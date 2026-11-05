@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PitchProX Deploy Guide</title>
+<style>
+  :root {
+    --bg: #f6f8f9; --surface: #ffffff; --text: #1d2a30; --muted: #5d6d74; --border: #dfe6e9;
+    --brand: #0eadab; --brand-soft: #e3f6f6; --ok: #138a52; --ok-soft: #e4f5ec; --todo: #b54708; --todo-soft: #fdf0e3;
+    --warn: #9a6700; --warn-soft: #fff6d6; --danger: #b42318; --danger-soft: #fdecea; --code: #eef2f4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #11181b; --surface: #182226; --text: #e5eef0; --muted: #9db0b6; --border: #2a383d;
+      --brand: #3cc9c6; --brand-soft: #173335; --ok: #4cc38a; --ok-soft: #173126; --todo: #f0a35e; --todo-soft: #3a2817;
+      --warn: #e8c35a; --warn-soft: #362d12; --danger: #f2877c; --danger-soft: #3b1d1a; --code: #22303a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  h2 { font-size: 20px; margin: 44px 0 12px; padding-top: 8px; border-top: 1px solid var(--border); }
+  h3 { font-size: 16px; margin: 20px 0 8px; }
+  p { margin: 8px 0; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  nav.toc { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; }
+  nav.toc ol { margin: 0; padding-left: 20px; columns: 2; column-gap: 32px; }
+  @media (max-width: 640px) { nav.toc ol { columns: 1; } }
+  a { color: var(--brand); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin: 12px 0; }
+  .callout { border-left: 4px solid var(--brand); background: var(--brand-soft); border-radius: 8px; padding: 12px 16px; margin: 12px 0; }
+  .callout.warn { border-color: var(--warn); background: var(--warn-soft); }
+  .callout.danger { border-color: var(--danger); background: var(--danger-soft); }
+  .callout strong:first-child { display: block; margin-bottom: 2px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .stat { font-size: 26px; font-weight: 700; color: var(--brand); line-height: 1.2; }
+  .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin: 12px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: var(--bg); }
+  tr:last-child td { border-bottom: 0; }
+  code { background: var(--code); padding: 1px 6px; border-radius: 5px; font-size: 13px; }
+  .pill { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .done { background: var(--ok-soft); color: var(--ok); }
+  .todo { background: var(--todo-soft); color: var(--todo); }
+  .part { background: var(--warn-soft); color: var(--warn); }
+  .q { background: var(--danger-soft); color: var(--danger); }
+  details { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin: 10px 0; }
+  details > summary { cursor: pointer; padding: 12px 16px; font-weight: 600; list-style: none; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary::before { content: "▸"; margin-right: 6px; color: var(--muted); }
+  details[open] > summary::before { content: "▾"; }
+  details > summary .left { flex: 1; min-width: 200px; }
+  details .body { padding: 0 16px 14px; }
+  details .table-wrap { margin: 0; }
+  .flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin: 12px 0; }
+  .flow .box { flex: 1 1 160px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+  .flow .box b { display: block; }
+  .flow .arrow { align-self: center; color: var(--muted); font-size: 20px; }
+  @media (max-width: 640px) { .flow .arrow { transform: rotate(90deg); width: 100%; text-align: center; } }
+  ol.steps li, ul li { margin: 4px 0; }
+  .copy { white-space: pre-wrap; font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code); border-radius: 10px; padding: 14px 16px; }
+  .muted { color: var(--muted); }
+</style>
+
+</head>
+<body>
+<main>
+  <h1>Deploy PitchProX on CloudPanel</h1>
+  <p class="sub">Step-by-step for a first deployment · Next.js app + MySQL · 27 Oct 2026</p>
+
+  <nav class="toc"><ol>
+    <li><a href="#big">How it fits together</a></li>
+    <li><a href="#code">Code changes needed</a></li>
+    <li><a href="#site">1. Create the site</a></li>
+    <li><a href="#ssl">2. Domain &amp; HTTPS</a></li>
+    <li><a href="#db">3. MySQL database</a></li>
+    <li><a href="#upload">4. Upload the code</a></li>
+    <li><a href="#env">5. The settings file</a></li>
+    <li><a href="#build">6. Install &amp; build</a></li>
+    <li><a href="#run">7. Start it (PM2)</a></li>
+    <li><a href="#vhost">8. Check the vhost</a></li>
+    <li><a href="#admin">9. Create the first admin</a></li>
+    <li><a href="#test">10. Test it</a></li>
+    <li><a href="#update">Updating later</a></li>
+    <li><a href="#trouble">When something breaks</a></li>
+  </ol></nav>
+
+  <h2 id="big">How it fits together</h2>
+  <div class="flow">
+    <div class="box"><b>Visitor</b>opens https://your-domain.com</div>
+    <div class="arrow">→</div>
+    <div class="box"><b>NGINX (CloudPanel)</b>handles HTTPS, forwards to the app port — this is the "vhost"</div>
+    <div class="arrow">→</div>
+    <div class="box"><b>Next.js app</b>kept running by PM2 on port 3000</div>
+    <div class="arrow">→</div>
+    <div class="box"><b>MySQL</b>on the same server (127.0.0.1)</div>
+  </div>
+  <p>One app, one database. The website and its backend routes are the same Next.js app, so there is only <b>one</b> thing to deploy.</p>
+
+  <h2 id="code">Code changes needed</h2>
+  <p class="muted">Uploaded files are saved in a <code>storage/</code> folder inside the project (created automatically). To keep them somewhere else, add <code>UPLOAD_DIR=/home/SITE-USER/pitchprox-uploads</code> to <code>.env.local</code>.</p>
+  <div class="callout">
+    <strong>None. You only create one settings file on the server.</strong>
+    Database name, user, password and mode all come from <code>.env.local</code> (step 5). The app <b>creates its own tables</b> the first time it runs — you don't import any SQL.
+  </div>
+  <div class="callout warn">
+    <strong>Don't use the GitHub auto-deploy yet</strong>
+    <code>.github/workflows/deploy.yml</code> stops when lint fails (48 old errors left in admin/rep screens), and it doesn't install packages on the server. Its <code>rsync --delete</code> would also <b>wipe the uploaded files</b> in <code>storage/</code>. Deploy by hand with this guide until we fix it in a later module.
+  </div>
+
+  <h2 id="site">1. Create the site</h2>
+  <ol class="steps">
+    <li>Log in to CloudPanel: <code>https://YOUR-SERVER-IP:8443</code></li>
+    <li><b>Sites → + Add Site → Create a Node.js Site</b></li>
+    <li><b>Domain name:</b> e.g. <code>app.pitchprox.com</code> · <b>Node.js version:</b> <b>22 LTS</b> · <b>App Port:</b> <code>3000</code> (any free port — remember it)</li>
+    <li>CloudPanel creates a <b>site user</b> and password — save both. Your files live in <code>/home/SITE-USER/htdocs/YOUR-DOMAIN/</code></li>
+  </ol>
+
+  <h2 id="ssl">2. Domain &amp; HTTPS</h2>
+  <ol class="steps">
+    <li>At your domain registrar, add an <b>A record</b>: <code>app</code> → your server IP. Wait until it works (a few minutes to an hour).</li>
+    <li>In CloudPanel: open the site → <b>SSL/TLS → Actions → New Let's Encrypt Certificate</b> → Create.</li>
+  </ol>
+  <div class="callout danger">
+    <strong>HTTPS is required, not optional</strong>
+    The login cookie is marked "secure" in production, so browsers only send it over HTTPS. On plain <code>http://</code> people can't stay logged in.
+  </div>
+
+  <h2 id="db">3. MySQL database</h2>
+  <ol class="steps">
+    <li>In CloudPanel: <b>Databases → Add Database</b> (inside your site, or the main Databases menu).</li>
+    <li><b>Database name:</b> <code>pitchprox</code> · <b>User:</b> <code>pitchprox_app</code> · <b>Password:</b> click generate, then copy it somewhere safe.</li>
+    <li>That's it — CloudPanel gives this user full rights on this one database, which the app needs (it creates and updates its own tables).</li>
+  </ol>
+  <p class="muted">Host is <code>127.0.0.1</code>, port <code>3306</code>. Never open port 3306 to the internet.</p>
+
+  <h2 id="upload">4. Upload the code</h2>
+  <p>Connect as the <b>site user</b> (not root). In CloudPanel open the site → <b>SSH/FTP</b> to see/add login details. Then pick one:</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Option</th><th>How</th></tr></thead>
+    <tbody>
+      <tr><td><b>A. Git (best)</b></td><td><div class="copy">ssh SITE-USER@YOUR-SERVER-IP
+cd ~/htdocs/YOUR-DOMAIN
+ls -la                   # check: only CloudPanel's placeholder files should be here
+rm -rf ./* ./.??*        # empty THIS folder only — double-check you ran the cd line above
+git clone https://github.com/YOUR/REPO.git .</div></td></tr>
+      <tr><td><b>B. SFTP</b></td><td>Use FileZilla → connect with the site user → upload the project into <code>htdocs/YOUR-DOMAIN/</code>. <b>Don't</b> upload <code>node_modules</code>, <code>.next</code>, <code>.git</code> or your local <code>.env.local</code>.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2 id="env">5. The settings file (<code>.env.local</code>)</h2>
+  <p>In the project folder on the server:</p>
+  <div class="copy">nano .env.local</div>
+  <p>Paste this, using your real database password from step 3:</p>
+  <div class="copy">NODE_ENV=production
+MYSQL_HOST=127.0.0.1
+MYSQL_PORT=3306
+MYSQL_DATABASE=pitchprox
+MYSQL_USER=pitchprox_app
+MYSQL_PASSWORD="paste-the-generated-password-here"</div>
+  <p>Save (<b>Ctrl+O</b>, Enter, <b>Ctrl+X</b>), then lock it so only you can read it:</p>
+  <div class="copy">chmod 600 .env.local</div>
+  <p class="muted">The port is <b>not</b> set here — Next.js picks its port before it reads this file. We pass it in step 7 instead.</p>
+
+  <h2 id="build">6. Install &amp; build</h2>
+  <div class="copy">node -v          # must say v22.x
+npm ci              # installs packages (a few minutes)
+npm run db:migrate  # creates the tables + default playbooks & plans (safe to repeat)
+npm run build       # makes the production version</div>
+  <div class="callout warn">
+    <strong>Small server (1–2 GB RAM)?</strong>
+    The build may be killed for running out of memory. Ask your host or add swap (as root): <code>fallocate -l 2G /swapfile &amp;&amp; chmod 600 /swapfile &amp;&amp; mkswap /swapfile &amp;&amp; swapon /swapfile</code>
+  </div>
+
+  <h2 id="run">7. Start it (PM2 keeps it running)</h2>
+  <div class="copy">npm install -g pm2
+pm2 start ecosystem.config.cjs     # uses the port in that file (8765) — must match the App Port
+pm2 save
+pm2 status                                             # should say "online"</div>
+  <p>Make it come back after a server reboot:</p>
+  <div class="copy">echo $PATH          # copy what this prints
+crontab -e          # add these two lines at the bottom:
+PATH=paste-what-echo-printed
+@reboot pm2 resurrect &gt; /dev/null 2&gt;&amp;1</div>
+
+  <h2 id="vhost">8. Check the vhost</h2>
+  <p>CloudPanel writes the NGINX config (the "vhost") for you. Open the site → <b>Vhost</b> tab and check the main part points to your App Port:</p>
+  <div class="copy">location / {
+  proxy_pass http://127.0.0.1:{{app_port}}/;
+  proxy_set_header Host $host;
+  proxy_set_header X-Forwarded-Proto $scheme;
+  ...
+}</div>
+  <ul>
+    <li><b>Keep the proxy part as it is.</b> <code>{{app_port}}</code> is filled from step 1 — it must match <code>PORT</code> in <code>ecosystem.config.cjs</code>.</li>
+    <li><b>Add one line for uploads</b> (AI training files go up to 50 MB): inside the <code>server { }</code> block that has <code>listen 443</code>, add <code>client_max_body_size 60M;</code> and click <b>Save</b>. Without it, larger uploads fail with "413 Request Entity Too Large".</li>
+  </ul>
+
+  <h2 id="admin">9. Create the first admin</h2>
+  <p>Customers sign themselves up on the website. Staff accounts are made on the server:</p>
+  <div class="copy">npm run create-user -- --email you@company.com --name "Your Name" --password "a-strong-password" --role super_admin</div>
+  <p class="muted">Use <code>--role sales_rep</code> for a sales rep. (Later, Step 2.2 of the build plan adds a screen for this.)</p>
+
+  <h2 id="test">10. Test it</h2>
+  <ol class="steps">
+    <li>Open <code>https://YOUR-DOMAIN</code> — the padlock should show.</li>
+    <li>Sign up as a test customer → you land on the customer dashboard.</li>
+    <li>Add a lead → refresh → it's still there (it's in MySQL).</li>
+    <li>Sign out, sign in as your super admin → you land on <code>/super-admin/dashboard</code>.</li>
+    <li>Check the log has no errors: <code>pm2 logs pitchprox --lines 50</code></li>
+  </ol>
+
+  <h2 id="update">Updating later</h2>
+  <div class="copy">cd ~/htdocs/YOUR-DOMAIN
+git pull                 # or upload the changed files
+npm ci
+npm run db:migrate       # adds any new tables/columns from the update
+npm run build
+pm2 reload pitchprox</div>
+  <p><b>Back up first</b> before big updates — two things:</p>
+  <ul>
+    <li><b>Database:</b> CloudPanel → Databases → <b>Export</b> (or <code>mysqldump -u pitchprox_app -p pitchprox &gt; backup.sql</code>).</li>
+    <li><b>Uploaded files:</b> the <code>storage/</code> folder in the project (AI training material, ticket attachments): <code>tar czf storage-backup.tar.gz storage</code>.</li>
+  </ul>
+  <p>Never delete <code>.env.local</code> or <code>storage/</code> — neither is in Git, so <code>git pull</code> leaves them alone.</p>
+
+  <h2 id="trouble">When something breaks</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>You see</th><th>Usually means</th><th>Fix</th></tr></thead>
+    <tbody>
+      <tr><td><b>502 Bad Gateway</b></td><td>App not running, or port mismatch</td><td><code>pm2 status</code>; make sure <code>PORT</code> in <code>ecosystem.config.cjs</code> = App Port in CloudPanel</td></tr>
+      <tr><td>Signs in, then kicked back to sign-in</td><td>No HTTPS</td><td>Do step 2 (Let's Encrypt), open the <code>https://</code> address</td></tr>
+      <tr><td>"Something went wrong" on every action</td><td>Wrong database details</td><td>Check <code>.env.local</code>, then <code>pm2 logs pitchprox</code> — look for <code>Access denied</code> or <code>ECONNREFUSED</code></td></tr>
+      <tr><td><code>Access denied for user</code></td><td>Wrong DB password/user</td><td>Re-copy the password from CloudPanel; keep the quotes</td></tr>
+      <tr><td>Build stops with "Killed"</td><td>Out of memory</td><td>Add swap (step 6)</td></tr>
+      <tr><td>Site down after a reboot</td><td>PM2 didn't restart</td><td>Do the crontab part of step 7; for now run <code>pm2 resurrect</code></td></tr>
+      <tr><td>Changes don't show</td><td>Forgot to build or restart</td><td><code>npm run build &amp;&amp; pm2 restart pitchprox</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout danger">
+    <strong>Security before going public</strong>
+    Change any server, database, and GitHub passwords/keys that existed while the old malicious code was in the project. Use a new database password only for production.
+  </div>
+</main>
+</body>
+</html>

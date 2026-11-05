@@ -1,0 +1,103 @@
+name: CI/CD Pipeline — CloudPanel (SFTP via rsync + SSH)
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+# Cancel in-progress runs for the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: 22
+
+jobs:
+  # ──────────────────────────────────────────────
+  # CI — Lint & Build checks on every push/PR
+  # ──────────────────────────────────────────────
+  ci:
+    name: 🧪 CI — Lint & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: ⚡ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      - name: 🔍 Run linter
+        run: npm run lint
+
+      - name: 🏗️ Build Next.js app
+        run: npm run build
+        env:
+          CI: true
+
+  # ──────────────────────────────────────────────
+  # CD — Deploy to CloudPanel via rsync over SSH (main branch only)
+  # ──────────────────────────────────────────────
+  deploy:
+    name: 🚀 Deploy to CloudPanel (rsync over SSH)
+    runs-on: ubuntu-latest
+    needs: ci
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: ⚡ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      - name: 🏗️ Build Next.js app
+        run: npm run build
+        env:
+          CI: true
+
+      # ── Rsync transfer (only changed files, with exclusions) ──
+      - name: 📤 Sync files via rsync over SSH
+        run: |
+          # Write SSH key
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+          # Add server to known hosts
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+          # Determine target directory — use SSH_SITE_DOMAIN if set, otherwise SSH_HOST
+          SITE_DOMAIN="${{ secrets.SSH_SITE_DOMAIN || secrets.SSH_HOST }}"
+
+          # Transfer only changed files via rsync
+          rsync -avz --delete --no-perms --no-times \
+            --exclude={'.git/','node_modules/','.env','.env.*','.github/','.next/cache/'} \
+            ./ \
+            ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:/home/${{ secrets.SSH_USERNAME }}/htdocs/${SITE_DOMAIN}/
+
+          # Restart the app after sync (same SSH session, no extra action needed)
+          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} "
+            # Load profile and set PATH
+            [ -s \"\$HOME/.bashrc\" ] && source \"\$HOME/.bashrc\"
+            [ -s \"\$HOME/.profile\" ] && source \"\$HOME/.profile\"
+            export PATH=\$PATH:/usr/local/bin:/usr/bin:/usr/local/nodejs/bin
+
+            # Go to site directory and restart
+            cd /home/${{ secrets.SSH_USERNAME }}/htdocs/${SITE_DOMAIN}/
+            pm2 restart pitchprox || pm2 start npm --name \"pitchprox\" -- start
+          "

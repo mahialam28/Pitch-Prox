@@ -1,0 +1,89 @@
+"use client";
+
+import React from "react";
+import Link from "next/link";
+import { Flame, AlertCircle, Clock, UserX } from "lucide-react";
+import { SAVED_SEGMENTS } from "../segments-data";
+
+export default function SavedSegments({ segments = SAVED_SEGMENTS }) {
+  const getIcon = (type, color) => {
+    switch (type) {
+      case "flame":
+        return {
+          Icon: Flame,
+          bg: "bg-orange-50 text-orange-500",
+        };
+      case "alert":
+        return {
+          Icon: AlertCircle,
+          bg: "bg-sky-50 text-sky-600",
+        };
+      case "clock":
+        return {
+          Icon: Clock,
+          bg: "bg-purple-50 text-purple-600",
+        };
+      case "user":
+      default:
+        return {
+          Icon: UserX,
+          bg: "bg-slate-100 text-slate-600",
+        };
+    }
+  };
+
+  return (
+    <div className="w-full flex flex-col gap-3.5">
+      <h3 className="text-base sm:text-lg font-bold text-dark-black/85 tracking-tight">
+        Saved Segments
+      </h3>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+        {segments.map((seg) => {
+          const iconConfig = getIcon(seg.iconType, seg.color);
+          const IconComponent = iconConfig.Icon;
+
+          return (
+            <Link
+              key={seg.id}
+              href={`/super-admin/campaigns-journeys/segments/${seg.id}`}
+              className="bg-white rounded-2xl border border-light-gray p-4 sm:p-4.5 shadow-xs hover:border-primary/40 hover:shadow-md transition-all duration-200 flex flex-col justify-between gap-3 group cursor-pointer"
+            >
+              {/* Top Row: Icon + Name/Count + Used Badge */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className={`w-9 h-9 rounded-xl ${iconConfig.bg} flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform`}
+                  >
+                    <IconComponent className="w-4 h-4 stroke-[2.2]" />
+                  </div>
+
+                  <div className="flex flex-col min-w-0">
+                    <span className="font-bold text-xs sm:text-[13px] text-dark-black/85 group-hover:text-primary transition-colors truncate">
+                      {seg.name}
+                    </span>
+                    <span className="text-[11px] text-light-black font-semibold mt-0.5">
+                      {seg.leadsCount}{" "}
+                      <span className="font-normal">leads</span>
+                    </span>
+                  </div>
+                </div>
+
+                {seg.usedInCampaign && (
+                  <span className="inline-flex items-center text-[8px] sm:text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide bg-emerald-50 text-emerald-600 border border-emerald-200 whitespace-nowrap shrink-0">
+                    USED IN CAMPAIGN
+                  </span>
+                )}
+              </div>
+
+              {/* Bottom Row: Updated Date */}
+              <div className="pt-2 border-t border-light-gray/60 flex items-center justify-between text-[11px] text-light-black">
+                <span>Updated: {seg.updatedAt}</span>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

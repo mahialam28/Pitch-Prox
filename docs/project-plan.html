@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PitchProX Backend Plan</title>
+<style>
+  :root {
+    --bg: #f6f8f9; --surface: #ffffff; --text: #1d2a30; --muted: #5d6d74; --border: #dfe6e9;
+    --brand: #0eadab; --brand-soft: #e3f6f6; --ok: #138a52; --ok-soft: #e4f5ec; --todo: #b54708; --todo-soft: #fdf0e3;
+    --warn: #9a6700; --warn-soft: #fff6d6; --danger: #b42318; --danger-soft: #fdecea; --code: #eef2f4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #11181b; --surface: #182226; --text: #e5eef0; --muted: #9db0b6; --border: #2a383d;
+      --brand: #3cc9c6; --brand-soft: #173335; --ok: #4cc38a; --ok-soft: #173126; --todo: #f0a35e; --todo-soft: #3a2817;
+      --warn: #e8c35a; --warn-soft: #362d12; --danger: #f2877c; --danger-soft: #3b1d1a; --code: #22303a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  h2 { font-size: 20px; margin: 44px 0 12px; padding-top: 8px; border-top: 1px solid var(--border); }
+  h3 { font-size: 16px; margin: 20px 0 8px; }
+  p { margin: 8px 0; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  nav.toc { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; }
+  nav.toc ol { margin: 0; padding-left: 20px; columns: 2; column-gap: 32px; }
+  @media (max-width: 640px) { nav.toc ol { columns: 1; } }
+  a { color: var(--brand); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin: 12px 0; }
+  .callout { border-left: 4px solid var(--brand); background: var(--brand-soft); border-radius: 8px; padding: 12px 16px; margin: 12px 0; }
+  .callout.warn { border-color: var(--warn); background: var(--warn-soft); }
+  .callout.danger { border-color: var(--danger); background: var(--danger-soft); }
+  .callout strong:first-child { display: block; margin-bottom: 2px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .stat { font-size: 26px; font-weight: 700; color: var(--brand); line-height: 1.2; }
+  .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin: 12px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: var(--bg); }
+  tr:last-child td { border-bottom: 0; }
+  code { background: var(--code); padding: 1px 6px; border-radius: 5px; font-size: 13px; }
+  .pill { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .done { background: var(--ok-soft); color: var(--ok); }
+  .todo { background: var(--todo-soft); color: var(--todo); }
+  .part { background: var(--warn-soft); color: var(--warn); }
+  .q { background: var(--danger-soft); color: var(--danger); }
+  details { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin: 10px 0; }
+  details > summary { cursor: pointer; padding: 12px 16px; font-weight: 600; list-style: none; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary::before { content: "▸"; margin-right: 6px; color: var(--muted); }
+  details[open] > summary::before { content: "▾"; }
+  details > summary .left { flex: 1; min-width: 200px; }
+  details .body { padding: 0 16px 14px; }
+  details .table-wrap { margin: 0; }
+  .flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin: 12px 0; }
+  .flow .box { flex: 1 1 160px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+  .flow .box b { display: block; }
+  .flow .arrow { align-self: center; color: var(--muted); font-size: 20px; }
+  @media (max-width: 640px) { .flow .arrow { transform: rotate(90deg); width: 100%; text-align: center; } }
+  ol.steps li, ul li { margin: 4px 0; }
+  .copy { white-space: pre-wrap; font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code); border-radius: 10px; padding: 14px 16px; }
+  .muted { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>PitchProX — What We're Building</h1>
+  <p class="sub">Backend plan &amp; open questions · updated 27 Oct 2026 · based on the code, the project docs, Phase 1 testing and the Figma file (client chats not yet available)</p>
+
+  <nav class="toc">
+    <ol>
+      <li><a href="#short">The short answer</a></li>
+      <li><a href="#figma">What's in the Figma file</a></li>
+      <li><a href="#what">What PitchProX is</a></li>
+      <li><a href="#panels">The 3 panels (and your dashboard question)</a></li>
+      <li><a href="#mobile">The mobile app</a></li>
+      <li><a href="#decision">The big decision: where the backend lives</a></li>
+      <li><a href="#apis">Every API to build</a></li>
+      <li><a href="#services">Outside services needed</a></li>
+      <li><a href="#ask">Questions to send your client</a></li>
+      <li><a href="#need">What I need from you</a></li>
+      <li><a href="#plan">Proposed work plan</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="short">1. The short answer</h2>
+  <div class="grid">
+    <div class="card"><div class="stat">3 web panels</div>Customer, Internal Sales Rep, and Super Admin — all already designed and coded as a website (113 screens).</div>
+    <div class="card"><div class="stat">1 mobile app</div><b>Found in Figma</b>: ~85 phone screens for customers (Home, Call, Analytics, CRM, AI train). Not coded anywhere yet.</div>
+    <div class="card"><div class="stat">~150 APIs</div>needed for the website + app. <b>26 are built and tested</b> (sign-in, leads, CRM, settings, dashboard).</div>
+  </div>
+  <div class="callout warn">
+    <strong>The mobile app changes the backend</strong>
+    One API must now serve <b>both the website and a phone app</b>. Phone apps can't use the website's login cookie, so the API needs <b>token login</b> (like the spec describes). The spec also says the backend should be a <b>separate server</b> (Django / FastAPI / Node, PostgreSQL), while Phase 1 built it <b>inside Next.js</b> with MySQL. Confirm with the client before building more — see <a href="#decision">section 6</a>.
+  </div>
+
+  <!-- 2 -->
+  <h2 id="figma">2. What's in the Figma file</h2>
+  <div class="callout">
+    <strong>Opened ✓ (your copy: "PitchProX || AI Project (Copy)")</strong>
+    17 pages. The ones with real content are below. <span class="muted">The "Last UI design" page was too large to load in one go — not reviewed yet.</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Figma page</th><th>What's on it</th><th>Matches the code?</th></tr></thead>
+      <tbody>
+        <tr><td><b>Final Design</b></td><td>~85 <b>phone screens</b> (mobile app) + ~35 desktop screens + ~40 pop-ups + 4 written requirement notes</td><td>Desktop: yes. <b>Phone app: not built anywhere</b></td></tr>
+        <tr><td><b>Client Provided screens</b></td><td>~190 desktop screens of all 3 web panels (incl. employee onboarding/offboarding for compliance, calendar, campaigns, quotas)</td><td>Yes — this is what the website code was built from</td></tr>
+        <tr><td><b>Dashboards</b></td><td>~63 desktop screens: dashboards, mail, calendar, audit, plans &amp; pricing, sales-rep access, settings</td><td>Yes</td></tr>
+        <tr><td><b>Last UI design</b></td><td>Not loaded (too large)</td><td>Unknown — check next</td></tr>
+        <tr><td>Cover, logo, moodboard, design system, icons, mockup, trash</td><td>Design assets only</td><td>No API needed</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <h3>Rules written in the Figma notes</h3>
+  <ul>
+    <li><b>Prompt Adherence %</b> = (AI prompt words the rep said word-for-word ÷ total prompt words) × 100. <b>Deviation %</b> = 100 − Prompt Adherence. Show an "optimal range" green zone and compare to team &amp; industry average.</li>
+    <li>Dashboard tiles: Prompt Adherence, Deviation, <b>Lead-to-Subscription %</b> (this week), <b>Quota progress (X/100)</b>, <b>Trust Gain average</b> (last 7 days), plus a "1-click call" button.</li>
+    <li>KPI data comes <b>"from Zoho + PitchProX AI"</b> → Zoho CRM integration is expected. Also <b>Zoho Mail</b>, and <b>Zoom / Google Meet</b> for video meetings.</li>
+    <li>Leads section: new leads today, conversion this week, <b>top lead source</b>, table with status, next step and <b>priority flag</b>.</li>
+    <li>Billing: <b>free plan</b>, <b>free trial</b>, upgrade, renew/cancel. <i>"Once the quota is reached, the user gets an in-app prompt offering additional call credit at a metered rate."</i></li>
+    <li>Sign-up with <b>Google</b>, and <b>OTP code verification</b> (6 screens) on the phone app.</li>
+  </ul>
+
+  <!-- 3 -->
+  <h2 id="what">3. What PitchProX is (plain words)</h2>
+  <div class="card">
+    <p><b>PitchProX is a website where sales teams make phone calls with an AI coach listening.</b> While a salesperson talks to a customer, the AI shows live tips on screen (e.g. "they said it's too expensive → say this"). After the call, it gives a summary, a score and a recording.</p>
+    <p>Around that core it has: a lead list and CRM pipeline, sales scripts ("playbooks"), AI training, analytics, billing by call minutes, support tickets, email, and a compliance section for security audits (SOC 2).</p>
+    <p>The <b>first users are real-estate agents</b> — the lead types are things like "Expired Listings", "FSBO", "Probate".</p>
+  </div>
+  <h3>How the pieces connect</h3>
+  <div class="flow">
+    <div class="box"><b>People</b>Customers, PitchProX sales reps, PitchProX admins</div>
+    <div class="arrow">→</div>
+    <div class="box"><b>Website (done)</b>3 panels, 113 screens — currently mostly sample data</div>
+    <div class="arrow">→</div>
+    <div class="box"><b>Backend / API (your job)</b>Saves and loads data, checks who's allowed, talks to outside services</div>
+    <div class="arrow">→</div>
+    <div class="box"><b>Database + services</b>MySQL/PostgreSQL, phone calls, AI, payments, email, file storage</div>
+  </div>
+
+  <!-- 4 -->
+  <h2 id="panels">4. The 3 panels (and your dashboard question)</h2>
+  <div class="callout">
+    <strong>"Is this the main admin dashboard, or do I build another one?"</strong>
+    <b>This repo already contains the Super Admin dashboard</b> — 48 screens under <code>/super-admin</code>, matching the Figma admin designs. You do <b>not</b> need to build another admin panel. Your job is to build the API that makes these existing screens (and the mobile app) work with real data.
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Panel</th><th>Who uses it</th><th>Screens</th><th>Main jobs</th><th>Backend status</th></tr></thead>
+      <tbody>
+        <tr><td><b>Public site</b><br><code>/</code></td><td>Visitors</td><td>6</td><td>Landing page, pricing, FAQ, demo request, sign-in/up, password reset</td><td><span class="pill part">Sign-in/up done</span></td></tr>
+        <tr><td><b>Customer panel</b><br><code>/user</code></td><td>Companies that pay for PitchProX and their sales staff</td><td>30</td><td>Leads, CRM, live calling, call reports, playbooks, AI training, analytics, billing, settings, support</td><td><span class="pill part">Leads, CRM, settings, dashboard done</span></td></tr>
+        <tr><td><b>Internal Sales Rep panel</b><br><code>/internal-sales-representative</code></td><td>PitchProX's own salespeople who sell PitchProX to customers</td><td>30</td><td>Their assigned leads &amp; customers, calling, calendar, mail, quota/commission, support tickets</td><td><span class="pill todo">Only login works</span></td></tr>
+        <tr><td><b>Super Admin panel</b><br><code>/super-admin</code></td><td>PitchProX owners / operations team</td><td>48</td><td>All customers, sales reps, plans &amp; prices, billing &amp; credits, support, mail, campaigns, master playbook, compliance</td><td><span class="pill todo">Only login works</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="mobile">5. The mobile app (found in Figma)</h2>
+  <div class="card">
+    <p><b>Yes, there is a mobile app.</b> It is the <b>customer's app</b> — the same job as the <code>/user</code> web panel, on a phone. Bottom tabs: <b>Home · Call · Analytics · CRM · AI train</b>. There is <b>no code for it</b> in this repo, and no mobile designs for the Sales Rep or Super Admin panels.</p>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>App area</th><th>Screens</th><th>What it does</th><th>API</th></tr></thead>
+      <tbody>
+        <tr><td><b>Splash &amp; onboarding</b></td><td>8</td><td>Intro slides</td><td>None</td></tr>
+        <tr><td><b>Login</b></td><td>12</td><td>Sign in, sign up (+ Google), <b>email OTP code</b>, reset &amp; change password, terms</td><td><span class="pill part">Partly done</span> + OTP, tokens</td></tr>
+        <tr><td><b>Home</b></td><td>2</td><td>Today's stats (calls, AI responses, success rate), weekly call chart, quick lead list</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><b>Call</b></td><td>~8</td><td>Phone <b>dial pad</b>, live call, <b>AI call summary</b> → update status / set follow-up / note, call history, follow-ups</td><td><span class="pill todo">To do</span> telephony + AI</td></tr>
+        <tr><td><b>Leads &amp; CRM</b></td><td>5</td><td>Lead list &amp; details, CRM pipeline &amp; details</td><td><span class="pill done">Mostly done</span></td></tr>
+        <tr><td><b>Analytics</b></td><td>1</td><td>Performance charts</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><b>AI train</b></td><td>~25</td><td>Upload <b>PDF, video, web link, video link, other files</b>, add scripts; sections: Sales Pitch, Handling Objections, Closing Deals</td><td><span class="pill todo">To do</span> storage + AI</td></tr>
+        <tr><td><b>Playbook templates</b></td><td>10</td><td>Intro Pitch, Prospecting, Product Overview, Qualifying Questions, Price Discussion, Closing, Company Overview, Expired, Circle Prospecting</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><b>Calibration</b></td><td>~9</td><td>Start → answer questions out loud → <b>score</b></td><td><span class="pill todo">To do</span> (save score)</td></tr>
+        <tr><td><b>Profile &amp; account</b></td><td>~6</td><td>Profile, personal info, <b>notifications</b>, <b>subscription</b> (free plan, trial, upgrade, renew/cancel)</td><td><span class="pill part">Partly done</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout warn">
+    <strong>What the app means for the backend</strong>
+    <ul>
+      <li><b>Token login</b> (access + refresh tokens) for the app — the current cookie login only works in the browser.</li>
+      <li><b>Email OTP</b> endpoints (send code, verify code) and <b>push notifications</b> (register the phone, send alerts).</li>
+      <li>The same API for website and app, with clear documentation so the app developer can use it.</li>
+      <li><b>Subscriptions inside an iPhone/Android app</b> may have to go through Apple/Google payments, not just Stripe. Ask the client how the app should sell plans.</li>
+    </ul>
+  </div>
+
+  <!-- 6 -->
+  <h2 id="decision">6. The big decision: where the backend lives</h2>
+  <p>The spec (<code>PROJECT_SPECIFICATION.md</code>) and what we built in Phase 1 don't match. Pick one with the client:</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th></th><th>A — Inside Next.js (what Phase 1 did)</th><th>B — Separate server (what the spec says)</th></tr></thead>
+      <tbody>
+        <tr><td><b>Where</b></td><td>API routes inside this same repo (<code>/api/v1/...</code>)</td><td>A new project (e.g. Django or Node) on its own server, port 8000</td></tr>
+        <tr><td><b>Database</b></td><td>MySQL (CloudPanel docs use MySQL)</td><td>PostgreSQL + Redis (spec)</td></tr>
+        <tr><td><b>Login</b></td><td>Cookie today — <b>must add token login</b> for the app</td><td>JWT tokens (website <i>and</i> mobile app)</td></tr>
+        <tr><td><b>Good for</b></td><td>One codebase, one deploy, keeps all Phase 1 work</td><td>Mobile app, heavy AI/background jobs, a team that knows Python</td></tr>
+        <tr><td><b>Phase 1 work</b></td><td>Keep as-is</td><td>Logic and tests carry over; code must be ported</td></tr>
+        <tr><td><b>Live AI calling</b></td><td>Still needs a small separate service for the live audio/AI stream</td><td>Built in (Django Channels / Socket.io)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout">
+    <strong>My recommendation</strong>
+    Since there <b>is</b> a mobile app, the API needs token login either way. If the client <b>doesn't require Django/Python</b> → <b>keep A</b>, add token login now, and add a small separate service for live calls later. If the client <b>wants Django/Python or a separate backend</b> → <b>switch to B now</b>, before more is built. Ask before starting Phase 2.
+  </div>
+
+  <!-- 7 -->
+  <h2 id="apis">7. Every API to build</h2>
+  <p>Grouped by area. Click a group to see its endpoints. <span class="pill done">Done</span> = built and tested in Phase 1. <span class="pill todo">To do</span> = screen exists, API doesn't.</p>
+
+  <details open>
+    <summary><span class="left">Login &amp; account</span><span><span class="pill done">11 done</span> <span class="pill todo">8 to do</span></span></summary>
+    <div class="body"><div class="table-wrap"><table>
+      <thead><tr><th>Endpoint</th><th>What it does</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td><code>POST /auth/sign-up</code></td><td>Create company + first admin</td><td><span class="pill done">Done</span></td></tr>
+        <tr><td><code>POST /auth/sign-in</code> · <code>/sign-out</code></td><td>Log in / out</td><td><span class="pill done">Done</span></td></tr>
+        <tr><td><code>GET /me</code></td><td>Who is logged in</td><td><span class="pill done">Done</span></td></tr>
+        <tr><td><code>GET/PATCH /settings/profile</code> · <code>PATCH /settings/password</code></td><td>Edit name, change password</td><td><span class="pill done">Done</span></td></tr>
+        <tr><td><code>GET/PUT /settings/preferences</code> · <code>/notifications</code></td><td>Personal settings</td><td><span class="pill done">Done</span></td></tr>
+        <tr><td><code>POST /auth/forgot-password</code> · <code>/reset-password</code></td><td>Reset password by email</td><td><span class="pill todo">To do</span> needs email</td></tr>
+        <tr><td><code>POST /auth/verify-email</code></td><td>Confirm email address</td><td><span class="pill todo">To do</span> needs email</td></tr>
+        <tr><td><code>GET /auth/google/callback</code></td><td>Sign in with Google</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>POST /auth/2fa/setup</code> · <code>/2fa/verify</code></td><td>Two-step login</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>GET/DELETE /me/sessions</code></td><td>See / log out other devices</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>POST /me/avatar</code></td><td>Profile photo upload</td><td><span class="pill todo">To do</span> needs storage</td></tr>
+        <tr><td><code>POST /auth/refresh</code></td><td>Renew login token (only if option B / mobile)</td><td><span class="pill q">Depends</span></td></tr>
+      </tbody></table></div></div>
+  </details>
+
+  <details open>
+    <summary><span class="left">Mobile app extras (new from Figma)</span><span><span class="pill todo">8 to do</span></span></summary>
+    <div class="body"><div class="table-wrap"><table>
+      <thead><tr><th>Endpoint</th><th>What it does</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td><code>POST /auth/token</code> · <code>/auth/refresh</code> · <code>/auth/logout</code></td><td>Token login for the app (access + refresh tokens)</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>POST /auth/otp/send</code> · <code>/auth/otp/verify</code></td><td>Email code during sign-up and password reset</td><td><span class="pill todo">To do</span> needs email</td></tr>
+        <tr><td><code>POST/DELETE /devices</code></td><td>Register the phone for push notifications</td><td><span class="pill todo">To do</span> needs push service</td></tr>
+        <tr><td><code>GET /home</code></td><td>Today's stats, weekly call chart, quick lead list</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>POST /calibration/sessions</code> · <code>GET /calibration/score</code></td><td>Save calibration answers and score</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>GET /playbook-templates</code></td><td>The 9 ready-made script templates</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>POST /ai-training/links</code></td><td>Add a web link or video link for AI training</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>GET /legal/terms</code></td><td>Terms &amp; conditions text</td><td><span class="pill todo">To do</span></td></tr>
+      </tbody></table></div></div>
+  </details>
+
+  <details>
+    <summary><span class="left">Company &amp; team (customer panel)</span><span><span class="pill todo">5 to do</span></span></summary>
+    <div class="body"><div class="table-wrap"><table>
+      <thead><tr><th>Endpoint</th><th>What it does</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET/PATCH /organization</code></td><td>Company profile</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>GET /users</code> · <code>POST /users/invite</code></td><td>List team, invite a teammate</td><td><span class="pill todo">To do</span> needs email</td></tr>
+        <tr><td><code>PATCH/DELETE /users/:id</code></td><td>Change role, remove teammate</td><td><span class="pill todo">To do</span></td></tr>
+      </tbody></table></div></div>
+  </details>
+
+  <details>
+    <summary><span class="left">Leads &amp; CRM</span><span><span class="pill done">15 done</span> <span class="pill todo">4 to do</span></span></summary>
+    <div class="body"><div class="table-wrap"><table>
+      <thead><tr><th>Endpoint</th><th>What it does</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET/POST /leads</code> · <code>GET/PATCH/DELETE /leads/:id</code></td><td>Lead list, add, edit, delete</td><td><span class="pill done">Done</span></td></tr>
+        <tr><td><code>GET/POST /crm/prospects</code> · <code>GET/PATCH/DELETE /crm/prospects/:id</code></td><td>Prospect pipeline</td><td><span class="pill done">Done</span></td></tr>
+        <tr><td><code>POST /crm/prospects/:id/move</code> · <code>/notes</code> · <code>/follow-ups</code></td><td>Change stage, notes, schedule follow-up</td><td><span class="pill done">Done</span></td></tr>
+        <tr><td><code>GET /dashboard</code></td><td>Customer dashboard numbers</td><td><span class="pill done">Done</span></td></tr>
+        <tr><td><code>POST /leads/import</code></td><td>Upload a CSV of leads</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>POST /leads/:id/assign</code></td><td>Give a lead to a sales rep</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>GET /leads/:id/activity</code></td><td>Lead history: calls, notes, changes</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>POST /leads/:id/notes</code></td><td>Notes on leads (only prospects have them now)</td><td><span class="pill todo">To do</span></td></tr>
+      </tbody></table></div></div>
+  </details>
+
+  <details>
+    <summary><span class="left">Calls, recordings &amp; live AI</span><span><span class="pill todo">12 to do</span> <span class="pill q">needs providers</span></span></summary>
+    <div class="body"><div class="table-wrap"><table>
+      <thead><tr><th>Endpoint</th><th>What it does</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td><code>POST /calls/initiate</code></td><td>Start a call, get a phone/WebRTC token, check minutes left</td><td><span class="pill todo">To do</span> telephony</td></tr>
+        <tr><td><code>POST /calls/:id/end</code> · <code>PATCH /calls/:id/status</code></td><td>Finish call, outcome, duration</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>POST /calls/:id/notes</code> · <code>/follow-up</code></td><td>Notes and callbacks during a call</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>GET /calls</code> · <code>GET /calls/:id</code></td><td>Call history and call report</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>GET /calls/:id/transcript</code> · <code>/recording</code> · <code>/analysis</code></td><td>Transcript, audio, AI summary &amp; scores</td><td><span class="pill todo">To do</span> AI + storage</td></tr>
+        <tr><td><code>WS /ws/v1/live-call-stream</code></td><td>Live transcript + AI tips during the call</td><td><span class="pill todo">To do</span> hardest part</td></tr>
+        <tr><td><code>POST /webhooks/telephony</code></td><td>Events from the phone provider</td><td><span class="pill todo">To do</span></td></tr>
+      </tbody></table></div></div>
+  </details>
+
+  <details>
+    <summary><span class="left">Playbooks, AI training &amp; analytics</span><span><span class="pill todo">12 to do</span></span></summary>
+    <div class="body"><div class="table-wrap"><table>
+      <thead><tr><th>Endpoint</th><th>What it does</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET/POST /playbooks</code> · <code>GET/PATCH /playbooks/:id</code></td><td>Sales scripts list, create, edit</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>POST /playbooks/:id/publish</code> · <code>/clone</code> · <code>/objections</code></td><td>Publish, copy, add objection answers</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>GET/POST /ai-training/guidelines</code></td><td>Rules the AI should follow</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>POST /ai-training/assets</code> · <code>/jobs</code> · <code>GET /jobs/:id</code></td><td>Upload training files, start/track training</td><td><span class="pill todo">To do</span> AI + storage</td></tr>
+        <tr><td><code>GET /analytics/performance</code> · <code>/calls</code> · <code>/reps</code></td><td>Charts and leaderboards</td><td><span class="pill todo">To do</span> needs call data</td></tr>
+      </tbody></table></div></div>
+  </details>
+
+  <details>
+    <summary><span class="left">Billing, plans &amp; minutes</span><span><span class="pill todo">14 to do</span> <span class="pill q">needs Stripe</span></span></summary>
+    <div class="body"><div class="table-wrap"><table>
+      <thead><tr><th>Endpoint</th><th>What it does</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET /billing/plans</code> · <code>/subscription</code> · <code>/usage</code> · <code>/invoices</code></td><td>Customer billing page</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>POST /billing/checkout</code> · <code>/customer-portal</code></td><td>Upgrade plan, change card (the 2 missing pages)</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>POST /billing/minutes/purchase</code></td><td>Buy more call minutes</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>POST /billing/webhook</code></td><td>Payment events from Stripe</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>GET/POST/PATCH /admin/plans</code> · <code>/promo-codes</code> · <code>/add-ons</code> · <code>/trial-rules</code></td><td>Super admin: plan &amp; pricing control</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>POST /admin/billing/adjust-credits</code> · <code>GET /admin/billing/payments</code> · <code>/invoices</code></td><td>Super admin: credits, payments, invoices</td><td><span class="pill todo">To do</span></td></tr>
+      </tbody></table></div></div>
+  </details>
+
+  <details>
+    <summary><span class="left">Support, mail &amp; calendar</span><span><span class="pill todo">14 to do</span></span></summary>
+    <div class="body"><div class="table-wrap"><table>
+      <thead><tr><th>Endpoint</th><th>What it does</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET/POST /support/tickets</code> · <code>GET/PATCH /support/tickets/:id</code></td><td>Create and track tickets (all 3 panels)</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>POST /support/tickets/:id/messages</code> · <code>/assign</code></td><td>Reply, assign to staff</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>GET/POST /mail/templates</code> · <code>GET/PATCH/DELETE /mail/templates/:id</code></td><td>Email templates</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>POST /mail/send</code> · <code>GET /mail/messages</code> · <code>/messages/:id</code></td><td>Send and view emails</td><td><span class="pill todo">To do</span> needs email</td></tr>
+        <tr><td><code>GET/POST /calendar/events</code> · <code>PATCH/DELETE /calendar/events/:id</code></td><td>Calendar, reminders</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>GET/POST /announcements</code></td><td>Super admin announcements</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>GET /notifications</code> · <code>PATCH /notifications/:id</code></td><td>Bell icon in the header</td><td><span class="pill todo">To do</span></td></tr>
+      </tbody></table></div></div>
+  </details>
+
+  <details>
+    <summary><span class="left">Sales rep panel</span><span><span class="pill todo">8 to do</span></span></summary>
+    <div class="body"><div class="table-wrap"><table>
+      <thead><tr><th>Endpoint</th><th>What it does</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET /rep/dashboard</code></td><td>Daily quota, connect rate, callbacks</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>GET /rep/leads</code> · <code>/rep/prospects</code></td><td>Only leads assigned to this rep</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>GET /rep/customers</code> · <code>/rep/customers/:id</code></td><td>Customers this rep manages</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>POST /rep/customers/:id/notes</code> · <code>PATCH</code> profile/owner</td><td>Notes and edits on a customer</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>GET /rep/commission</code></td><td>Quota and earnings</td><td><span class="pill todo">To do</span></td></tr>
+      </tbody></table></div></div>
+  </details>
+
+  <details>
+    <summary><span class="left">Super admin: customers, reps, campaigns</span><span><span class="pill todo">16 to do</span></span></summary>
+    <div class="body"><div class="table-wrap"><table>
+      <thead><tr><th>Endpoint</th><th>What it does</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET /admin/dashboard</code> · <code>/admin/analytics</code></td><td>Platform revenue (MRR), growth, alerts</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>GET /admin/customers</code> · <code>GET/PATCH /admin/customers/:id</code></td><td>All customer companies, usage, plan, refunds</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>GET/POST /admin/sales-reps</code> · <code>PATCH /admin/sales-reps/:id</code></td><td>Reps, quotas, assignments</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>POST /admin/sales-reps/:id/notes</code> · <code>/coaching</code> · <code>/reports</code></td><td>Manager notes, coaching, reports</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>POST /admin/impersonate/:userId</code></td><td>"Log in as" a user (needs strong safeguards)</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>GET/POST /campaigns</code> · <code>/segments</code> · <code>/campaign-templates</code> (+ <code>/:id</code>)</td><td>Marketing campaigns to customer groups</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>GET/PATCH /admin/master-playbook</code></td><td>Default playbook every customer gets</td><td><span class="pill todo">To do</span></td></tr>
+      </tbody></table></div></div>
+  </details>
+
+  <details>
+    <summary><span class="left">Compliance &amp; audit (9 modules)</span><span><span class="pill todo">18 to do</span></span></summary>
+    <div class="body"><div class="table-wrap"><table>
+      <thead><tr><th>Endpoint</th><th>What it does</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET /compliance/overview</code></td><td>Readiness % and alerts</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>GET/POST /compliance/policies</code> (+ <code>/:id</code>)</td><td>Policy documents with versions</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>GET/POST /compliance/training</code> · <code>/bulk-assign</code> · <code>/categories</code></td><td>Staff training records</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>GET /compliance/ai-governance</code></td><td>AI safety numbers</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>GET/POST /compliance/incidents</code> (+ <code>/:id</code>)</td><td>Security incidents</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>GET /compliance/audit-logs</code> · <code>/access-records</code></td><td>Who did what, who logged in (needs logging everywhere)</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>GET/PATCH /compliance/soc2-controls</code></td><td>SOC 2 checklist</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>POST /compliance/evidence/upload</code> · <code>GET</code> list</td><td>Evidence files with SHA-256 fingerprint</td><td><span class="pill todo">To do</span> needs storage</td></tr>
+      </tbody></table></div></div>
+  </details>
+
+  <details>
+    <summary><span class="left">Integrations</span><span><span class="pill todo">5 to do</span></span></summary>
+    <div class="body"><div class="table-wrap"><table>
+      <thead><tr><th>Endpoint</th><th>What it does</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET /integrations</code></td><td>Connected tools (settings shows Zoho, Gmail, Outlook, Calendar)</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>POST /integrations/:provider/connect</code> · <code>DELETE /integrations/:id</code></td><td>Connect / disconnect</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td><code>POST /integrations/:id/sync</code> · <code>/webhooks/integrations/:provider</code></td><td>Sync contacts &amp; events</td><td><span class="pill todo">To do</span></td></tr>
+      </tbody></table></div></div>
+  </details>
+
+  <!-- 8 -->
+  <h2 id="services">8. Outside services needed</h2>
+  <p>These can't be built — they must be chosen and paid for by the client. Each needs an account and API keys.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>For</th><th>Spec suggests</th><th>Blocks</th></tr></thead>
+      <tbody>
+        <tr><td><b>Phone calls in the browser</b></td><td>Twilio or LiveKit</td><td>Live calling, recordings, minutes</td></tr>
+        <tr><td><b>Speech-to-text</b></td><td>Deepgram or Whisper</td><td>Live transcripts</td></tr>
+        <tr><td><b>AI (tips, summaries, scores)</b></td><td>Claude or GPT</td><td>Live coaching, call reports, playbook generator</td></tr>
+        <tr><td><b>Payments</b></td><td>Stripe</td><td>Plans, upgrades, cards, invoices, buying minutes</td></tr>
+        <tr><td><b>Email sending</b></td><td>Any (Resend, SES, SendGrid)</td><td>Password reset, invites, mail center, ticket replies</td></tr>
+        <tr><td><b>File storage</b></td><td>AWS S3 or Cloudflare R2</td><td>Recordings, training files, evidence, avatars</td></tr>
+        <tr><td><b>Google login / Calendar / Gmail</b></td><td>Google Cloud project</td><td>Google sign-in, integrations</td></tr>
+        <tr><td><b>Zoho CRM &amp; Zoho Mail</b> (from Figma notes)</td><td>Zoho developer app</td><td>KPI data, mail integration</td></tr>
+        <tr><td><b>Zoom / Google Meet</b> (from Figma notes)</td><td>Zoom app / Google Cloud</td><td>Video meetings from the calendar</td></tr>
+        <tr><td><b>Push notifications</b> (mobile app)</td><td>Firebase Cloud Messaging / Apple Push</td><td>App notifications</td></tr>
+        <tr><td><b>App store payments</b> (maybe)</td><td>Apple / Google in-app purchase</td><td>Selling plans inside the phone app</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 9 -->
+  <h2 id="ask">9. Questions to send your client</h2>
+  <p>Copy and send these. Their answers decide the plan.</p>
+  <div class="copy">1. Figma has a mobile app for customers (~85 screens). Who is building the app itself, and with what (Flutter / React Native / native)? I'm building its API — correct?
+2. Do you want the backend inside the existing Next.js project, or as a separate server? Your spec mentions Django/FastAPI/Node — is that a requirement?
+3. Which database: MySQL (like the CloudPanel server) or PostgreSQL (like the spec)?
+4. Is the Super Admin panel in this repo the final admin dashboard, or is there another admin design in Figma?
+5. Which providers should I use for: phone calls (Twilio/LiveKit), speech-to-text, AI (Claude/GPT), payments (Stripe), email, file storage? Who creates and pays for these accounts?
+6. What is in scope for my contract: all 3 panels, or only the Customer panel first? Are live AI calling and the compliance section included?
+7. What are the priorities and the deadline? Which features must work first for launch or a demo?
+8. Can you give me edit access to the Figma file (or allow "Duplicate to drafts")?
+9. Is there an existing server, domain and database I should deploy to?
+10. In the mobile app, should users buy plans/credits inside the app (Apple/Google payments) or only on the website?
+11. Figma notes mention Zoho CRM, Zoho Mail, and Zoom/Google Meet. Are these integrations in my scope, and do you have Zoho accounts?
+12. Is the "Last UI design" page in Figma newer than "Final Design"? Which page is the final source of truth?</div>
+
+  <!-- 10 -->
+  <h2 id="need">10. What I need from you</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Item</th><th>How to get it</th></tr></thead>
+      <tbody>
+        <tr><td><b>Figma access</b></td><td><span class="pill done">Done</span> Your copy opens fine.</td></tr>
+        <tr><td><b>Fiverr chat</b></td><td>Open the conversation in a desktop browser → scroll to the very top so all messages load → <b>Cmd + P</b> → <b>Save as PDF</b>. Also download any files the client attached.</td></tr>
+        <tr><td><b>Telegram chat</b></td><td>Use <b>Telegram Desktop</b> (the phone app can't export) → open the chat → <b>⋮</b> menu → <b>Export chat history</b> → format <b>HTML</b>, tick photos &amp; files → Export. You get a <code>ChatExport_...</code> folder.</td></tr>
+        <tr><td><b>Where to put them</b></td><td>A folder <b>outside this project</b> (so private chats never get committed), e.g. <code>~/Projects/pitchprox-inputs/</code>. Tell me the path and I'll read everything and update this report.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 11 -->
+  <h2 id="plan">11. Proposed work plan</h2>
+  <p class="muted">Order after the client answers. Each step ends with tests like Phase 1.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Step</th><th>What</th><th>Needs</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>0</td><td>Answers from client · Figma access · chat exports · confirm backend option A or B</td><td>You + client</td><td><span class="pill q">Waiting</span></td></tr>
+        <tr><td>1</td><td>Login, roles, leads, CRM, dashboard, settings</td><td>—</td><td><span class="pill done">Done</span></td></tr>
+        <tr><td>1b</td><td><b>Mobile-ready login:</b> token login, refresh, email OTP, device registration — and API documentation for the app developer</td><td>Email provider (for OTP)</td><td><span class="pill todo">Next</span></td></tr>
+        <tr><td>2</td><td>Customer panel without outside services: team &amp; invites, lead import/assign/activity, playbooks, AI-training guidelines, support tickets, notifications, audit log</td><td>Nothing external</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td>3</td><td>Super Admin basics: customers, sales reps, plans &amp; pricing, announcements, master playbook</td><td>Nothing external</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td>4</td><td>Sales Rep panel: assigned leads, customers, calendar, commission</td><td>Step 3</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td>5</td><td>Email: password reset, invites, mail center, ticket replies</td><td>Email provider</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td>6</td><td>Billing: plans, Stripe checkout, invoices, minutes, credits</td><td>Stripe</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td>7</td><td>Calling: start/end calls, history, recordings</td><td>Twilio/LiveKit + storage</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td>8</td><td>Live AI coaching, transcripts, post-call analysis, analytics</td><td>Speech-to-text + AI</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td>9</td><td>Compliance suite, campaigns, integrations (Zoho, Google, Zoom)</td><td>Storage, Zoho/Google/Zoom</td><td><span class="pill todo">To do</span></td></tr>
+        <tr><td>10</td><td>Launch prep: fix remaining 48 lint errors, rate limits, tests, security review, rotate old passwords</td><td>—</td><td><span class="pill todo">To do</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="muted">Sources: the code in this repo (113 screens, 26 working API endpoints), <code>PROJECT_SPECIFICATION.md</code>, <code>PROJECT_DISCOVERY.md</code>, <code>DEPLOYMENT.md</code>, <code>ROADMAP.md</code>. Figma file "PitchProX || AI Project (Copy)": Final Design, Client Provided screens and Dashboards pages (Last UI design not yet loaded). Not yet included: Fiverr and Telegram chats.</p>
+</main>
+</body>
+</html>

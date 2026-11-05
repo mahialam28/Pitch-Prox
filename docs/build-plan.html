@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PitchProX Build Plan</title>
+<style>
+  :root {
+    --bg: #f6f8f9; --surface: #ffffff; --text: #1d2a30; --muted: #5d6d74; --border: #dfe6e9;
+    --brand: #0eadab; --brand-soft: #e3f6f6; --ok: #138a52; --ok-soft: #e4f5ec; --todo: #b54708; --todo-soft: #fdf0e3;
+    --warn: #9a6700; --warn-soft: #fff6d6; --danger: #b42318; --danger-soft: #fdecea; --code: #eef2f4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #11181b; --surface: #182226; --text: #e5eef0; --muted: #9db0b6; --border: #2a383d;
+      --brand: #3cc9c6; --brand-soft: #173335; --ok: #4cc38a; --ok-soft: #173126; --todo: #f0a35e; --todo-soft: #3a2817;
+      --warn: #e8c35a; --warn-soft: #362d12; --danger: #f2877c; --danger-soft: #3b1d1a; --code: #22303a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  h2 { font-size: 20px; margin: 44px 0 12px; padding-top: 8px; border-top: 1px solid var(--border); }
+  h3 { font-size: 16px; margin: 20px 0 8px; }
+  p { margin: 8px 0; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  nav.toc { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; }
+  nav.toc ol { margin: 0; padding-left: 20px; columns: 2; column-gap: 32px; }
+  @media (max-width: 640px) { nav.toc ol { columns: 1; } }
+  a { color: var(--brand); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin: 12px 0; }
+  .callout { border-left: 4px solid var(--brand); background: var(--brand-soft); border-radius: 8px; padding: 12px 16px; margin: 12px 0; }
+  .callout.warn { border-color: var(--warn); background: var(--warn-soft); }
+  .callout.danger { border-color: var(--danger); background: var(--danger-soft); }
+  .callout strong:first-child { display: block; margin-bottom: 2px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .stat { font-size: 26px; font-weight: 700; color: var(--brand); line-height: 1.2; }
+  .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin: 12px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: var(--bg); }
+  tr:last-child td { border-bottom: 0; }
+  code { background: var(--code); padding: 1px 6px; border-radius: 5px; font-size: 13px; }
+  .pill { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .done { background: var(--ok-soft); color: var(--ok); }
+  .todo { background: var(--todo-soft); color: var(--todo); }
+  .part { background: var(--warn-soft); color: var(--warn); }
+  .q { background: var(--danger-soft); color: var(--danger); }
+  details { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin: 10px 0; }
+  details > summary { cursor: pointer; padding: 12px 16px; font-weight: 600; list-style: none; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary::before { content: "▸"; margin-right: 6px; color: var(--muted); }
+  details[open] > summary::before { content: "▾"; }
+  details > summary .left { flex: 1; min-width: 200px; }
+  details .body { padding: 0 16px 14px; }
+  details .table-wrap { margin: 0; }
+  .flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin: 12px 0; }
+  .flow .box { flex: 1 1 160px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+  .flow .box b { display: block; }
+  .flow .arrow { align-self: center; color: var(--muted); font-size: 20px; }
+  @media (max-width: 640px) { .flow .arrow { transform: rotate(90deg); width: 100%; text-align: center; } }
+  ol.steps li, ul li { margin: 4px 0; }
+  .copy { white-space: pre-wrap; font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code); border-radius: 10px; padding: 14px 16px; }
+  .muted { color: var(--muted); }
+</style>
+
+</head>
+<body>
+<main>
+  <h1>PitchProX — Build Plan (Web App)</h1>
+  <p class="sub">Role by role, module by module · 27 Oct 2026 · everything saves to MySQL · mobile-app API on hold</p>
+
+  <div class="callout">
+    <strong>The rules we agreed</strong>
+    <ul>
+      <li><b>Website only for now.</b> The mobile-app API (token login, OTP codes, push notifications) waits until you talk to the app developer.</li>
+      <li><b>One role at a time</b>, one module at a time. Each module is tested before the next starts.</li>
+      <li><b>Everything saves to MySQL</b> (same database you'll create in CloudPanel).</li>
+      <li>Pages that need <b>the client</b> (an account, a provider, a decision) or <b>the app developer</b> are <b>not built</b> — they get a clear yellow warning saying why.</li>
+    </ul>
+  </div>
+
+  <div class="callout warn">
+    <strong>Quick note on the word "API"</strong>
+    The website still needs its own small backend routes to save to MySQL — that's how every button that "saves" works (Phase 1 already did this for leads and CRM). What we're <b>holding</b> is the <i>public</i> API for the phone app. Nothing extra to set up: the website and its routes deploy together as one app.
+  </div>
+
+  <h2>Order of work</h2>
+  <div class="flow">
+    <div class="box"><b>Step 1 — Customer</b><code>customer_admin</code> + <code>customer_member</code><br>/user panel</div>
+    <div class="arrow">→</div>
+    <div class="box"><b>Step 2 — Super Admin</b><code>super_admin</code><br>creates plans, reps, customers</div>
+    <div class="arrow">→</div>
+    <div class="box"><b>Step 3 — Sales Rep</b><code>sales_rep</code><br>works what admin assigns</div>
+    <div class="arrow">→</div>
+    <div class="box"><b>Step 4 — Go live</b>CloudPanel deploy (see deploy guide)</div>
+  </div>
+  <p class="muted">Why Super Admin before Sales Rep: a sales rep's screens show customers and leads <i>assigned by the super admin</i>. Without the admin side, the rep panel would have nothing real to show.</p>
+
+  <h2>Step 0 — before any role (½ day)</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>#</th><th>Module</th><th>What you get</th></tr></thead>
+    <tbody>
+      <tr><td>0.1 <span class="pill done">Done</span></td><td><b>Page status warnings</b></td><td>One central list of every page: <span class="pill done">Working</span>, <span class="pill part">Partly working</span>, or <span class="pill q">Waiting on client/app</span> with the exact reason (e.g. "Needs a phone-call provider from the client"). Safe to show the client from day one.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>Step 1 — Customer (<code>/user</code>, 30 pages)</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>#</th><th>Module</th><th>Pages</th><th>Can we finish it?</th></tr></thead>
+    <tbody>
+      <tr><td>✓</td><td>Login, dashboard, leads, CRM, profile/password/preferences/notifications</td><td>11</td><td><span class="pill done">Done in Phase 1</span></td></tr>
+      <tr><td>1.1 <span class="pill done">Done</span></td><td><b>Playbooks</b> — list, details, choose active playbook, multi-step builder, templates</td><td>2</td><td><span class="pill done">Yes</span> <span class="muted">AI "auto-generate" button gets a warning</span></td></tr>
+      <tr><td>1.2 <span class="pill done">Done</span></td><td><b>AI Training</b> — guidelines, scripts, uploaded files &amp; links (stored on the server)</td><td>1</td><td><span class="pill part">Mostly</span> <span class="muted">actual AI training needs an AI provider</span></td></tr>
+      <tr><td>1.3 <span class="pill done">Done</span></td><td><b>Support tickets</b> — create, list, reply, status</td><td>2</td><td><span class="pill done">Yes</span> <span class="muted">admin answers them in Step 2</span></td></tr>
+      <tr><td>1.4 <span class="pill done">Done</span></td><td><b>Mail</b> — templates and sent-mail history</td><td>5</td><td><span class="pill part">Mostly</span> <span class="muted">actually sending email needs the client's email service</span></td></tr>
+      <tr><td>1.5 <span class="pill done">Done</span></td><td><b>Leads extras</b> — CSV import, lead notes &amp; activity (the details modal is still fake)</td><td>—</td><td><span class="pill done">Yes</span></td></tr>
+      <tr><td>1.6 <span class="pill done">Done</span></td><td><b>Security</b> — see logged-in devices, log out other devices</td><td>1</td><td><span class="pill done">Yes</span> <span class="muted">2-step login later</span></td></tr>
+      <tr><td>1.7 <span class="pill done">Done</span></td><td><b>Billing (view only)</b> — current plan, minutes used, history from MySQL</td><td>3</td><td><span class="pill part">View only</span> <span class="muted">paying/upgrading needs Stripe</span></td></tr>
+      <tr><td>1.8 <span class="pill done">Done</span></td><td><b>Calibration</b> — save the mic-check results</td><td>1</td><td><span class="pill done">Yes</span> <span class="muted">(the mic test already works)</span></td></tr>
+      <tr><td>1.9 <span class="pill part">Partly</span></td><td><b>Team member role</b> (<code>customer_member</code>)</td><td>—</td><td><span class="pill q">Client decision</span> <span class="muted">no "add team member" screen exists, and nobody has said what a member can't do</span></td></tr>
+    </tbody>
+  </table></div>
+  <p><b>Waiting on client → warning only:</b> Live Calling, Calls &amp; call reports, Performance Analytics (needs call data), Integrations, payment pages (upgrade, card), forgot-password email.</p>
+
+  <h2>Step 2 — Super Admin (<code>/super-admin</code>, 48 pages)</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>#</th><th>Module</th><th>Can we finish it?</th></tr></thead>
+    <tbody>
+      <tr><td>2.1</td><td><b>Customers</b> — all companies &amp; users, details, plan, minutes, notes, suspend</td><td><span class="pill done">Yes</span></td></tr>
+      <tr><td>2.2</td><td><b>Sales reps</b> — create reps from the screen (no more command line), quotas, assign customers &amp; leads, manager notes</td><td><span class="pill done">Yes</span></td></tr>
+      <tr><td>2.3</td><td><b>Plans &amp; pricing</b> — plans, promo codes, add-ons, trial rules (the customer billing page reads these)</td><td><span class="pill done">Yes</span></td></tr>
+      <tr><td>2.4</td><td><b>Credits &amp; billing</b> — manual minute credits/debits with history</td><td><span class="pill part">Mostly</span> <span class="muted">real payments need Stripe</span></td></tr>
+      <tr><td>2.5</td><td><b>Support tickets</b> — answer customers' and reps' tickets</td><td><span class="pill done">Yes</span></td></tr>
+      <tr><td>2.6</td><td><b>Dashboard</b> — real platform numbers from MySQL</td><td><span class="pill part">Mostly</span> <span class="muted">revenue needs Stripe, call stats need calls</span></td></tr>
+      <tr><td>2.7</td><td><b>Calendar &amp; announcements</b></td><td><span class="pill done">Yes</span></td></tr>
+      <tr><td>2.8</td><td><b>Master playbook</b> — the default playbook customers start with</td><td><span class="pill done">Yes</span></td></tr>
+      <tr><td>2.9</td><td><b>Mail center &amp; campaigns</b> — templates, segments, campaign drafts</td><td><span class="pill part">Mostly</span> <span class="muted">sending needs email service</span></td></tr>
+      <tr><td>2.10</td><td><b>Compliance</b> — policies, incidents, training logs, audit log, access records, evidence files</td><td><span class="pill done">Yes</span> <span class="muted">(biggest module — may split in two)</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>Step 3 — Sales Rep (<code>/internal-sales-representative</code>, 30 pages)</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>#</th><th>Module</th><th>Can we finish it?</th></tr></thead>
+    <tbody>
+      <tr><td>3.1</td><td><b>Dashboard &amp; quota</b> — targets set by the admin, progress</td><td><span class="pill part">Mostly</span> <span class="muted">call-based numbers wait for calling</span></td></tr>
+      <tr><td>3.2</td><td><b>Assigned customers</b> — list, details, notes</td><td><span class="pill done">Yes</span></td></tr>
+      <tr><td>3.3</td><td><b>Rep's own leads &amp; CRM</b> (the rep's lead types and outcomes)</td><td><span class="pill done">Yes</span></td></tr>
+      <tr><td>3.4</td><td><b>Calendar, mail templates, support tickets, settings</b></td><td><span class="pill done">Yes</span> <span class="muted">email sending waits</span></td></tr>
+      <tr><td>3.5</td><td><b>Commission / billing view</b></td><td><span class="pill part">View only</span></td></tr>
+    </tbody>
+  </table></div>
+  <p><b>Waiting → warning only:</b> live calling, call recordings, rep analytics from calls.</p>
+
+  <h2>Parked — needs the client or the app developer</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Feature</th><th>Waiting on</th><th>What the page will say</th></tr></thead>
+    <tbody>
+      <tr><td>Live calling, recordings, transcripts, AI coaching, call reports, call analytics</td><td>Client: phone provider (Twilio/LiveKit) + AI provider</td><td>"Calling isn't connected yet — waiting for the phone/AI provider."</td></tr>
+      <tr><td>Upgrade plan, payment card, buying minutes, revenue numbers</td><td>Client: Stripe account</td><td>"Payments aren't connected yet."</td></tr>
+      <tr><td>Forgot password, invites, sending mail &amp; campaigns</td><td>Client: email service (SMTP / Resend / SES)</td><td>"Email sending isn't connected yet."</td></tr>
+      <tr><td>Zoho, Google, Zoom, Outlook integrations · Google sign-in</td><td>Client: accounts &amp; keys</td><td>"Integration not connected yet."</td></tr>
+      <tr><td>Mobile app API (tokens, OTP, push)</td><td>App developer</td><td>— (not a web page)</td></tr>
+      <tr><td><b>New roles</b> in "Last UI design": Internal Admin Manager, Super Admin Auditor, Super Admin Support, Employee Onboarding</td><td>You: a readable copy of that Figma page</td><td>— not in the code yet; we plan them once we can see the screens</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>What I suggest we do first</h2>
+  <div class="callout">
+    <strong>Start: 0.1 Page status warnings → then 1.1 Playbooks</strong>
+    The warnings make the whole site honest and demo-safe in one small step. Playbooks are the heart of the product (the AI coaches from them), they need no outside service, and the screens are already built — so the client sees a big feature become real.
+  </div>
+  <p class="muted">Each module ends with: lint + build pass, automated tests against MySQL, and an update to ROADMAP.md.</p>
+</main>
+</body>
+</html>

@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PitchProX User Manual</title>
+<style>
+  :root {
+    --bg: #f6f8f9; --surface: #ffffff; --text: #1d2a30; --muted: #5d6d74; --border: #dfe6e9;
+    --brand: #0eadab; --brand-soft: #e3f6f6; --ok: #138a52; --ok-soft: #e4f5ec; --warn: #9a6700; --warn-soft: #fff6d6;
+    --wait: #b54708; --wait-soft: #fdf0e3; --info: #175cd3; --info-soft: #eaf2fd; --code: #eef2f4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #11181b; --surface: #182226; --text: #e5eef0; --muted: #9db0b6; --border: #2a383d;
+      --brand: #3cc9c6; --brand-soft: #173335; --ok: #4cc38a; --ok-soft: #173126; --warn: #e8c35a; --warn-soft: #362d12;
+      --wait: #f0a35e; --wait-soft: #3a2817; --info: #84adf5; --info-soft: #172a45; --code: #22303a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #11181b; --surface: #182226; --text: #e5eef0; --muted: #9db0b6; --border: #2a383d;
+    --brand: #3cc9c6; --brand-soft: #173335; --ok: #4cc38a; --ok-soft: #173126; --warn: #e8c35a; --warn-soft: #362d12;
+    --wait: #f0a35e; --wait-soft: #3a2817; --info: #84adf5; --info-soft: #172a45; --code: #22303a;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; }
+  .layout { max-width: 1180px; margin: 0 auto; padding: 32px 16px 80px; display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 40px; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; gap: 16px; } nav.side { position: static !important; max-height: none !important; } }
+  nav.side { position: sticky; top: 24px; align-self: start; max-height: calc(100vh - 48px); overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; font-size: 14px; }
+  nav.side b { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 10px 0 4px; }
+  nav.side b:first-child { margin-top: 0; }
+  nav.side a { display: block; padding: 3px 0; color: var(--text); text-decoration: none; }
+  nav.side a:hover { color: var(--brand); }
+  main { min-width: 0; }
+  h1 { font-size: 30px; line-height: 1.2; margin: 0 0 6px; }
+  h2 { font-size: 22px; margin: 48px 0 6px; padding-top: 12px; border-top: 1px solid var(--border); scroll-margin-top: 16px; }
+  h3 { font-size: 17px; margin: 26px 0 8px; scroll-margin-top: 16px; }
+  p { margin: 8px 0; }
+  a { color: var(--brand); }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .where { color: var(--muted); font-size: 14px; margin: 0 0 10px; }
+  .where code { font-size: 13px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin: 12px 0; }
+  ol.steps { counter-reset: step; list-style: none; padding: 0; margin: 12px 0; }
+  ol.steps > li { counter-increment: step; position: relative; padding: 10px 14px 10px 52px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin: 8px 0; }
+  ol.steps > li::before { content: counter(step); position: absolute; left: 14px; top: 10px; width: 26px; height: 26px; border-radius: 50%; background: var(--brand); color: #fff; font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+  .btn { display: inline-block; padding: 0 7px; border-radius: 6px; background: var(--brand-soft); color: var(--brand); font-weight: 600; font-size: 13.5px; white-space: nowrap; }
+  .menu { font-weight: 600; white-space: nowrap; }
+  .note { border-left: 4px solid var(--info); background: var(--info-soft); border-radius: 8px; padding: 10px 14px; margin: 12px 0; font-size: 14px; }
+  .note.tip { border-color: var(--ok); background: var(--ok-soft); }
+  .note.warn { border-color: var(--wait); background: var(--wait-soft); }
+  .note strong:first-child { display: block; margin-bottom: 2px; }
+  .pill { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; vertical-align: 1px; }
+  .ok { background: var(--ok-soft); color: var(--ok); }
+  .part { background: var(--warn-soft); color: var(--warn); }
+  .wait { background: var(--wait-soft); color: var(--wait); }
+  .prev { background: var(--info-soft); color: var(--info); }
+  .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin: 12px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: var(--bg); }
+  tr:last-child td { border-bottom: 0; }
+  code { background: var(--code); padding: 1px 6px; border-radius: 5px; font-size: 13px; }
+  .copy { white-space: pre-wrap; word-break: break-word; font: 13.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code); border-radius: 10px; padding: 12px 14px; margin: 8px 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  .grid .card { margin: 0; }
+  .grid .card b { display: block; margin-bottom: 4px; }
+  .muted { color: var(--muted); }
+  @media print { nav.side { display: none; } .layout { display: block; } h2 { break-before: page; } ol.steps > li { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="side" aria-label="Contents">
+  <b>Start here</b>
+  <a href="#welcome">Welcome</a>
+  <a href="#labels">Page labels</a>
+  <a href="#accounts">Accounts &amp; signing in</a>
+  <b>Customer panel</b>
+  <a href="#dashboard">1. Dashboard</a>
+  <a href="#leads">2. Leads</a>
+  <a href="#crm">3. CRM</a>
+  <a href="#playbooks">4. Playbooks</a>
+  <a href="#ai-training">5. AI Training</a>
+  <a href="#calibration">6. Calibration</a>
+  <b>Settings</b>
+  <a href="#profile">7. Profile &amp; password</a>
+  <a href="#preferences">8. Preferences &amp; notifications</a>
+  <a href="#security">9. Security</a>
+  <a href="#billing">10. Billing</a>
+  <a href="#mail">11. Send Mail</a>
+  <a href="#support">12. Support tickets</a>
+  <b>Reference</b>
+  <a href="#admin">Creating staff accounts</a>
+  <a href="#coming">Coming soon</a>
+  <a href="#help">Troubleshooting</a>
+</nav>
+
+<main>
+  <h1>PitchProX User Manual</h1>
+  <p class="sub">Step-by-step guide to the customer panel · Updated 27 October 2026 · <a href="https://pitchprox.dmango.online">pitchprox.dmango.online</a></p>
+
+  <!-- ───────────────────────── Welcome ───────────────────────── -->
+  <section id="welcome">
+    <p><b>PitchProX helps sales teams organise leads, follow a sales playbook and, soon, make calls with a live AI coach.</b> This manual walks through every feature that works today, click by click. Everything you add is saved and stays after you refresh the page or sign in again.</p>
+    <div class="grid">
+      <div class="card"><b>Website</b><a href="https://pitchprox.dmango.online">pitchprox.dmango.online</a></div>
+      <div class="card"><b>Best in</b>Chrome, Edge, Safari or Firefox, on a computer. Phones work, but tables are easier on a big screen.</div>
+      <div class="card"><b>Need help?</b>Open a support ticket from <span class="menu">Settings → Support Ticket</span> (see <a href="#support">section 12</a>).</div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────── Labels ───────────────────────── -->
+  <h2 id="labels">Page labels: what works on each page</h2>
+  <p>Every page shows a small label at the bottom of the screen so nothing looks finished before it is. Click the <b>✕</b> on a label to hide it for that page.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Label</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><i>no label</i></td><td>Everything on the page works and is saved.</td></tr>
+      <tr><td><span class="pill part">Partly working</span></td><td>The main actions work; the label names the part that is still waiting.</td></tr>
+      <tr><td><span class="pill wait">Waiting on client</span></td><td>This feature needs an account or decision from you (for example a payment or phone provider). See <a href="#coming">Coming soon</a>.</td></tr>
+      <tr><td><span class="pill prev">Preview</span></td><td>The design is finished but the page still shows sample data. It is being built next.</td></tr>
+    </tbody>
+  </table></div>
+
+  <!-- ───────────────────────── Accounts ───────────────────────── -->
+  <h2 id="accounts">Accounts &amp; signing in</h2>
+  <p>There are four kinds of account. Everyone signs in on the same page and is taken to their own area automatically.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Account</th><th>Who</th><th>How it is created</th><th>Opens on</th></tr></thead>
+    <tbody>
+      <tr><td><b>Customer admin</b></td><td>A business that uses PitchProX</td><td>Signs up on the website</td><td>Customer dashboard</td></tr>
+      <tr><td><b>Customer team member</b></td><td>That business's staff</td><td>Added by the PitchProX team (see <a href="#admin">Creating staff accounts</a>)</td><td>Customer dashboard</td></tr>
+      <tr><td><b>Sales rep</b></td><td>PitchProX's own salespeople</td><td>Added by the PitchProX team</td><td>Sales Rep panel <span class="pill prev">Preview</span></td></tr>
+      <tr><td><b>Super admin</b></td><td>PitchProX owners and operations</td><td>Added by the PitchProX team</td><td>Super Admin panel <span class="pill prev">Preview</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Create a customer account</h3>
+  <ol class="steps">
+    <li>Go to <a href="https://pitchprox.dmango.online/sign-up">pitchprox.dmango.online/sign-up</a>.</li>
+    <li>Enter your <b>full name</b>, <b>email</b> and a <b>password</b> of at least 8 characters, and type the password again to confirm.</li>
+    <li>Tick the <b>Terms &amp; Conditions</b> box.</li>
+    <li>Click <span class="btn">Create Account</span>. You land on your dashboard, signed in, on the <b>Free Trial</b> plan.</li>
+  </ol>
+
+  <h3>Sign in and sign out</h3>
+  <ol class="steps">
+    <li>Go to <a href="https://pitchprox.dmango.online/sign-in">pitchprox.dmango.online/sign-in</a>, enter your email and password, and click <span class="btn">Sign In</span>.</li>
+    <li>To sign out, click <span class="btn">Logout</span> at the bottom of the left menu.</li>
+  </ol>
+  <div class="note"><strong>Good to know</strong>You stay signed in for 7 days on each device. "Sign in with Google / Facebook" and "Forgot password" are not connected yet <span class="pill wait">Waiting on client</span>.</div>
+
+  <!-- ───────────────────────── Dashboard ───────────────────────── -->
+  <h2 id="dashboard">1. Dashboard</h2>
+  <p class="where">Left menu → <span class="menu">Dashboard</span> · <span class="pill part">Partly working</span></p>
+  <p>The dashboard is your summary. It shows:</p>
+  <ul>
+    <li><b>Conversion Momentum</b>: the share of your leads that reached <i>Qualified</i> or <i>Appointment Set</i>, with the count (for example "3 of 12 leads qualified").</li>
+    <li><b>Lead Pipeline Overview</b>: how many leads sit in each stage. With no leads yet, it offers an <span class="btn">Add a lead</span> button.</li>
+    <li><b>Prompt Adherence, Trust Gain, Performance Trend and Recent Calls</b> say "No call data yet". They fill in once calling is connected.</li>
+  </ul>
+
+  <!-- ───────────────────────── Leads ───────────────────────── -->
+  <h2 id="leads">2. Leads</h2>
+  <p class="where">Left menu → <span class="menu">Leads</span> · <span class="pill ok">Working</span></p>
+  <p>Leads are the people you plan to call. Everything here is saved instantly.</p>
+
+  <h3>Add a lead</h3>
+  <ol class="steps">
+    <li>Click <span class="btn">Add New Lead</span>.</li>
+    <li>Fill in <b>Full Name</b> and <b>Property Address</b> (both required), up to 6 <b>phone numbers</b> (they format themselves, e.g. (213) 555-1234), <b>email</b>, <b>property address</b>, city, state, zip and <b>lead type</b> (for example Expired Listings or FSBO).</li>
+    <li>Add any <b>notes</b> (up to 500 characters).</li>
+    <li>Click <span class="btn">Save Lead</span>. You return to the list with your new lead at the top.</li>
+  </ol>
+  <div class="note"><strong>Phone numbers</strong>You can type several numbers, but only the first one is saved for now.</div>
+
+  <h3>Change stage, status or outcome from the list</h3>
+  <ol class="steps">
+    <li>In the leads table, click the coloured badge in the <b>Stage</b>, <b>Status</b> or <b>Outcome</b> column.</li>
+    <li>Pick the new value. It saves immediately; if saving fails, the old value comes back and a message explains why.</li>
+  </ol>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Field</th><th>Choices</th></tr></thead>
+    <tbody>
+      <tr><td>Stage</td><td>New · Attempted · Contacted · In Conversation · Follow-Up · Qualified · Appointment Set · Archived</td></tr>
+      <tr><td>Status</td><td>Hot · Warm · Cold · Unknown</td></tr>
+      <tr><td>Outcome</td><td>Appointment Set · Follow-Up Required · Information Requested · Not Interested · Not a Fit · No Answer · Voicemail · Wrong Number · Do Not Contact · Other</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Find leads quickly</h3>
+  <ul>
+    <li><b>Tabs:</b> All Leads · Hot Leads · Not Connected · Interested / Not Interested.</li>
+    <li><b>Filters above the table:</b> stage, status, lead type and outcome.</li>
+    <li><b>Time filter</b> (top right): This Year, This Month, This Week or Today, based on when the lead was last updated.</li>
+  </ul>
+
+  <h3>Open a lead: notes, follow-ups and timeline</h3>
+  <ol class="steps">
+    <li>Click any lead's row. Its details window opens.</li>
+    <li><b>Add a note:</b> click <span class="btn">Add Note</span>, type, then <span class="btn">Save Note</span>. It appears in the <b>Activity Timeline</b> with your name and the time.</li>
+    <li><b>Schedule a follow-up:</b> click <span class="btn">Schedule Follow-Up</span>, choose the <b>date</b>, type a <b>time</b> such as <code>10:00 AM</code> or <code>14:30</code>, then <span class="btn">Schedule Event</span>. The date must be in the future.</li>
+    <li>The timeline shows the upcoming follow-up, every note (newest first) and when the lead was added.</li>
+  </ol>
+
+  <h3>Edit or delete a lead</h3>
+  <ol class="steps">
+    <li><b>Edit:</b> click the pencil icon in the row (or <span class="btn">Edit</span> in the details window), change any field, then <span class="btn">Update Lead</span>.</li>
+    <li><b>Delete:</b> click the bin icon (or <span class="btn">Delete</span> in the details window) and confirm. Deleting also removes the lead's notes and cannot be undone.</li>
+  </ol>
+
+  <!-- ───────────────────────── CRM ───────────────────────── -->
+  <h2 id="crm">3. CRM</h2>
+  <p class="where">Left menu → <span class="menu">CRM</span> · <span class="pill ok">Working</span></p>
+  <p>The CRM tracks <b>prospects</b>, the leads you are actively working, through your pipeline. It works like Leads, with three additions.</p>
+  <ol class="steps">
+    <li><b>Add a prospect:</b> click <span class="btn">Add Prospect</span>, fill in the form (name and address are required), choose a stage, status and outcome, then <span class="btn">Save Prospect</span>.</li>
+    <li><b>Move through the pipeline:</b> click the <b>Stage</b> badge in the table and pick the next stage.</li>
+    <li><b>Notes and follow-ups:</b> click a prospect, then use <span class="btn">Add Note</span> and <span class="btn">Schedule Follow-Up</span> exactly as for leads. The <b>Follow-Up</b> column then shows <i>Scheduled</i>, <i>Due Soon</i> (within 2 days) or <i>Due Now</i>.</li>
+    <li><b>Edit:</b> pencil icon or <span class="btn">Edit</span> → change fields → <span class="btn">Update Prospect</span>.</li>
+    <li><b>Import:</b> click <span class="btn">Import</span> and choose a <code>.csv</code> or <code>.json</code> file. Each valid row is saved; if some rows are rejected, a message says how many and why.</li>
+    <li><b>Export:</b> click <span class="btn">Export</span> to download the prospects shown as a CSV file.</li>
+  </ol>
+  <div class="note tip"><strong>CSV import format</strong>The first row should be headers. Recognised columns: <code>Name</code>, <code>Property Address</code>, <code>Lead Stage</code>, <code>Status</code>, <code>Lead Type</code>, <code>Outcome</code>. Values must match the choices in the Leads table above, e.g. Stage <code>Qualified</code>, Status <code>Warm</code>.</div>
+
+  <!-- ───────────────────────── Playbooks ───────────────────────── -->
+  <h2 id="playbooks">4. Playbooks</h2>
+  <p class="where">Left menu → <span class="menu">Playbook</span> · <span class="pill part">Partly working</span> (buying premium playbooks waits for payments)</p>
+  <p>A playbook is the sales method your AI coach follows on calls. One playbook is <b>active</b> at a time; new accounts start with <b>PitchProX Standard</b>.</p>
+
+  <h3>Change the active playbook</h3>
+  <ol class="steps">
+    <li>Click <span class="btn">Change Playbook</span> in the Active Playbook card.</li>
+    <li>Pick a playbook. Greyed-out ones are premium (not bought yet) or unfinished drafts.</li>
+    <li>Click <span class="btn">Apply Playbook</span>. The card at the top now shows your choice. You can also click <span class="btn">Use Playbook</span> on any card.</li>
+  </ol>
+
+  <h3>Create your own playbook</h3>
+  <ol class="steps">
+    <li>Click <span class="btn">Create Playbook</span> on the dotted <b>Custom Playbook</b> card.</li>
+    <li><b>Step 1 · Basic Info:</b> name (required), short description, lead types it suits, experience level, your voice and core philosophy, and your main goal.</li>
+    <li><b>Step 2 · Your Style:</b> tone, communication style, energy, sentence style, formality and humour.</li>
+    <li><b>Step 3 · Conversation Flow:</b> the stages of your call (Opening, Discovery, …). Add, edit, reorder or remove stages.</li>
+    <li><b>Step 4 · Objection Handling:</b> the objections you hear and your response framework. Add or edit objections.</li>
+    <li><b>Step 5 · Review &amp; Save:</b> check the summary and the <b>completeness score</b> (how much is filled in), then click <span class="btn">Create Playbook</span>. It becomes your active playbook.</li>
+  </ol>
+  <div class="note tip"><strong>Save as you go</strong>Click <span class="btn">Save as Draft</span> at the top at any step. Drafts appear under the <b>Custom</b> tab with a <i>DRAFT</i> badge; click <span class="btn">Finish Draft</span> to continue later. Moving between steps never loses what you typed.</div>
+
+  <h3>Edit or delete your playbook</h3>
+  <ol class="steps">
+    <li>Open the <b>Custom</b> tab.</li>
+    <li>Click the pencil to edit. The builder opens with everything filled in; click <span class="btn">Save Changes</span>.</li>
+    <li>Click the bin to delete and confirm. If it was your active playbook, PitchProX Standard becomes active again.</li>
+  </ol>
+
+  <!-- ───────────────────────── AI Training ───────────────────────── -->
+  <h2 id="ai-training">5. AI Training</h2>
+  <p class="where">Left menu → <span class="menu">AI Training</span> · <span class="pill part">Partly working</span> (the AI learns from it once an AI provider is connected)</p>
+  <p>Upload material that teaches the AI how you sell. There are 7 categories: Sales Bio, Company Info, Scripts &amp; Flows, Objections, Marketing &amp; Listing Presentation, Past Sales Data and Other Resources.</p>
+  <ol class="steps">
+    <li>Find the category card and click <span class="btn">Upload</span>.</li>
+    <li>Choose a file: PDF, Word, text, slides, spreadsheets, video (MP4, MOV), audio (MP3, WAV) or images, up to <b>50 MB</b>.</li>
+    <li>The file appears in the <b>Training Content</b> table with its type, size and date.</li>
+    <li><b>Training Progress</b> shows how many of the 7 categories have material (one category = 14%).</li>
+    <li><b>Pause</b> (⏸) keeps a file stored but leaves it out of training; click ▶ to resume. <b>Delete</b> (bin) removes it permanently.</li>
+  </ol>
+  <div class="note warn"><strong>Privacy</strong>Do not upload sensitive client information. Files are stored privately and only your company's accounts can see them.</div>
+
+  <!-- ───────────────────────── Calibration ───────────────────────── -->
+  <h2 id="calibration">6. Calibration</h2>
+  <p class="where">Left menu → <span class="menu">Calibration</span> · <span class="pill part">Partly working</span> (scores are samples until AI is connected)</p>
+  <ol class="steps">
+    <li>Allow microphone access when your browser asks.</li>
+    <li>Follow the on-screen rounds: listen, then read the suggested response aloud while recording.</li>
+    <li>Click <span class="btn">End Calibration</span> when done. A message confirms the session was saved and how many sessions you have completed.</li>
+  </ol>
+  <div class="note">The score screen after calibration shows <b>sample</b> numbers until the AI is connected.</div>
+
+  <!-- ───────────────────────── Profile ───────────────────────── -->
+  <h2 id="profile">7. Profile &amp; password</h2>
+  <p class="where">Left menu → <span class="menu">Settings</span> → <span class="menu">Profile</span> · <span class="pill part">Partly working</span></p>
+  <ol class="steps">
+    <li><b>Change your name:</b> edit the name field and click <span class="btn">Save Changes</span>. The new name shows in the left menu immediately.</li>
+    <li><b>Change your password:</b> under <b>Change Password</b>, enter your current password and the new one twice (8+ characters), then save.</li>
+  </ol>
+  <div class="note tip"><strong>Security</strong>Changing your password signs you out on every <i>other</i> device, in case someone else knew the old one. The language and "Delete Your Account" options are not active yet.</div>
+
+  <!-- ───────────────────────── Preferences ───────────────────────── -->
+  <h2 id="preferences">8. Preferences &amp; notifications</h2>
+  <p class="where"><span class="menu">Settings</span> → <span class="menu">Preferences</span> / <span class="menu">Notifications</span> · <span class="pill ok">Working</span></p>
+  <ol class="steps">
+    <li><b>Preferences:</b> set the <b>font size</b> and your <b>default playbook</b> (the same choice as the Playbook page), then click <span class="btn">Save Changes</span>.</li>
+    <li><b>Notifications:</b> choose how you get in-app notifications and AI insight alerts, then save.</li>
+  </ol>
+
+  <!-- ───────────────────────── Security ───────────────────────── -->
+  <h2 id="security">9. Security</h2>
+  <p class="where"><span class="menu">Settings</span> → <span class="menu">Security</span> · <span class="pill part">Partly working</span> (2-step login coming later)</p>
+  <h3>See and remove signed-in devices</h3>
+  <ol class="steps">
+    <li><b>Device Management</b> lists every device signed in to your account: device type, browser, IP address and when it was last active. "This Device" is the one you are using.</li>
+    <li>Click the <b>⋮</b> menu on a device:
+      <ul>
+        <li><b>Device Info</b>: when it signed in.</li>
+        <li><b>Refresh Session</b>: keep it signed in for another 7 days.</li>
+        <li><b>Remove Device</b>: sign that device out immediately.</li>
+      </ul>
+    </li>
+    <li>Click <span class="btn">Log out of all other devices</span> to sign out everywhere except here.</li>
+  </ol>
+  <h3>Check sign-in history</h3>
+  <p><b>Login Activity</b> shows your last 20 sign-in attempts with date, time, device, browser, IP and <i>Success</i> or <i>Failed</i>. An unknown device or many <i>Failed</i> rows means someone may be trying your password: change it (<a href="#profile">section 7</a>) and remove unknown devices.</p>
+
+  <!-- ───────────────────────── Billing ───────────────────────── -->
+  <h2 id="billing">10. Billing</h2>
+  <p class="where"><span class="menu">Settings</span> → <span class="menu">Billing</span> · <span class="pill part">Partly working</span> (payments wait for Stripe)</p>
+  <ol class="steps">
+    <li><b>Current Plan</b> shows your plan, price and billing cycle. New accounts are on the <b>Free Trial</b> (10 calls and 1 detailed report).</li>
+    <li><b>Usage Overview</b> shows calls and reports used against your plan's limits. Counting starts once calling is connected.</li>
+    <li><b>Overages &amp; Charges</b> shows the price per extra call on your plan.</li>
+    <li>Click <span class="btn">Upgrade Plan</span> to compare plans; switch <b>Monthly / Annual</b> to see both prices.</li>
+    <li><span class="btn">Invoice History</span> lists invoices after your first payment. <span class="btn">Payment Method</span> opens Stripe's secure card page once payments are connected.</li>
+  </ol>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Plan</th><th>Monthly</th><th>Annual (per month)</th><th>Calls / month</th><th>Detailed reports</th><th>Extra calls</th></tr></thead>
+    <tbody>
+      <tr><td>Free Trial</td><td>$0</td><td>—</td><td>10</td><td>1</td><td>—</td></tr>
+      <tr><td>Basic</td><td>$99</td><td>$89</td><td>150</td><td>5</td><td>$0.45 each</td></tr>
+      <tr><td>Pro</td><td>$199</td><td>$179</td><td>400</td><td>20</td><td>$0.45 each</td></tr>
+      <tr><td>Elite</td><td>$349</td><td>$314</td><td>750</td><td>50</td><td>$0.35 each</td></tr>
+    </tbody>
+  </table></div>
+
+  <!-- ───────────────────────── Mail ───────────────────────── -->
+  <h2 id="mail">11. Send Mail</h2>
+  <p class="where"><span class="menu">Settings</span> → <span class="menu">Send Mail</span> · <span class="pill part">Partly working</span> (delivery waits for an email service)</p>
+  <ol class="steps">
+    <li>Optional: click a template under <b>Quick templates</b> to pre-fill the subject and message.</li>
+    <li>Enter the recipient's email. Click <b>CC</b> or <b>BCC</b> to add more addresses, separated by commas.</li>
+    <li>Write the subject and message, then click <span class="btn">Send email</span>.</li>
+    <li>The email appears under recent emails with the status <span class="pill part">Waiting</span>. Click it to see the full message.</li>
+  </ol>
+  <div class="note warn"><strong>Emails are not delivered yet</strong>Messages are saved with a "Waiting" status and will be sent once an email service is connected. The "AI draft" button inserts sample text for now.</div>
+
+  <!-- ───────────────────────── Support ───────────────────────── -->
+  <h2 id="support">12. Support tickets</h2>
+  <p class="where"><span class="menu">Settings</span> → <span class="menu">Support Ticket</span> · <span class="pill ok">Working</span></p>
+  <h3>Open a ticket</h3>
+  <ol class="steps">
+    <li>Under <b>Create a new ticket</b>, choose a <b>category</b> (Technical Support, Billing &amp; Plans, Account Access or Feature Request) and a <b>priority</b> (Low, Medium, High or Urgent).</li>
+    <li>Write a short <b>subject</b> and describe the problem.</li>
+    <li>Optional: attach a screenshot or file (images, PDF, documents or logs, up to 10 MB).</li>
+    <li>Click <span class="btn">Create Ticket</span>. A message shows its number, e.g. <code>#TKT-1001</code>, and it appears in <b>Your tickets</b>.</li>
+  </ol>
+  <h3>Follow up on a ticket</h3>
+  <ol class="steps">
+    <li>Click a ticket in <b>Your tickets</b> or <b>Recent support tickets</b> (or <span class="btn">View all tickets</span>). The conversation opens on the right.</li>
+    <li>Type in the reply box and click <span class="btn">Send Reply</span>. Use the arrows at the top to move between tickets.</li>
+    <li>Click the eye or download icon on an attachment to open it. The <b>Attachments</b> tab lists every file on the ticket.</li>
+  </ol>
+  <div class="note">Statuses: <b>Open</b> → <b>In progress</b> → <b>Resolved</b> / <b>Closed</b>. Replying to a resolved or closed ticket opens it again. Replies from the PitchProX team arrive with the Super Admin panel.</div>
+
+  <!-- ───────────────────────── Admin ───────────────────────── -->
+  <h2 id="admin">Creating staff accounts</h2>
+  <p>Super admins, sales reps and customer team members are created on the server by your developer. There is no sign-up page for them, so nobody can make themselves an admin. Your developer runs one command per account in the project folder:</p>
+  <div class="copy"># Super admin
+npm run create-user -- --email you@company.com --name "Your Name" --password "a-strong-password" --role super_admin
+
+# Sales rep
+npm run create-user -- --email rep@company.com --name "Rep Name" --password "a-strong-password" --role sales_rep
+
+# Team member of an existing customer (use that customer's sign-up email)
+npm run create-user -- --email staff@customer.com --name "Staff Name" --password "a-strong-password" --role customer_member --company-of owner@customer.com</div>
+  <p class="muted">Use strong passwords of at least 8 characters, and share them privately, never in a document or group chat.</p>
+
+  <!-- ───────────────────────── Coming soon ───────────────────────── -->
+  <h2 id="coming">Coming soon</h2>
+  <p>These areas are designed and on screen but are not active yet. Most need an account or decision from you.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Area</th><th>Status</th><th>Needs</th></tr></thead>
+    <tbody>
+      <tr><td>Live Calling, Calls &amp; call reports, Performance Analytics, AI coaching, calibration scores</td><td><span class="pill wait">Waiting on client</span></td><td>A phone-call provider (e.g. Twilio or LiveKit) and an AI provider (e.g. Claude or GPT)</td></tr>
+      <tr><td>Upgrading plans, card payments, invoices, buying minutes, premium playbooks</td><td><span class="pill wait">Waiting on client</span></td><td>A Stripe account</td></tr>
+      <tr><td>Password reset email, delivering emails, invitations</td><td><span class="pill wait">Waiting on client</span></td><td>An email-sending service</td></tr>
+      <tr><td>Integrations (Zoho, Gmail, Outlook, Calendar), Google sign-in</td><td><span class="pill wait">Waiting on client</span></td><td>Your accounts with those services</td></tr>
+      <tr><td>Super Admin panel</td><td><span class="pill prev">Preview</span></td><td>Being built next</td></tr>
+      <tr><td>Sales Rep panel</td><td><span class="pill prev">Preview</span></td><td>Being built after the Super Admin panel</td></tr>
+      <tr><td>2-step login (2FA), team invitations screen</td><td><span class="pill prev">Preview</span></td><td>Planned</td></tr>
+    </tbody>
+  </table></div>
+
+  <!-- ───────────────────────── Troubleshooting ───────────────────────── -->
+  <h2 id="help">Troubleshooting</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Problem</th><th>What to do</th></tr></thead>
+    <tbody>
+      <tr><td>"Invalid email or password"</td><td>Check for typos and Caps Lock. Password reset by email isn't available yet, so ask the PitchProX team to reset it.</td></tr>
+      <tr><td>I'm sent back to the sign-in page</td><td>Your session ended (after 7 days, a password change, or "Log out of all other devices"). Sign in again. Always use the <code>https://</code> address.</td></tr>
+      <tr><td>A page opens a different dashboard than I expected</td><td>Each account only opens its own area. A customer account can't open the Super Admin or Sales Rep pages.</td></tr>
+      <tr><td>Upload fails</td><td>Check the file type and size: 50 MB for AI Training, 10 MB for ticket attachments.</td></tr>
+      <tr><td>An email I "sent" never arrived</td><td>Expected for now: emails stay <i>Waiting</i> until an email service is connected.</td></tr>
+      <tr><td>Numbers on a page look like examples</td><td>Check the label at the bottom of the screen. <b>Preview</b> pages still show sample data.</td></tr>
+      <tr><td>Something else</td><td>Open a support ticket (<a href="#support">section 12</a>) with a screenshot.</td></tr>
+    </tbody>
+  </table></div>
+</main>
+</div>
+</body>
+</html>
