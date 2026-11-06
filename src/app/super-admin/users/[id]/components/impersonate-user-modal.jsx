@@ -35,11 +35,6 @@ const LANGUAGE_OPTIONS = [
   { value: "fr", label: "French" },
 ];
 
-const OWNER_OPTIONS = [
-  { value: "daniel", label: "Daniel Miller (Admin)" },
-  { value: "sarah", label: "Sarah Johnson (Manager)" },
-  { value: "jennifer", label: "Jennifer Smith (Owner)" },
-];
 
 export default function ImpersonateUserModal({
   isOpen = false,
@@ -60,12 +55,15 @@ export default function ImpersonateUserModal({
   const [accessLevel, setAccessLevel] = useState("full"); // "full" | "readonly"
   const [reason, setReason] = useState("Helping user troubleshoot billing issue");
   const [language, setLanguage] = useState("en");
-  const [accountOwner, setAccountOwner] = useState("daniel");
+  // Who to sign in as: the account's members (owner first), when the page knows them
+  const memberOptions = user.members?.length ? user.members.map((member) => ({ value: member.id, label: `${member.name}${member.role === "customer_admin" ? " (Owner)" : ""}` })) : [{ value: "owner", label: `${user.name} (Owner)` }];
+  const [memberId, setMemberId] = useState(memberOptions[0].value);
   const [isAcknowledged, setIsAcknowledged] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!reason.trim()) {
       toast.error("Please provide a reason for impersonation.");
@@ -76,9 +74,16 @@ export default function ImpersonateUserModal({
       return;
     }
 
-    toast.success(`Started impersonation session for ${user.name}.`);
-    if (onConfirm) onConfirm({ duration, accessLevel, reason });
-    onClose();
+    // The caller starts the session; on failure it reports the error and the modal stays open
+    try {
+      setSubmitting(true);
+      await onConfirm?.({ duration, accessLevel, reason: reason.trim(), userId: memberId === "owner" ? undefined : memberId });
+      onClose();
+    } catch {
+      /* reported by the caller */
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -186,13 +191,6 @@ export default function ImpersonateUserModal({
                       <span className="font-semibold text-dark-black/90">
                         {user.company || "Acme Inc."}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => toast.success("Edit company details")}
-                        className="text-xs font-semibold text-teal-600 hover:underline cursor-pointer"
-                      >
-                        Edit
-                      </button>
                     </div>
                   </div>
 
@@ -225,25 +223,16 @@ export default function ImpersonateUserModal({
                   </div>
 
                   <div className="pt-2.5 flex items-center justify-between gap-2">
-                    <span className="text-light-black font-medium">Account Owner</span>
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-[160px]">
-                        <Dropdown
-                          items={OWNER_OPTIONS}
-                          selected={accountOwner}
-                          onSelect={setAccountOwner}
-                          variant="small"
-                          className="w-full"
-                          buttonClassName="h-8 text-xs font-semibold"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => toast.success("Edit owner")}
-                        className="text-xs font-semibold text-teal-600 hover:underline cursor-pointer"
-                      >
-                        Edit
-                      </button>
+                    <span className="text-light-black font-medium">Sign In As</span>
+                    <div className="w-[180px]">
+                      <Dropdown
+                        items={memberOptions}
+                        selected={memberId}
+                        onSelect={setMemberId}
+                        variant="small"
+                        className="w-full"
+                        buttonClassName="h-8 text-xs font-semibold"
+                      />
                     </div>
                   </div>
                 </div>
@@ -519,9 +508,10 @@ export default function ImpersonateUserModal({
               <button
                 type="button"
                 onClick={handleSubmit}
-                className="flex-1 sm:flex-initial px-6 py-2 rounded-xl bg-[#0E4F4F] hover:bg-[#093838] text-white text-xs font-semibold transition-colors cursor-pointer shadow-sm"
+                disabled={submitting}
+                className="disabled:opacity-60 flex-1 sm:flex-initial px-6 py-2 rounded-xl bg-[#0E4F4F] hover:bg-[#093838] text-white text-xs font-semibold transition-colors cursor-pointer shadow-sm"
               >
-                Start Impersonation
+                {submitting ? "Starting…" : "Start Impersonation"}
               </button>
             </div>
           </div>

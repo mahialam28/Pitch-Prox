@@ -8,6 +8,7 @@ import { Eye, User as UserIcon, Lock, Ban, Trash2 } from "lucide-react";
 import ActionMenu from "@/components/shared/dropdown/action-menu";
 import ImpersonateUserModal from "../[id]/components/impersonate-user-modal";
 import { SuspendAccountModal, DeleteAccountModal, startImpersonation } from "../[id]/components/account-dialogs";
+import { accountApi } from "../account-api";
 import { showSavedToast } from "@/lib/toast";
 import {
   Search,
@@ -758,7 +759,8 @@ const pageSizeOptions = [
 ];
 
 // users: live rows (from /api/v1/customers); without it the sample list is shown
-const UserList = ({ users } = {}) => {
+// onChanged: reload the live list after a row action
+const UserList = ({ users, onChanged } = {}) => {
   const portal = usePortal();
   const router = useRouter();
   const [usersList, setUsersList] = useState(initialUsers);
@@ -767,17 +769,34 @@ const UserList = ({ users } = {}) => {
   const [suspending, setSuspending] = useState(null);
   const [deleting, setDeleting] = useState(null);
 
+  // Live rows call the API; the sample list (no `users`) only changes on screen.
+  // Sales reps can't impersonate, suspend or delete; Super Admin and Support can.
+  const live = Boolean(users);
+  const staffOnly = portal.base === "/super-admin";
   const rowMenuItems = (user) => [
     { label: "View Details", icon: Eye, onClick: () => router.push(`${portal.base}/users/${user.id}`) },
-    { label: "Impersonate User", icon: UserIcon, onClick: () => setImpersonating(user) },
-    {
-      label: "Reset Password",
-      icon: Lock,
-      onClick: () => showSavedToast("Password reset sent", `${user.name} will get a reset link at ${user.email}.`),
-    },
-    { label: "Suspend Account", icon: Ban, disabled: user.status === "Suspended", onClick: () => setSuspending(user) },
-    { divider: true },
-    { label: "Delete Account", icon: Trash2, danger: true, onClick: () => setDeleting(user) },
+    ...(staffOnly ? [{ label: "Impersonate User", icon: UserIcon, disabled: ["Suspended", "Deleted"].includes(user.status), onClick: () => setImpersonating(user) }] : []),
+    ...(user.status === "Invited"
+      ? [
+          {
+            label: "Resend Activation Link",
+            icon: Lock,
+            onClick: async () => {
+              if (!live) return showSavedToast("Activation link sent", `${user.name} will get a new link at ${user.email}.`);
+              const { invite } = await accountApi(user.id).resendActivation();
+              await navigator.clipboard?.writeText(`${window.location.origin}/activate?token=${invite.token}`).catch(() => {});
+              showSavedToast("New activation link", "Copied to your clipboard. Send it to the customer.");
+            },
+          },
+        ]
+      : []),
+    ...(staffOnly
+      ? [
+          { label: "Suspend Account", icon: Ban, disabled: ["Suspended", "Deleted"].includes(user.status), onClick: () => setSuspending(user) },
+          { divider: true },
+          { label: "Delete Account", icon: Trash2, danger: true, disabled: user.status === "Deleted", onClick: () => setDeleting(user) },
+        ]
+      : []),
   ];
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPlan, setSelectedPlan] = useState("All Plans");
@@ -1278,7 +1297,8 @@ const UserList = ({ users } = {}) => {
         isOpen={Boolean(impersonating)}
         onClose={() => setImpersonating(null)}
         user={impersonating ? { ...impersonating, industry: "Real Estate", timeZone: "(GMT-05:00) Eastern Time (US & Canada)" } : undefined}
-        onConfirm={(options) => {
+        onConfirm={async (options) => {
+          if (live) return accountApi(impersonating?.id).impersonate(options);
           startImpersonation(impersonating?.id, options);
           router.push(`${portal.base}/users/${impersonating?.id}`);
         }}
@@ -1288,17 +1308,27 @@ const UserList = ({ users } = {}) => {
         onClose={() => setSuspending(null)}
         name={suspending?.name}
         iconTone="warning"
-        onConfirm={() =>
+        onConfirm={async (reason) => {
+          if (live) {
+            await accountApi(suspending?.id).setStatus("suspended", reason);
+            return onChanged?.();
+          }
           setUsersList((prev) =>
             prev.map((user) => (user.id === suspending?.id ? { ...user, status: "Suspended", statusDot: "bg-red-500", statusClass: "text-red-600" } : user))
-          )
-        }
+          );
+        }}
       />
       <DeleteAccountModal
         isOpen={Boolean(deleting)}
         onClose={() => setDeleting(null)}
         company={deleting?.company}
-        onConfirm={() => setUsersList((prev) => prev.filter((user) => user.id !== deleting?.id))}
+        onConfirm={async () => {
+          if (live) {
+            await accountApi(deleting?.id).setStatus("deleted", "Deleted from the Users list");
+            return onChanged?.();
+          }
+          setUsersList((prev) => prev.filter((user) => user.id !== deleting?.id));
+        }}
       />
     </div>
   );

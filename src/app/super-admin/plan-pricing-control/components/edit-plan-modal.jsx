@@ -1,75 +1,31 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 
+const dollars = (cents) => (cents / 100).toFixed(2).replace(/\.00$/, "");
+
+// plan: a plan from /api/v1/admin/pricing. onSave(body) / onDelete(plan) save on the server and
+// may refuse (the modal stays open). The parent remounts this modal (key) for each plan.
 export const EditPlanModal = ({ isOpen, plan, onClose, onSave, onDelete }) => {
-  const [formData, setFormData] = useState({
-    name: "Basic",
-    description:
-      "Essential plan for individual agents to start using PitchProX and improve their calls.",
-    status: "Active",
-    badge: "",
-    displayOrder: "1",
-    callsIncluded: "150",
-    reportsIncluded: "1",
-    calibrationsIncluded: "1",
-    monthlyPrice: "99",
-    annualPrice: "948",
-    callOverageFee: "0.35",
-    reportOverageFee: "5.00",
-  });
-
-  useEffect(() => {
-    if (plan) {
-      const isPro = plan.id === "pro";
-      const isProX = plan.id === "prox";
-      const isEnterprise = plan.id === "enterprise";
-      const isFree = plan.id === "free-trial";
-
-      setFormData({
-        name: plan.name || "Basic",
-        description:
-          plan.description ||
-          (isFree
-            ? "Free 7-day trial for agents to experience PitchProX AI capabilities."
-            : isPro
-            ? "High-performance plan for active agents needing higher call quotas and priority support."
-            : isProX
-            ? "Ultimate powerhouse tier for top producers and high-volume closers."
-            : isEnterprise
-            ? "Custom enterprise tier for large brokerage teams with SLA guarantees."
-            : "Essential plan for individual agents to start using PitchProX and improve their calls."),
-        status: plan.status || "Active",
-        badge: plan.isPopular ? "Most Popular" : plan.badge || "",
-        displayOrder: isFree ? "0" : isPro ? "2" : isProX ? "3" : isEnterprise ? "4" : "1",
-        callsIncluded: isFree ? "10" : isPro ? "400" : isProX ? "750" : isEnterprise ? "2500" : "150",
-        reportsIncluded: isFree ? "1" : isPro ? "5" : isProX ? "15" : isEnterprise ? "50" : "1",
-        calibrationsIncluded: isFree ? "1" : isPro ? "3" : isProX ? "10" : isEnterprise ? "25" : "1",
-        monthlyPrice: plan.price ? plan.price.replace("$", "").replace("Custom Pricing", "999") : "99",
-        annualPrice: plan.annualPrice ? plan.annualPrice.replace("$", "").split(" ")[0] : "948",
-        callOverageFee: plan.overage ? plan.overage.replace("$", "").split(" ")[0] : "0.35",
-        reportOverageFee: "5.00",
-      });
-    } else {
-      setFormData({
-        name: "",
-        description: "",
-        status: "Active",
-        badge: "",
-        displayOrder: "1",
-        callsIncluded: "100",
-        reportsIncluded: "1",
-        calibrationsIncluded: "1",
-        monthlyPrice: "49",
-        annualPrice: "470",
-        callOverageFee: "0.35",
-        reportOverageFee: "5.00",
-      });
-    }
-  }, [plan, isOpen]);
+  const [saving, setSaving] = useState(false);
+  const [formData, setFormData] = useState(() => ({
+    name: plan?.name ?? "",
+    description: plan?.description ?? "",
+    status: plan?.status ?? "Active",
+    badge: plan?.badge ?? "",
+    displayOrder: String(plan?.displayOrder ?? 1),
+    callsIncluded: String(plan?.callsIncluded ?? 100),
+    reportsIncluded: String(plan?.reportsIncluded ?? 1),
+    calibrationsIncluded: String(plan?.calibrationsIncluded ?? 1),
+    monthlyPrice: plan ? dollars(plan.priceMonthlyCents) : "49",
+    annualPrice: plan ? dollars(plan.priceAnnualCents) : "470",
+    callOverageFee: plan ? (plan.callOverageCents / 100).toFixed(2) : "0.35",
+    reportOverageFee: plan ? (plan.reportOverageCents / 100).toFixed(2) : "5.00",
+  }));
+  const isTrial = Boolean(plan?.isTrial);
 
   if (!isOpen) return null;
 
@@ -83,54 +39,33 @@ export const EditPlanModal = ({ isOpen, plan, onClose, onSave, onDelete }) => {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.name.trim()) {
       toast.error("Plan name is required");
       return;
     }
-
-    const isPopular =
-      formData.badge.toLowerCase().includes("popular") ||
-      formData.badge.toLowerCase().includes("most popular");
-
-    const savedPlan = {
-      id: plan ? plan.id : `plan-${Date.now()}`,
-      name: formData.name,
-      status: formData.status,
-      description: formData.description,
-      badge: formData.badge,
-      displayOrder: formData.displayOrder,
-      price: `$${formData.monthlyPrice}`,
-      period: "/month",
-      annualPrice: formData.annualPrice ? `$${formData.annualPrice} /year` : null,
-      discountBadge: "Save 20%",
-      isCustom: formData.name.toLowerCase() === "enterprise",
-      isPopular: isPopular,
-      features: [
-        `${formData.callsIncluded} Calls / month`,
-        `${formData.reportsIncluded} Reports / month`,
-        `${formData.calibrationsIncluded} Calibrations`,
-        isPopular ? "Priority Support" : "Standard Support",
-      ],
-      overage: `$${formData.callOverageFee} per additional call`,
-      actionType: "edit-plan",
-      actionLabel: "Edit Plan",
-      buttonStyle: isPopular
-        ? "bg-primary hover:bg-primary/90 text-white shadow-2xs"
-        : "border border-light-gray hover:bg-light-gray/40 text-dark-black/80",
-    };
-
-    onSave(savedPlan);
-    toast.success("Plan updated successfully");
-    onClose();
+    setSaving(true);
+    try {
+      await onSave(formData);
+      toast.success(plan?.subscribers ? `Plan updated. ${plan.subscribers} existing customer${plan.subscribers === 1 ? " keeps" : "s keep"} their current price until they change plan.` : "Plan updated.");
+      onClose();
+    } catch {
+      /* reported by the caller */
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleDelete = () => {
-    if (onDelete && plan) {
-      onDelete(plan.id);
-      toast.error(`Plan "${plan.name}" deleted.`);
+  // Plans customers have used can only be archived
+  const handleDelete = async () => {
+    if (!onDelete || !plan) return;
+    try {
+      await onDelete(plan);
+      toast.success(`Plan "${plan.name}" deleted.`);
       onClose();
+    } catch {
+      /* reported by the caller */
     }
   };
 
@@ -224,12 +159,10 @@ export const EditPlanModal = ({ isOpen, plan, onClose, onSave, onDelete }) => {
                   className="w-full text-xs font-medium px-3.5 py-2.5 rounded-xl border border-light-gray bg-white focus:outline-hidden focus:border-primary text-dark-black/85 cursor-pointer"
                 >
                   <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
-                  <option value="Draft">Draft</option>
-                  <option value="Archived">Archived</option>
+                  <option value="Archived" disabled={isTrial}>Archived</option>
                 </select>
                 <span className="text-[11px] text-light-black mt-1.5 block">
-                  Inactive plans won&apos;t be available for new users.
+                  Archived plans aren&apos;t offered to new customers. Plans with customers on them can&apos;t be archived.
                 </span>
               </div>
             </div>
@@ -481,7 +414,7 @@ export const EditPlanModal = ({ isOpen, plan, onClose, onSave, onDelete }) => {
 
           {/* Modal Actions Footer */}
           <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-light-gray/80 bg-[#F8FAFC]">
-            {plan ? (
+            {plan && !isTrial ? (
               <button
                 type="button"
                 onClick={handleDelete}

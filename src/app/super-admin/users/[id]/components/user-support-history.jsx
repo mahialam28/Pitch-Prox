@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import { apiRequest } from "@/lib/client-api";
+import { showError } from "@/lib/alerts";
+import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -256,9 +258,60 @@ const PAGE_SIZE_OPTIONS = [
   { value: 50, label: "50 / page" },
 ];
 
-export const UserSupportHistory = () => {
+// Design categories (New Ticket dialog) → the ticket system's categories
+const CATEGORY_VALUES = { Billing: "billing", Technical: "technical", Calibration: "technical", Account: "account", "Feature Request": "feature" };
+const day = (value) => new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+const time = (value) => new Date(value).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+const ROLE_NAMES = { customer: "Customer", agent: "Support", staff: "Support" };
+
+// A staff ticket from the API in the shape this screen uses
+const toDesignTicket = (ticket) => ({
+  id: ticket.reference,
+  ticketId: ticket.id,
+  subject: ticket.subject,
+  snippet: "",
+  category: ticket.categoryLabel,
+  status: ticket.status.toUpperCase(),
+  priority: ticket.priority.toUpperCase(),
+  createdDate: day(ticket.createdAt),
+  createdTime: time(ticket.createdAt),
+  updatedDate: day(ticket.updatedAt),
+  updatedTime: time(ticket.updatedAt),
+  agent: ticket.assignedTo?.name ?? "Unassigned",
+  customer: ticket.customer.name,
+  messages: null,
+});
+
+const duration = (minutes) => {
+  if (minutes === null) return "—";
+  if (minutes < 60) return `${Math.round(minutes)}m`;
+  if (minutes < 1440) return `${Math.floor(minutes / 60)}h ${Math.round(minutes % 60)}m`;
+  return `${Math.floor(minutes / 1440)}d ${Math.round((minutes % 1440) / 60)}h`;
+};
+
+// account: the live customer page (tickets from the server); without it the sample tickets are shown
+export const UserSupportHistory = ({ account = null }) => {
+  const live = Boolean(account);
   const router = useRouter();
-  const [tickets, setTickets] = useState(INITIAL_TICKETS);
+  const [localTickets, setTickets] = useState(INITIAL_TICKETS);
+  const [created, setCreated] = useState([]);
+  const tickets = live ? [...created, ...account.tickets.map(toDesignTicket)] : localTickets;
+  // Response / resolution times from the account's tickets
+  const responseTimes = live ? account.tickets.filter((ticket) => ticket.firstResponseAt).map((ticket) => (new Date(ticket.firstResponseAt) - new Date(ticket.createdAt)) / 60000) : [];
+  const resolutionTimes = live ? account.tickets.filter((ticket) => ["Resolved", "Closed"].includes(ticket.status)).map((ticket) => (new Date(ticket.updatedAt) - new Date(ticket.createdAt)) / 60000) : [];
+  const average = (list) => (list.length ? list.reduce((sum, value) => sum + value, 0) / list.length : null);
+  const summary = live
+    ? {
+        total: tickets.length,
+        open: tickets.filter((ticket) => !["RESOLVED", "CLOSED"].includes(ticket.status)).length,
+        resolved: tickets.filter((ticket) => ["RESOLVED", "CLOSED"].includes(ticket.status)).length,
+        response: duration(average(responseTimes)),
+        resolution: duration(average(resolutionTimes)),
+      }
+    : { total: 24, open: 3, resolved: 18, response: "2h 18m", resolution: "1d 6h" };
+  // Who handles this customer: the agent on the latest assigned ticket, otherwise their account rep
+  const contact = live ? account.tickets.find((ticket) => ticket.assignedTo)?.assignedTo ?? account.rep : { name: "Sarah Johnson", email: "sarah.johnson@pitchprox.com" };
+  const [detail, setDetail] = useState(null);
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [dateRangeText, setDateRangeText] = useState("May 16, 2024 - May 16, 2025");
@@ -276,8 +329,20 @@ export const UserSupportHistory = () => {
   const [isNewTicketOpen, setIsNewTicketOpen] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
 
-  // Design only: the new ticket is added to the on-screen list
-  const handleCreateTicket = ({ subject, category, priority, description }) => {
+  // Live: opens a real ticket for this customer (Support / Super Admin / their rep)
+  const handleCreateTicket = async ({ subject, category, priority, description }) => {
+    if (live) {
+      const form = new FormData();
+      Object.entries({ organizationId: account.organizationId, category: CATEGORY_VALUES[category] ?? "technical", priority: priority.toLowerCase(), subject, description }).forEach(([key, value]) => form.append(key, value));
+      try {
+        const { ticket } = await apiRequest("/api/v1/staff/tickets", { method: "POST", body: form });
+        setCreated((list) => [toDesignTicket(ticket), ...list]);
+        return ticket;
+      } catch (error) {
+        showError("Ticket not created", error.message);
+        throw error;
+      }
+    }
     const now = new Date();
     const date = now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
     const time = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
@@ -300,6 +365,21 @@ export const UserSupportHistory = () => {
       ...prev,
     ]);
   };
+
+  // Opening a live ticket loads its conversation
+  const openTicket = async (ticket) => {
+    setSelectedTicketForDetail(ticket);
+    if (!live || !ticket.ticketId) return;
+    try {
+      const { ticket: full } = await apiRequest(`/api/v1/staff/tickets/${ticket.ticketId}`);
+      setDetail({
+        id: ticket.ticketId,
+        messages: full.messages.map((message) => ({ sender: message.sender, role: ROLE_NAMES[message.role] ?? message.role, time: `${day(message.createdAt)} ${time(message.createdAt)}`, text: message.body })),
+      });
+    } catch (error) {
+      showError("Ticket not loaded", error.message);
+    }
+  };
   const [isKnowledgeModalOpen, setIsKnowledgeModalOpen] = useState(false);
 
   // Close dropdowns on click outside
@@ -314,16 +394,14 @@ export const UserSupportHistory = () => {
   }, []);
 
   // Filtered tickets
-  const filteredTickets = useMemo(() => {
-    return tickets.filter((t) => {
-      if (statusFilter !== "all" && t.status !== statusFilter) return false;
-      if (categoryFilter !== "all" && t.category !== categoryFilter) return false;
-      return true;
-    });
-  }, [tickets, statusFilter, categoryFilter]);
+  const filteredTickets = tickets.filter((t) => {
+    if (statusFilter !== "all" && t.status !== statusFilter) return false;
+    if (categoryFilter !== "all" && t.category !== categoryFilter) return false;
+    return true;
+  });
 
   // Pagination calculation
-  const totalTickets = 24; // Representative total count matching mockup
+  const totalTickets = summary.total;
   const currentCount = filteredTickets.length;
   const totalPages = Math.max(1, Math.ceil(currentCount / pageSize));
   const paginatedTickets = filteredTickets.slice(
@@ -511,7 +589,7 @@ export const UserSupportHistory = () => {
                       transition={{ duration: 0.15 }}
                       className="absolute left-0 top-full mt-1.5 w-48 bg-white rounded-xl border border-light-gray shadow-lg py-1.5 z-30"
                     >
-                      {CATEGORY_OPTIONS.map((option) => (
+                      {(live ? [{ value: "all", label: "All Categories" }, ...["Technical Support", "Billing & Plans", "Account Access", "Feature Request"].map((value) => ({ value, label: value }))] : CATEGORY_OPTIONS).map((option) => (
                         <button
                           key={option.value}
                           type="button"
@@ -647,7 +725,7 @@ export const UserSupportHistory = () => {
                         <td className="py-4 pl-6 pr-3 whitespace-nowrap align-middle w-[120px]">
                           <button
                             type="button"
-                            onClick={() => setSelectedTicketForDetail(ticket)}
+                            onClick={() => openTicket(ticket)}
                             className="text-primary font-bold hover:underline cursor-pointer tracking-tight"
                           >
                             {ticket.id}
@@ -658,7 +736,7 @@ export const UserSupportHistory = () => {
                         <td className="py-4 px-3 align-middle w-[260px] overflow-hidden">
                           <button
                             type="button"
-                            onClick={() => setSelectedTicketForDetail(ticket)}
+                            onClick={() => openTicket(ticket)}
                             className="text-left group cursor-pointer block w-full overflow-hidden"
                           >
                             <p className="font-bold text-dark-black text-xs leading-snug group-hover:text-primary transition-colors truncate">
@@ -733,7 +811,7 @@ export const UserSupportHistory = () => {
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      setSelectedTicketForDetail(ticket);
+                                      openTicket(ticket);
                                       setOpenDropdown(null);
                                     }}
                                     className="w-full px-3.5 py-2 text-xs text-dark-black hover:bg-light-gray flex items-center gap-2 cursor-pointer"
@@ -905,29 +983,29 @@ export const UserSupportHistory = () => {
             <div className="flex flex-col gap-3 text-xs sm:text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-light-black font-medium">Total Tickets</span>
-                <span className="font-bold text-dark-black text-sm">24</span>
+                <span className="font-bold text-dark-black text-sm">{summary.total}</span>
               </div>
 
               <div className="flex items-center justify-between">
                 <span className="text-light-black font-medium">Open Tickets</span>
-                <span className="font-bold text-primary text-sm">3</span>
+                <span className="font-bold text-primary text-sm">{summary.open}</span>
               </div>
 
               <div className="flex items-center justify-between">
                 <span className="text-light-black font-medium">Resolved Tickets</span>
-                <span className="font-bold text-dark-black text-sm">18</span>
+                <span className="font-bold text-dark-black text-sm">{summary.resolved}</span>
               </div>
 
               <div className="border-t border-light-gray my-1" />
 
               <div className="flex items-center justify-between">
                 <span className="text-light-black font-medium">Average Response Time</span>
-                <span className="font-bold text-dark-black text-sm">2h 18m</span>
+                <span className="font-bold text-dark-black text-sm">{summary.response}</span>
               </div>
 
               <div className="flex items-center justify-between">
                 <span className="text-light-black font-medium">Average Resolution Time</span>
-                <span className="font-bold text-dark-black text-sm">1d 6h</span>
+                <span className="font-bold text-dark-black text-sm">{summary.resolution}</span>
               </div>
             </div>
           </div>
@@ -940,34 +1018,37 @@ export const UserSupportHistory = () => {
 
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-center font-bold text-sm shrink-0 shadow-2xs">
-                SJ
+                {(contact?.name ?? "—").split(/\s+/).slice(0, 2).map((part) => part[0]).join("")}
               </div>
               <div className="flex flex-col">
                 <h4 className="text-sm font-bold text-dark-black leading-snug">
-                  Sarah Johnson
+                  {contact?.name ?? "No contact yet"}
                 </h4>
                 <p className="text-xs text-light-black font-medium">
-                  Support Specialist
+                  {live ? (account.tickets.some((ticket) => ticket.assignedTo) ? "Support agent" : "Account rep") : "Support Specialist"}
                 </p>
               </div>
             </div>
 
             <div className="flex flex-col gap-2 pt-1 text-xs">
-              <a
-                href="mailto:sarah.johnson@pitchprox.com"
-                className="flex items-center gap-2.5 text-light-black hover:text-primary transition-colors group"
-              >
-                <Mail className="w-3.5 h-3.5 text-light-black group-hover:text-primary transition-colors shrink-0" />
-                <span className="truncate">sarah.johnson@pitchprox.com</span>
-              </a>
-
-              <a
-                href="tel:5125550190"
-                className="flex items-center gap-2.5 text-light-black hover:text-primary transition-colors group"
-              >
-                <Phone className="w-3.5 h-3.5 text-light-black group-hover:text-primary transition-colors shrink-0" />
-                <span>(512) 555-0190</span>
-              </a>
+              {contact?.email && (
+                <a
+                  href={`mailto:${contact.email}`}
+                  className="flex items-center gap-2.5 text-light-black hover:text-primary transition-colors group"
+                >
+                  <Mail className="w-3.5 h-3.5 text-light-black group-hover:text-primary transition-colors shrink-0" />
+                  <span className="truncate">{contact.email}</span>
+                </a>
+              )}
+              {!live && (
+                <a
+                  href="tel:5125550190"
+                  className="flex items-center gap-2.5 text-light-black hover:text-primary transition-colors group"
+                >
+                  <Phone className="w-3.5 h-3.5 text-light-black group-hover:text-primary transition-colors shrink-0" />
+                  <span>(512) 555-0190</span>
+                </a>
+              )}
             </div>
 
             {/* Send Message Button */}
@@ -1085,7 +1166,7 @@ export const UserSupportHistory = () => {
                   Conversation Thread
                 </div>
 
-                {selectedTicketForDetail.messages?.map((msg, idx) => (
+                {(live ? (detail?.id === selectedTicketForDetail.ticketId ? detail.messages : []) : selectedTicketForDetail.messages)?.map((msg, idx) => (
                   <div
                     key={idx}
                     className={`p-4 rounded-xl border flex flex-col gap-2 ${

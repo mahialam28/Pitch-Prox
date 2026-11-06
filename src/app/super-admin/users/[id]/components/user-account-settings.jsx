@@ -11,152 +11,124 @@ import EditCompanyProfileModal from "./edit-company-profile-modal";
 import EditAccountOwnerModal from "./edit-account-owner-modal";
 import { SuspendAccountModal, DeleteAccountModal, DeactivateAccountModal } from "./account-dialogs";
 import AuditInfo from "./audit-info";
+import { formatDate, formatDateTime } from "@/lib/client-api";
 
-export default function UserAccountSettings({
-  onNavigateTab = () => {},
-}) {
-  // State for Company Profile
-  const [companyData, setCompanyData] = useState({
-    name: "Acme Inc.",
-    website: "www.acme.com",
-    industry: "Real Estate",
-    size: "11-50 employees",
-    phone: "(512) 555-0198",
-    address: "123 Main Street, Suite 400\nAustin, TX 78701, USA",
-    timeZone: "(GMT-05:00) Eastern Time (US & Canada)",
+// Account Settings tab on the live customer page. `account` is the customer detail from the API,
+// `api` the account calls (../../account-api) and `onChanged` reloads the page after a change.
+const STATUS_NAMES = { active: "Active", suspended: "Suspended", deleted: "Deleted" };
+
+export default function UserAccountSettings({ onNavigateTab = () => {}, account, api, onChanged = () => {} }) {
+  const [open, setOpen] = useState(null);
+  const close = () => setOpen(null);
+  const { permissions, subscription, profile } = account;
+  const canWrite = permissions.canWrite && account.status !== "deleted";
+
+  const companyData = {
+    name: account.company,
+    website: profile.website ?? "",
+    industry: profile.industry ?? "",
+    size: profile.companySize ?? "",
+    phone: profile.phone ?? "",
+    address: profile.address ?? "",
+    timeZone: profile.timezone ?? "",
     language: "English (US)",
     dateFormat: "MM/DD/YYYY",
-  });
-
-  // State for Account Owner
-  const [ownerData, setOwnerData] = useState({
-    name: "Jennifer Smith",
-    email: "jennifer.smith@acme.com",
-    phone: "(555) 123-4567",
-  });
-
-  // State for Account Status
-  const [statusData, setStatusData] = useState({
-    accountStatus: "Active",
-    billingStatus: "Up to date",
-    plan: "Premium",
-    nextInvoice: "Jun 15, 2025",
-    autoRenew: true,
-    accountId: "ACC-001234",
-  });
-
-  // Modals
-  const [isEditCompanyOpen, setIsEditCompanyOpen] = useState(false);
-  const [isEditOwnerOpen, setIsEditOwnerOpen] = useState(false);
-  const [isSuspendAlertOpen, setIsSuspendAlertOpen] = useState(false);
-  const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
-  const [isDeactivateAlertOpen, setIsDeactivateAlertOpen] = useState(false);
-
-  // Handlers
-  const handleSaveCompany = (newData) => {
-    setCompanyData(newData);
-    setIsEditCompanyOpen(false);
-    toast.success("Company profile updated successfully!");
+  };
+  const ownerData = { name: account.owner?.name ?? "", email: account.owner?.email ?? "", phone: profile.phone ?? "" };
+  const statusData = {
+    accountStatus: STATUS_NAMES[account.status] ?? "Active",
+    billingStatus: subscription.status === "pending_payment" ? "Payment pending" : "Up to date",
+    plan: subscription.plan.name,
+    nextInvoice: subscription.cancelAtPeriodEnd ? "None (cancelling)" : subscription.currentPeriodEnd ? formatDate(subscription.currentPeriodEnd) : "End of this period",
+    autoRenew: !subscription.cancelAtPeriodEnd,
+    accountId: account.accountNumber,
   };
 
-  const handleSaveOwner = (newData) => {
-    setOwnerData(newData);
-    setIsEditOwnerOpen(false);
-    toast.success("Account owner updated successfully!");
+  // Edit modals wait for the server and stay open if it refuses
+  const saveCompany = async (data) => {
+    await api.updateProfile({ company: data.name, website: data.website, industry: data.industry, companySize: data.size, phone: data.phone, address: data.address, timezone: data.timeZone });
+    close();
+    onChanged();
+    toast.success("Company profile updated.");
   };
-
-  const handleToggleAutoRenew = () => {
-    const nextVal = !statusData.autoRenew;
-    setStatusData((prev) => ({ ...prev, autoRenew: nextVal }));
-    toast.success(nextVal ? "Auto renew turned ON." : "Auto renew turned OFF.");
+  const saveOwner = async (data) => {
+    await api.updateOwner({ name: data.name, email: data.email });
+    if (data.phone !== ownerData.phone) await api.updateProfile({ phone: data.phone });
+    close();
+    onChanged();
+    toast.success("Account owner updated.");
   };
-
+  const toggleAutoRenew = async () => {
+    if (!canWrite) return;
+    await api.cancel(statusData.autoRenew ? {} : { undo: true });
+    onChanged();
+    toast.success(statusData.autoRenew ? "Auto renew is off. The subscription ends at the end of this period." : "Auto renew is on.");
+  };
   const handleQuickAction = (actionId) => {
-    if (actionId === "reset_calibration") {
-      onNavigateTab("calibration");
-      toast.success("Navigated to Calibration.");
-    } else if (actionId === "add_calls" || actionId === "add_reports") {
-      onNavigateTab("subscription");
-      toast.success("Navigated to Subscription & Billing.");
-    } else if (actionId === "view_login_activity") {
-      onNavigateTab("usage");
-      toast.success("Navigated to Usage & Activity.");
-    } else if (actionId === "deactivate_account") {
-      setIsDeactivateAlertOpen(true);
-    }
+    if (actionId === "reset_calibration") onNavigateTab("calibration");
+    else if (actionId === "view_login_activity") onNavigateTab("usage");
+    else if (actionId === "deactivate_account" && permissions.canSuspend && account.status === "active") setOpen("deactivate");
   };
-
-  // Dialogs show their own confirmation toast; here we only update the on-screen status
-  const handleConfirmSuspend = () => setStatusData((prev) => ({ ...prev, accountStatus: "Suspended" }));
-  const handleConfirmDeactivate = () => setStatusData((prev) => ({ ...prev, accountStatus: "Inactive" }));
+  const lastChange = account.activity[0];
 
   return (
     <div className="w-full flex flex-col gap-6 pb-6">
-      {/* ═════════════════════════════════════════════════════════════ */}
-      {/* MAIN 2-COLUMN LAYOUT MATCHING USER REFERENCE IMAGE          */}
-      {/* ═════════════════════════════════════════════════════════════ */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-        {/* ── LEFT COLUMN (8 cols): Company Profile + Account Owner + Danger Zone ── */}
         <div className="xl:col-span-8 flex flex-col gap-6 w-full">
-          {/* 1. Company Profile Card */}
-          <CompanyProfile
-            company={companyData}
-            onEdit={() => setIsEditCompanyOpen(true)}
-          />
-
-          {/* 2. Account Owner Card */}
-          <AccountOwner
-            owner={ownerData}
-            onEdit={() => setIsEditOwnerOpen(true)}
-          />
-
-          {/* 3. Danger Zone Card */}
-          <DangerZone
-            onSuspendAccount={() => setIsSuspendAlertOpen(true)}
-            onDeleteAccount={() => setIsDeleteAlertOpen(true)}
-          />
+          <CompanyProfile company={companyData} onEdit={canWrite ? () => setOpen("company") : undefined} />
+          <AccountOwner owner={ownerData} onEdit={canWrite ? () => setOpen("owner") : undefined} />
+          {permissions.canSuspend && account.status !== "deleted" && (
+            <DangerZone
+              onSuspendAccount={() => (account.status === "active" ? setOpen("suspend") : toast("This account is already suspended."))}
+              onDeleteAccount={() => (permissions.isSuperAdmin ? setOpen("delete") : toast.error("Only a Super Admin can delete an account."))}
+            />
+          )}
         </div>
 
-        {/* ── RIGHT COLUMN (4 cols): Account Status + Quick Actions ── */}
         <div className="xl:col-span-4 flex flex-col gap-6 w-full">
-          {/* 1. Account Status Card */}
-          <AccountStatusCard
-            status={statusData}
-            onViewSubscription={() => onNavigateTab("subscription")}
-            onToggleAutoRenew={handleToggleAutoRenew}
-          />
-
-          {/* 2. Quick Actions Card */}
+          <AccountStatusCard status={statusData} onViewSubscription={() => onNavigateTab("subscription")} onToggleAutoRenew={toggleAutoRenew} />
           <AccountSettingsQuickActions onActionClick={handleQuickAction} />
         </div>
       </div>
 
-      {/* ── Footer Audit Info ── */}
-      <AuditInfo />
-
-      {/* ═════════════════════════════════════════════════════════════ */}
-      {/* MODALS                                                       */}
-      {/* ═════════════════════════════════════════════════════════════ */}
-
-      {/* 1. Edit Company Profile Modal */}
-      <EditCompanyProfileModal
-        isOpen={isEditCompanyOpen}
-        onClose={() => setIsEditCompanyOpen(false)}
-        company={companyData}
-        onSave={handleSaveCompany}
+      <AuditInfo
+        createdDate={formatDateTime(account.customerSince)}
+        createdBy={account.source === "sales" ? account.rep?.name ?? "Sales rep" : "Self sign-up"}
+        lastUpdated={lastChange ? formatDateTime(lastChange.createdAt) : "—"}
+        updatedBy={lastChange?.actor ?? "—"}
+        lastLogin={account.lastActiveAt ? formatDateTime(account.lastActiveAt) : "Never"}
+        loginCount={account.members.length}
+        loginCountLabel="Members"
       />
 
-      {/* 2. Edit Account Owner Modal */}
-      <EditAccountOwnerModal
-        isOpen={isEditOwnerOpen}
-        onClose={() => setIsEditOwnerOpen(false)}
-        owner={ownerData}
-        onSave={handleSaveOwner}
+      {open === "company" && <EditCompanyProfileModal isOpen onClose={close} company={companyData} onSave={(data) => saveCompany(data).catch(() => {})} />}
+      {open === "owner" && <EditAccountOwnerModal isOpen onClose={close} owner={ownerData} onSave={(data) => saveOwner(data).catch(() => {})} />}
+      <SuspendAccountModal
+        isOpen={open === "suspend"}
+        onClose={close}
+        name={account.company}
+        onConfirm={async (reason) => {
+          await api.setStatus("suspended", reason);
+          onChanged();
+        }}
       />
-
-      <SuspendAccountModal isOpen={isSuspendAlertOpen} onClose={() => setIsSuspendAlertOpen(false)} name={companyData.name} onConfirm={handleConfirmSuspend} />
-      <DeleteAccountModal isOpen={isDeleteAlertOpen} onClose={() => setIsDeleteAlertOpen(false)} company={companyData.name} />
-      <DeactivateAccountModal isOpen={isDeactivateAlertOpen} onClose={() => setIsDeactivateAlertOpen(false)} onConfirm={handleConfirmDeactivate} />
+      <DeactivateAccountModal
+        isOpen={open === "deactivate"}
+        onClose={close}
+        onConfirm={async () => {
+          await api.setStatus("suspended", "Deactivated from Account Settings");
+          onChanged();
+        }}
+      />
+      <DeleteAccountModal
+        isOpen={open === "delete"}
+        onClose={close}
+        company={account.company}
+        onConfirm={async () => {
+          await api.setStatus("deleted", "Deleted from Account Settings");
+          onChanged();
+        }}
+      />
     </div>
   );
 }

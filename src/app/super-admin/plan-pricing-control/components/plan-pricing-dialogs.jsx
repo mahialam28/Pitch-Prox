@@ -61,10 +61,15 @@ export const AddNewPlanModal = ({ isOpen, onClose, onCreate }) => {
     onClose();
   };
 
-  const create = () => {
-    onCreate?.(toPlanCard(form));
-    showSavedToast("Plan created", `${form.name.trim()} is ${form.active ? "now visible to customers" : "saved as a draft"}.`);
-    close();
+  // onCreate(form) saves it (live page) and may refuse; the dialog stays open then
+  const create = async () => {
+    try {
+      await onCreate?.(form, toPlanCard(form));
+      showSavedToast("Plan created", `${form.name.trim()} is ${form.active ? "now visible to customers" : "saved as archived"}.`);
+      close();
+    } catch {
+      /* reported by the caller */
+    }
   };
 
   return (
@@ -123,9 +128,9 @@ export const DeletePromoCodeModal = ({ promo, onClose, onConfirm }) => (
     message={`${promo?.code ?? ""} (${promo?.value ?? ""}, ${(promo?.appliesTo ?? "").toLowerCase()}) will stop working immediately.`}
     note="Customers who already redeemed it keep their discount."
     confirmLabel="Delete Promo Code"
-    onConfirm={() => {
-      onConfirm?.(promo);
-      showSavedToast("Promo code deleted", `${promo?.code} can no longer be redeemed.`);
+    onConfirm={async () => {
+      const result = await onConfirm?.(promo);
+      showSavedToast(result?.archived ? "Promo code archived" : "Promo code deleted", `${promo?.code} can no longer be redeemed.`);
     }}
   />
 );

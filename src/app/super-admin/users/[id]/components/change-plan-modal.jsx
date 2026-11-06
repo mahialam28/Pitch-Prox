@@ -104,10 +104,29 @@ export const ChangePlanModal = ({
       "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=160",
   },
   onConfirm = () => {},
+  // Live page: onPreview({ planId, billingCycle, when }) returns the server's proration preview.
+  // The parent remounts the modal (key) so the current plan is selected when it opens.
+  onPreview = null,
+  currentPlanId = "pro",
+  currentCycle = "monthly",
 }) => {
-  const [billingCycle, setBillingCycle] = useState("monthly"); // "monthly" | "annual"
-  const [selectedPlanId, setSelectedPlanId] = useState("pro");
+  const [billingCycle, setBillingCycle] = useState(currentCycle); // "monthly" | "annual"
+  const [selectedPlanId, setSelectedPlanId] = useState(PLANS.some((plan) => plan.id === currentPlanId) ? currentPlanId : "pro");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [when, setWhen] = useState("now"); // "now" (prorated) | "renewal"
+  const [preview, setPreview] = useState(null);
+  const unchanged = selectedPlanId === currentPlanId && billingCycle === currentCycle;
+
+  useEffect(() => {
+    if (!isOpen || !onPreview || unchanged) return undefined;
+    let cancelled = false;
+    onPreview({ planId: selectedPlanId, billingCycle, when })
+      .then((result) => !cancelled && setPreview(result))
+      .catch(() => !cancelled && setPreview(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, onPreview, selectedPlanId, billingCycle, when, unchanged]);
 
   // Close on Escape key
   useEffect(() => {
@@ -149,25 +168,21 @@ export const ChangePlanModal = ({
   const currentMonthlyPrice = user.currentPrice || 499;
   const priceDiff = currentMonthlyPrice - newPrice;
 
-  const handleConfirmChange = () => {
+  const handleConfirmChange = async () => {
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      await onConfirm?.({ planId: selectedPlanId, planName: selectedPlan.name, billingCycle, price: newPrice, when });
       toast.success(
-        `Plan updated to ${selectedPlan.name} (${billingCycle}) for ${
-          user.name || "Jennifer Smith"
-        }.`
+        when === "renewal"
+          ? `${selectedPlan.name} (${billingCycle}) starts at the next renewal for ${user.name}.`
+          : `Plan updated to ${selectedPlan.name} (${billingCycle}) for ${user.name}.`
       );
-      if (onConfirm) {
-        onConfirm({
-          planId: selectedPlanId,
-          planName: selectedPlan.name,
-          billingCycle,
-          price: newPrice,
-        });
-      }
       onClose();
-    }, 600);
+    } catch {
+      /* reported by the caller */
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -451,6 +466,27 @@ export const ChangePlanModal = ({
                 })}
               </div>
 
+              {/* 3. When it takes effect (live page) */}
+              {onPreview && (
+                <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label="When the change takes effect">
+                  {[
+                    ["now", "Change now (prorated)"],
+                    ["renewal", "At next renewal"],
+                  ].map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      role="radio"
+                      aria-checked={when === value}
+                      onClick={() => setWhen(value)}
+                      className={`px-3.5 py-2 rounded-xl border text-xs font-semibold cursor-pointer ${when === value ? "border-primary bg-primary/5 text-primary" : "border-light-gray text-medium-black hover:border-primary/40"}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {/* 3. Change Summary Box */}
               <div className="p-4 sm:p-4.5 rounded-2xl border border-light-gray bg-light-gray/25 flex items-start gap-3">
                 <Info className="w-5 h-5 text-primary shrink-0 mt-0.5" />
@@ -458,6 +494,16 @@ export const ChangePlanModal = ({
                   <h4 className="text-xs font-bold text-dark-black">
                     Change Summary
                   </h4>
+                  {onPreview ? (
+                    <p className="text-xs text-dark-black/85 leading-relaxed">
+                      {unchanged
+                        ? "This is the current plan and billing cycle."
+                        : preview
+                          ? `${user.currentPlan} → ${preview.plan.name} (${preview.billingCycle}). ${preview.summary}`
+                          : "Working out the price…"}
+                    </p>
+                  ) : (
+                  <>
                   <p className="text-xs text-dark-black/85 leading-relaxed">
                     You are switching from{" "}
                     <strong className="font-bold text-dark-black">
@@ -489,6 +535,8 @@ export const ChangePlanModal = ({
                     Effective immediately: Your next invoice on Jun 15, 2025 will be
                     updated to the new rate.
                   </p>
+                  </>
+                  )}
                 </div>
               </div>
             </div>
@@ -507,7 +555,7 @@ export const ChangePlanModal = ({
               <button
                 type="button"
                 onClick={handleConfirmChange}
-                disabled={isSubmitting}
+                disabled={isSubmitting || (onPreview && unchanged)}
                 className="px-6 py-2 rounded-xl bg-primary hover:bg-medium-teal active:scale-[0.98] text-white text-xs sm:text-sm font-semibold transition-all shadow-xs cursor-pointer disabled:opacity-50 flex items-center gap-2"
               >
                 {isSubmitting ? (

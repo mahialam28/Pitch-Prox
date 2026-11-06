@@ -125,12 +125,43 @@ const APPLIES_TO_OPTIONS = [
   { value: "Usage Ledger", label: "Usage Ledger" },
 ];
 
+// Live page: `customers` (from /api/v1/customers) and `onApply(organizationId, body)`, which saves
+// through the adjustments ledger and returns the entry. Without them the sample customers are used.
+// Design type → ledger entry
+const LEDGER_KIND = { "Call Credit": "calls", "Report Credit": "reports", "Dollar Credit": "credit", Discount: "discount", Refund: "refund", "Fee Waiver": "credit" };
+const LEDGER_APPLY_TO = { "Next Invoice": "Next Invoice", "Current Balance": "Account Balance", "Usage Ledger": "Account Balance" };
+
+const fromAccount = (account) => ({
+  value: account.organizationId,
+  label: `${account.name} (${account.company})`,
+  desc: `${account.planName ?? "No plan"} • ${account.status}`,
+  name: account.name,
+  company: account.company,
+  plan: `${account.planName ?? "No"} Plan`,
+  status: account.status,
+  statusText: account.status === "Pending payment" ? "Payment pending" : "Up to Date",
+  accountId: account.accountNumber,
+  nextInvoice: "End of period",
+  billingCycle: account.billingCycle === "annual" ? "Annual" : "Monthly",
+  initials: account.name.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join(""),
+});
+
 export const ApplyCreditAdjustmentModal = ({
   isOpen,
   onClose,
   onSuccess,
+  customers = null,
+  onApply = null,
+  canRefund = true,
 }) => {
-  const [selectedCustomerKey, setSelectedCustomerKey] = useState("jennifer-smith");
+  const live = Boolean(customers && onApply);
+  const customerMap = live ? Object.fromEntries(customers.filter((account) => !["Deleted"].includes(account.status)).map((account) => [account.organizationId, fromAccount(account)])) : CUSTOMER_DATA_MAP;
+  const customerOptions = live ? Object.values(customerMap).map(({ value, label, desc }) => ({ value, label, desc })) : customerDropdownOptions;
+  const typeOptions = live
+    ? ADJUSTMENT_TYPE_OPTIONS.filter((option) => canRefund || option.value !== "Refund").map((option) => (option.value === "Discount" ? { value: "Discount", label: "Discount ($)" } : option))
+    : ADJUSTMENT_TYPE_OPTIONS;
+  const [selectedCustomerKey, setSelectedCustomerKey] = useState(live ? Object.keys(customerMap)[0] ?? "" : "jennifer-smith");
+  const [submitting, setSubmitting] = useState(false);
   const [adjustmentType, setAdjustmentType] = useState("Dollar Credit");
   const [amount, setAmount] = useState("50.00");
   const [appliesTo, setAppliesTo] = useState("Next Invoice");
@@ -155,8 +186,7 @@ export const ApplyCreditAdjustmentModal = ({
 
   if (!isOpen) return null;
 
-  const currentCustomer =
-    CUSTOMER_DATA_MAP[selectedCustomerKey] || CUSTOMER_DATA_MAP["jennifer-smith"];
+  const currentCustomer = customerMap[selectedCustomerKey] || Object.values(customerMap)[0] || { name: "No customers yet", company: "", plan: "", status: "", statusText: "", accountId: "", nextInvoice: "", billingCycle: "", initials: "" };
 
   const getAmountDisplay = () => {
     if (adjustmentType === "Call Credit") {
@@ -165,7 +195,7 @@ export const ApplyCreditAdjustmentModal = ({
     if (adjustmentType === "Report Credit") {
       return `${amount} reports`;
     }
-    if (adjustmentType === "Discount") {
+    if (adjustmentType === "Discount" && !live) {
       return `${amount}%`;
     }
     const num = parseFloat(amount || "0");
@@ -186,7 +216,28 @@ export const ApplyCreditAdjustmentModal = ({
     onClose();
   };
 
-  const handleFinalConfirmApply = () => {
+  const handleFinalConfirmApply = async () => {
+    if (live) {
+      const kind = LEDGER_KIND[adjustmentType];
+      const counted = kind === "calls" || kind === "reports";
+      setSubmitting(true);
+      try {
+        const entry = await onApply(selectedCustomerKey, {
+          kind,
+          ...(counted ? { quantity: parseInt(amount, 10) } : { amount: parseFloat(amount) }),
+          applyTo: LEDGER_APPLY_TO[appliesTo],
+          reason: `${adjustmentType === "Fee Waiver" ? "Fee waiver: " : ""}${internalReason.trim() || "Courtesy credit"}`,
+        });
+        toast.success(entry.status === "pending" ? `${entry.reference} sent for approval.` : `${entry.value} applied to ${currentCustomer.name} (${entry.reference}).`);
+        setIsConfirmOpen(false);
+        onClose();
+      } catch {
+        setIsConfirmOpen(false);
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
     const newAdjustment = {
       id: `ADJ-2024-${Math.floor(1000 + Math.random() * 9000)}`,
       customer: `${currentCustomer.name}, ${currentCustomer.company}`,
@@ -276,7 +327,7 @@ export const ApplyCreditAdjustmentModal = ({
                         Search and select a customer
                       </span>
                       <Dropdown
-                        items={customerDropdownOptions}
+                        items={customerOptions}
                         selected={selectedCustomerKey}
                         onSelect={(val) => setSelectedCustomerKey(val)}
                         icon={<Search className="w-4 h-4 text-light-black" />}
@@ -370,7 +421,7 @@ export const ApplyCreditAdjustmentModal = ({
                           Adjustment Type <span className="text-red">*</span>
                         </label>
                         <Dropdown
-                          items={ADJUSTMENT_TYPE_OPTIONS}
+                          items={typeOptions}
                           selected={adjustmentType}
                           onSelect={(val) => setAdjustmentType(val)}
                           className="w-full"
@@ -603,6 +654,7 @@ export const ApplyCreditAdjustmentModal = ({
               </button>
 
               <div className="flex items-center gap-2.5">
+                {!live && (
                 <button
                   type="button"
                   onClick={handleSaveDraft}
@@ -610,11 +662,13 @@ export const ApplyCreditAdjustmentModal = ({
                 >
                   Save Draft
                 </button>
+                )}
 
                 <button
                   type="button"
                   onClick={handleApplyClick}
-                  className="px-6 py-2.5 text-xs font-semibold rounded-xl bg-primary hover:bg-medium-teal text-white transition-colors cursor-pointer shadow-sm flex items-center gap-1.5"
+                  disabled={submitting || (live && !selectedCustomerKey)}
+                  className="disabled:opacity-60 px-6 py-2.5 text-xs font-semibold rounded-xl bg-primary hover:bg-medium-teal text-white transition-colors cursor-pointer shadow-sm flex items-center gap-1.5"
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>Apply Credit</span>

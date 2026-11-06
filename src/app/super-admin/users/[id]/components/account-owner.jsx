@@ -9,7 +9,7 @@ export default function AccountOwner({
     email: "jennifer.smith@acme.com",
     phone: "(555) 123-4567",
   },
-  onEdit = () => {},
+  onEdit = null, // no Edit button for read-only viewers
 }) {
   return (
     <div className="bg-white rounded-2xl border border-light-gray shadow-xs p-5 sm:p-6 flex flex-col gap-5 w-full">
@@ -24,6 +24,7 @@ export default function AccountOwner({
           </p>
         </div>
 
+        {onEdit && (
         <button
           type="button"
           onClick={onEdit}
@@ -32,6 +33,7 @@ export default function AccountOwner({
           <Edit3 className="w-3.5 h-3.5 text-light-black" />
           <span>Edit Owner</span>
         </button>
+        )}
       </div>
 
       {/* 3 Column Details */}

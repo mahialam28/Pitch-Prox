@@ -29,11 +29,11 @@ export default function UserPortalPage() {
 
   const handleFormChange = (field, value) => setFormData((prev) => ({ ...prev, [field]: value }));
 
-  const createAccount = async () => {
+  const createAccount = async (promoCode) => {
     try {
       return await apiRequest("/api/v1/customers", {
         method: "POST",
-        body: { fullName: formData.firstName, company: formData.company, email: formData.email, phone: formData.phone, country: formData.country, planId: selectedPlan, billingCycle, seats },
+        body: { fullName: formData.firstName, company: formData.company, email: formData.email, phone: formData.phone, country: formData.country, planId: selectedPlan, billingCycle, seats, promoCode },
       });
     } catch (error) {
       showError("Account not created", error.message);

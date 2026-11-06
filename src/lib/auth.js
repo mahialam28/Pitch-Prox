@@ -13,38 +13,49 @@ export async function requestClient() {
   return { ip: ip?.slice(0, 64) ?? null, userAgent: list.get("user-agent")?.slice(0, 500) ?? null };
 }
 
-export async function createSession(userId) {
+// Impersonation keeps the staff member's own session here while they view a customer's portal
+export const STAFF_SESSION_COOKIE = "pitchprox_staff_session";
+
+const cookieOptions = (maxAge) => ({ httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge });
+
+export async function createSession(userId, { impersonationId = null, maxAgeSeconds = sessionDurationSeconds } = {}) {
   const token = createId("session");
-  const expiresAt = new Date(Date.now() + sessionDurationSeconds * 1000);
+  const expiresAt = new Date(Date.now() + maxAgeSeconds * 1000);
   const { ip, userAgent } = await requestClient();
-  await query("INSERT INTO sessions (id, user_id, token_hash, expires_at, ip, user_agent, last_seen_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)", [createId("sess"), userId, hashToken(token), expiresAt, ip, userAgent]);
+  await query("INSERT INTO sessions (id, user_id, token_hash, expires_at, ip, user_agent, last_seen_at, impersonation_id) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)", [createId("sess"), userId, hashToken(token), expiresAt, ip, userAgent, impersonationId]);
   const store = await cookies();
-  store.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: sessionDurationSeconds,
-  });
+  store.set(SESSION_COOKIE, token, cookieOptions(maxAgeSeconds));
+  return token;
 }
 
 export async function getCurrentUser() {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
+  // Deactivated staff and suspended or deleted customer accounts have no valid session;
+  // an impersonation session also ends when it is exited or runs out
   const rows = await query(`
     SELECT users.id, users.name, users.email, users.role, users.organization_id AS organizationId,
-      organizations.name AS organizationName, sessions.id AS sessionId, staff_profiles.status AS staffStatus
+      organizations.name AS organizationName, sessions.id AS sessionId, staff_profiles.status AS staffStatus,
+      impersonation_sessions.id AS impersonationId, impersonation_sessions.access AS impersonationAccess,
+      impersonation_sessions.expires_at AS impersonationExpiresAt, impersonators.name AS impersonatorName
     FROM sessions
     JOIN users ON users.id = sessions.user_id
     JOIN organizations ON organizations.id = users.organization_id
     LEFT JOIN staff_profiles ON staff_profiles.user_id = users.id
+    LEFT JOIN customer_accounts ON customer_accounts.organization_id = users.organization_id
+    LEFT JOIN impersonation_sessions ON impersonation_sessions.id = sessions.impersonation_id
+    LEFT JOIN users AS impersonators ON impersonators.id = impersonation_sessions.staff_id
     WHERE sessions.token_hash = ? AND sessions.expires_at > ?
       AND (staff_profiles.status IS NULL OR staff_profiles.status <> 'deactivated')
+      AND (customer_accounts.status IS NULL OR customer_accounts.status = 'active')
+      AND (sessions.impersonation_id IS NULL OR impersonation_sessions.ended_at IS NULL)
   `, [hashToken(token), new Date()]);
   if (!rows[0]) return null;
+  const { impersonationId, impersonationAccess, impersonationExpiresAt, impersonatorName, ...user } = rows[0];
+  user.impersonation = impersonationId ? { id: impersonationId, access: impersonationAccess, expiresAt: impersonationExpiresAt, staffName: impersonatorName } : null;
   // "Last active" for the devices list; written at most every 5 minutes per session
-  await query("UPDATE sessions SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ? AND (last_seen_at IS NULL OR last_seen_at < CURRENT_TIMESTAMP - INTERVAL 5 MINUTE)", [rows[0].sessionId]);
-  return rows[0];
+  await query("UPDATE sessions SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ? AND (last_seen_at IS NULL OR last_seen_at < CURRENT_TIMESTAMP - INTERVAL 5 MINUTE)", [user.sessionId]);
+  return user;
 }
 
 export async function requireCurrentUser() {
@@ -84,9 +95,33 @@ export async function redirectIfSignedIn() {
   if (path) redirect(path);
 }
 
+// Signing out while impersonating ends the impersonation and the staff session too
 export async function destroySession() {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
-  if (token) await query("DELETE FROM sessions WHERE token_hash = ?", [hashToken(token)]);
+  const staffToken = store.get(STAFF_SESSION_COOKIE)?.value;
+  if (token) {
+    await query("UPDATE impersonation_sessions JOIN sessions ON sessions.impersonation_id = impersonation_sessions.id SET impersonation_sessions.ended_at = NOW() WHERE sessions.token_hash = ? AND impersonation_sessions.ended_at IS NULL", [hashToken(token)]);
+    await query("DELETE FROM sessions WHERE token_hash = ?", [hashToken(token)]);
+  }
+  if (staffToken) await query("DELETE FROM sessions WHERE token_hash = ?", [hashToken(staffToken)]);
   store.delete(SESSION_COOKIE);
+  store.delete(STAFF_SESSION_COOKIE);
+}
+
+// The session of a staff member who is impersonating, by its cookie
+export async function swapToStaffSession() {
+  const store = await cookies();
+  const staffToken = store.get(STAFF_SESSION_COOKIE)?.value;
+  const token = store.get(SESSION_COOKIE)?.value;
+  if (!staffToken) return false;
+  if (token) await query("DELETE FROM sessions WHERE token_hash = ? AND impersonation_id IS NOT NULL", [hashToken(token)]);
+  const [staff] = await query("SELECT expires_at AS expiresAt FROM sessions WHERE token_hash = ? AND expires_at > ?", [hashToken(staffToken), new Date()]);
+  store.delete(STAFF_SESSION_COOKIE);
+  if (!staff) {
+    store.delete(SESSION_COOKIE);
+    return false;
+  }
+  store.set(SESSION_COOKIE, staffToken, cookieOptions(Math.max(60, Math.floor((new Date(staff.expiresAt) - Date.now()) / 1000))));
+  return true;
 }

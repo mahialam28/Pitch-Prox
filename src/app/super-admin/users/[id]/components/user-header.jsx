@@ -7,7 +7,6 @@ import { Swiper, SwiperSlide } from "swiper/react";
 import { FreeMode } from "swiper/modules";
 import "swiper/css";
 import "swiper/css/free-mode";
-import toast from "react-hot-toast";
 
 const tabs = [
   { id: "overview", label: "Overview" },
@@ -91,8 +90,8 @@ const UserHeader = ({
               <h1 className="text-xl sm:text-2xl font-bold text-dark-black tracking-tight">
                 {user.name}
               </h1>
-              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full border ${["Suspended", "Deleted", "Canceled"].includes(user.status) ? "bg-rose-50 text-rose-600 border-rose-200" : ["Invited", "Paused", "Pending payment"].includes(user.status) ? "bg-amber-50 text-amber-600 border-amber-200" : "bg-emerald-50 text-emerald-600 border-emerald-200"}`}>
+                <span className="w-1.5 h-1.5 rounded-full bg-current" />
                 {user.status}
               </span>
             </div>
@@ -121,7 +120,8 @@ const UserHeader = ({
 
         {/* Right: Action CTAs & Close Button */}
         <div className="flex items-center gap-2.5 flex-wrap self-stretch sm:self-start lg:self-center">
-          {/* Impersonate User Button */}
+          {/* Impersonate User Button (Super Admin / Support, active accounts) */}
+          {onImpersonate && (
           <button
             type="button"
             onClick={handleImpersonate}
@@ -130,6 +130,7 @@ const UserHeader = ({
             <UserCheck className="w-3.5 h-3.5 text-light-black" />
             <span>Impersonate User</span>
           </button>
+          )}
         </div>
       </div>
 

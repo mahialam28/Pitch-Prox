@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { UserCheck, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -12,9 +12,7 @@ export default function EditAccountOwnerModal({
 }) {
   const [formData, setFormData] = useState(owner);
 
-  useEffect(() => {
-    setFormData(owner);
-  }, [owner, isOpen]);
+  // The parent remounts this modal (key) each time it opens, so the form starts fresh
 
   if (!isOpen) return null;
 

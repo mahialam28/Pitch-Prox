@@ -1,110 +1,88 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { X, Tag, Calendar, Clock, ChevronDown } from "lucide-react";
 import toast from "react-hot-toast";
 
-export const AddPromoCodeModal = ({ isOpen, promoCode, onClose, onSave }) => {
-  const [formData, setFormData] = useState({
-    code: "SUMMER20",
-    name: "Summer 20% Off",
-    description: "20% discount on all monthly and annual plans.",
-    discountType: "Percentage Discount",
-    discountValue: "20",
-    appliesTo: "All Plans",
-    minPurchase: "0.00",
-    maxUses: "500",
-    perUserLimit: "1",
-    unlimitedUses: false,
-    stackableWithOthers: false,
-    startDate: "May 16, 2025",
-    expirationDate: "Jun 30, 2025",
-    timeZone: "(GMT-05:00) Eastern Time (US & Canada)",
-    status: "Active",
-  });
+const iso = (value) => (value ? new Date(value).toISOString().slice(0, 10) : "");
+const TYPE_BY_VALUE = { percent: "Percentage Discount", fixed: "Fixed Amount", free_reports: "Free Reports", free_calls: "Free Calls", trial_days: "Trial Extension" };
 
-  useEffect(() => {
-    if (promoCode) {
-      setFormData({
-        code: promoCode.code || "SUMMER20",
-        name: promoCode.name || "Summer 20% Off",
-        description: promoCode.description || "20% discount on all monthly and annual plans.",
-        discountType: promoCode.type || "Percentage Discount",
-        discountValue: promoCode.value ? promoCode.value.replace(/[^0-9.]/g, "") : "20",
-        appliesTo: promoCode.appliesTo || "All Plans",
-        minPurchase: promoCode.minPurchase || "0.00",
-        maxUses: promoCode.maxUses ? String(promoCode.maxUses) : "500",
-        perUserLimit: promoCode.perUserLimit || "1",
-        unlimitedUses: promoCode.unlimitedUses || false,
-        stackableWithOthers: promoCode.stackableWithOthers || false,
-        startDate: promoCode.startDate || "May 16, 2025",
-        expirationDate: promoCode.expiration || "Jun 30, 2025",
-        timeZone: "(GMT-05:00) Eastern Time (US & Canada)",
-        status: promoCode.status || "Active",
-      });
-    } else {
-      setFormData({
-        code: "SUMMER20",
-        name: "Summer 20% Off",
-        description: "20% discount on all monthly and annual plans.",
-        discountType: "Percentage Discount",
-        discountValue: "20",
-        appliesTo: "All Plans",
-        minPurchase: "0.00",
-        maxUses: "500",
-        perUserLimit: "1",
-        unlimitedUses: false,
-        stackableWithOthers: false,
-        startDate: "May 16, 2025",
-        expirationDate: "Jun 30, 2025",
-        timeZone: "(GMT-05:00) Eastern Time (US & Canada)",
-        status: "Active",
-      });
-    }
-  }, [promoCode, isOpen]);
+// promoCode: a saved code from the API (edit) or null (new). plans: paid plans for "Applies To".
+// onSave(body) saves it; the parent remounts this modal (key) for each code.
+export const AddPromoCodeModal = ({ isOpen, promoCode, onClose, onSave, plans = [] }) => {
+  const [saving, setSaving] = useState(false);
+  const [formData, setFormData] = useState(() =>
+    promoCode
+      ? {
+          code: promoCode.code,
+          name: promoCode.name ?? "",
+          description: promoCode.description ?? "",
+          discountType: TYPE_BY_VALUE[promoCode.discountType] ?? "Percentage Discount",
+          discountValue: promoCode.discountType === "fixed" ? String(promoCode.discountValue / 100) : String(promoCode.discountValue),
+          appliesTo: promoCode.planIds ? promoCode.planIds.join(",") : "All Plans",
+          minPurchase: (promoCode.minPurchaseCents / 100).toFixed(2),
+          maxUses: promoCode.maxUses === null ? "" : String(promoCode.maxUses),
+          perUserLimit: String(promoCode.perCustomerLimit),
+          unlimitedUses: promoCode.maxUses === null,
+          stackableWithOthers: promoCode.stackable,
+          startDate: iso(promoCode.startsAt),
+          expirationDate: iso(promoCode.expiresAt),
+          timeZone: "(GMT-05:00) Eastern Time (US & Canada)",
+          status: promoCode.status === "Paused" ? "Paused" : "Active",
+        }
+      : {
+          code: "",
+          name: "",
+          description: "",
+          discountType: "Percentage Discount",
+          discountValue: "20",
+          appliesTo: "All Plans",
+          minPurchase: "0.00",
+          maxUses: "500",
+          perUserLimit: "1",
+          unlimitedUses: false,
+          stackableWithOthers: false,
+          startDate: iso(new Date()),
+          expirationDate: "",
+          timeZone: "(GMT-05:00) Eastern Time (US & Canada)",
+          status: "Active",
+        }
+  );
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.code.trim()) {
       toast.error("Promo code is required.");
       return;
     }
-
-    const formattedValue =
-      formData.discountType === "Percentage Discount"
-        ? `${formData.discountValue}% Off`
-        : formData.discountType === "Fixed Amount"
-        ? `$${formData.discountValue} Off`
-        : formData.discountType === "Free Reports"
-        ? `${formData.discountValue} Reports`
-        : formData.discountType === "Trial Extension"
-        ? `${formData.discountValue} Days`
-        : `${formData.discountValue} Calls`;
-
-    const saved = {
-      id: promoCode ? promoCode.id : `promo-${Date.now()}`,
-      code: formData.code.toUpperCase().replace(/\s+/g, ""),
-      name: formData.name,
-      description: formData.description,
-      type: formData.discountType,
-      value: formattedValue,
-      appliesTo: formData.appliesTo,
-      used: promoCode ? promoCode.used : 0,
-      maxUses: formData.unlimitedUses ? "∞" : parseInt(formData.maxUses) || 500,
-      expiration: formData.expirationDate,
-      status: formData.status,
-    };
-
-    onSave(saved);
-    toast.success(
-      promoCode
-        ? `Promo code "${saved.code}" updated!`
-        : `Promo code "${saved.code}" created successfully!`
-    );
-    onClose();
+    setSaving(true);
+    try {
+      const saved = await onSave({
+        code: formData.code,
+        name: formData.name,
+        description: formData.description,
+        discountType: formData.discountType,
+        discountValue: formData.discountValue,
+        planIds: formData.appliesTo === "All Plans" ? null : formData.appliesTo.split(","),
+        minPurchase: formData.minPurchase || 0,
+        maxUses: formData.unlimitedUses ? null : formData.maxUses,
+        unlimitedUses: formData.unlimitedUses,
+        perCustomerLimit: formData.perUserLimit,
+        stackable: formData.stackableWithOthers,
+        startsAt: formData.startDate || null,
+        expiresAt: formData.expirationDate || null,
+        status: formData.status,
+      });
+      toast.success(promoCode ? `Promo code "${saved.code}" updated.` : `Promo code "${saved.code}" created.`);
+      onClose();
+    } catch {
+      /* reported by the caller */
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -282,9 +260,10 @@ export const AddPromoCodeModal = ({ isOpen, promoCode, onClose, onSave }) => {
                   className="w-full text-xs font-medium px-3 py-2 rounded-xl border border-light-gray bg-white focus:outline-hidden focus:border-primary text-dark-black/85 cursor-pointer"
                 >
                   <option value="All Plans">All Plans</option>
-                  <option value="Basic, Pro">Basic, Pro</option>
-                  <option value="Pro, ProX">Pro, ProX</option>
-                  <option value="Enterprise Only">Enterprise Only</option>
+                  {plans.map((plan) => (
+                    <option key={plan.id} value={plan.id}>{plan.name} only</option>
+                  ))}
+                  {formData.appliesTo.includes(",") && <option value={formData.appliesTo}>{promoCode?.appliesTo}</option>}
                 </select>
               </div>
 
@@ -422,7 +401,7 @@ export const AddPromoCodeModal = ({ isOpen, promoCode, onClose, onSave }) => {
                 </label>
                 <div className="relative flex items-center">
                   <input
-                    type="text"
+                    type="date"
                     value={formData.startDate}
                     onChange={(e) =>
                       setFormData({ ...formData, startDate: e.target.value })
@@ -437,11 +416,11 @@ export const AddPromoCodeModal = ({ isOpen, promoCode, onClose, onSave }) => {
               {/* Expiration Date */}
               <div>
                 <label className="block text-xs font-semibold text-dark-black/80 mb-1">
-                  Expiration Date <span className="text-red">*</span>
+                  Expiration Date <span className="text-light-black font-normal">(Optional, empty = never expires)</span>
                 </label>
                 <div className="relative flex items-center">
                   <input
-                    type="text"
+                    type="date"
                     value={formData.expirationDate}
                     onChange={(e) =>
                       setFormData({
@@ -450,7 +429,6 @@ export const AddPromoCodeModal = ({ isOpen, promoCode, onClose, onSave }) => {
                       })
                     }
                     className="w-full text-xs font-medium px-3 py-2 pr-9 rounded-xl border border-light-gray bg-white focus:outline-hidden focus:border-primary text-dark-black/85"
-                    required
                   />
                   <Calendar className="w-4 h-4 text-light-black absolute right-3 pointer-events-none" />
                 </div>

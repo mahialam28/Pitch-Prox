@@ -5,23 +5,24 @@ import { motion } from "framer-motion";
 import { X, Briefcase, Mail, Copy, Check } from "lucide-react";
 import toast from "react-hot-toast";
 
-export const EnterpriseConfigModal = ({ isOpen, onClose, onSave }) => {
-  const [price, setPrice] = useState("5,000");
-  const [billingCycle, setBillingCycle] = useState("Annual");
-  const [contractTerm, setContractTerm] = useState("12 months");
-  const [onboardingFee, setOnboardingFee] = useState("500");
-  const [currency, setCurrency] = useState("USD");
+// initial: the saved enterprise defaults. Payment links are created once Stripe is connected.
+export const EnterpriseConfigModal = ({ isOpen, onClose, onSave, initial = null }) => {
+  const [price, setPrice] = useState(initial?.price ?? "5,000");
+  const [billingCycle, setBillingCycle] = useState(initial?.billingCycle ?? "Annual");
+  const [contractTerm, setContractTerm] = useState(initial?.contractTerm ?? "12 months");
+  const [onboardingFee, setOnboardingFee] = useState(initial?.onboardingFee ?? "500");
+  const [currency, setCurrency] = useState(initial?.currency ?? "USD");
   const money = (value) => Number(String(value).replace(/[^0-9.]/g, "")) || 0;
   const recurring = money(price);
   const oneTime = money(onboardingFee);
 
   // Usage & seats
-  const [customCallLimits, setCustomCallLimits] = useState(true);
-  const [callLimitsValue, setCallLimitsValue] = useState("2,000");
-  const [customReportLimits, setCustomReportLimits] = useState(true);
-  const [reportLimitsValue, setReportLimitsValue] = useState("50");
-  const [unlimitedMembers, setUnlimitedMembers] = useState(true);
-  const [overagePricing, setOveragePricing] = useState("Defined per contract");
+  const [customCallLimits, setCustomCallLimits] = useState(initial?.customCallLimits ?? true);
+  const [callLimitsValue, setCallLimitsValue] = useState(initial?.callLimitsValue ?? "2,000");
+  const [customReportLimits, setCustomReportLimits] = useState(initial?.customReportLimits ?? true);
+  const [reportLimitsValue, setReportLimitsValue] = useState(initial?.reportLimitsValue ?? "50");
+  const [unlimitedMembers, setUnlimitedMembers] = useState(initial?.unlimitedMembers ?? true);
+  const [overagePricing, setOveragePricing] = useState(initial?.overagePricing ?? "Defined per contract");
 
   // Payment link & email
   const [customerEmail, setCustomerEmail] = useState("billing@acmeinc.com");
@@ -33,30 +34,19 @@ export const EnterpriseConfigModal = ({ isOpen, onClose, onSave }) => {
   if (!isOpen) return null;
 
   const handleCopyLink = () => {
-    const link = `https://pitchprox.ai/checkout/enterprise-quote-${Date.now()}`;
-    navigator.clipboard.writeText(link);
-    toast.success("Payment link copied to clipboard!");
+    toast("Payment links are created once Stripe is connected.");
   };
 
-  const handleCreateAndEmail = (e) => {
+  // Saves the enterprise defaults (price, term, limits). Emailing a payment link needs Stripe and email.
+  const handleCreateAndEmail = async (e) => {
     e.preventDefault();
-    if (!customerEmail.trim()) {
-      toast.error("Customer email is required.");
-      return;
+    try {
+      await onSave?.({ price, billingCycle, contractTerm, onboardingFee, currency, customCallLimits, callLimitsValue, customReportLimits, reportLimitsValue, unlimitedMembers, overagePricing });
+      toast.success("Enterprise defaults saved. Payment links are sent once Stripe and email are connected.");
+      onClose();
+    } catch {
+      /* reported by the caller */
     }
-    toast.success(`Enterprise quote link emailed to ${customerEmail}`);
-    if (onSave) {
-      onSave({
-        price,
-        billingCycle,
-        contractTerm,
-        onboardingFee,
-        callLimitsValue,
-        reportLimitsValue,
-        customerEmail,
-      });
-    }
-    onClose();
   };
 
   return (
@@ -483,7 +473,7 @@ export const EnterpriseConfigModal = ({ isOpen, onClose, onSave }) => {
                     className="w-full py-2.5 px-4 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-semibold shadow-2xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <Mail className="w-4 h-4" />
-                    <span>Create & Email Payment Link</span>
+                    <span>Save Enterprise Defaults</span>
                   </button>
                 </div>
               </div>

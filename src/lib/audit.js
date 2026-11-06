@@ -8,6 +8,11 @@ import { requestClient } from "@/lib/auth";
 //
 //   await recordAudit(user, { action: "staff.invited", entityType: "user", entityId: id, summary: "Invited Jane Doe as Sales Rep" });
 export async function recordAudit(actor, { action, entityType = null, entityId = null, summary, metadata = null, organizationId = null }) {
+  // Changes made while a staff member impersonates a customer are attributed to that staff member too
+  if (actor?.impersonation) {
+    summary = `${summary} (by ${actor.impersonation.staffName} while impersonating)`;
+    metadata = { ...(metadata ?? {}), impersonationId: actor.impersonation.id, impersonatedBy: actor.impersonation.staffName };
+  }
   let client = { ip: null, userAgent: null };
   try { client = await requestClient(); } catch { /* not inside a request (scripts) */ }
   await query(

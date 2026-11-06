@@ -81,7 +81,8 @@ const actions = [
   },
 ];
 
-const QuickActions = ({ onActionClick }) => {
+// hidden: action ids this role can't use (e.g. a sales rep can't issue refunds)
+const QuickActions = ({ onActionClick, hidden = [] }) => {
   const handleActionClick = (action) => {
     if (onActionClick) {
       onActionClick(action.id);
@@ -101,7 +102,7 @@ const QuickActions = ({ onActionClick }) => {
 
       {/* ── Action Items List ── */}
       <div className="divide-y divide-light-gray/40 flex-1 flex flex-col justify-between">
-        {actions.map((action) => {
+        {actions.filter((action) => !hidden.includes(action.id)).map((action) => {
           const Icon = action.icon;
           return (
             <button

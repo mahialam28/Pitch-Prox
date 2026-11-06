@@ -24,6 +24,8 @@ const partial = (message) => ({ status: "partial", message });
 const working = { status: "working" };
 const MAIL = `Emails and support tickets save and are listed, but emails are only delivered once ${NEEDS.email} is connected. Templates are the built-in library; the AI draft button inserts sample text until ${NEEDS.ai} is connected.`;
 const CALENDAR = "Calendar events save and are shared by visibility (everyone, internal, management or private). Announcements are coming in an upcoming update.";
+const CUSTOMER_DETAIL = `Account details, notes, support history, credits and adjustments, plan changes (with proration), pause, cancel, suspend and impersonation are live. Call history, usage, reports and calibration detail wait for ${NEEDS.calling}; invoices and refunds are processed once ${NEEDS.payments} is connected.`;
+const CREDITS = `Credits, discounts, approvals and reversals are live and kept in the ledger. Refunds are recorded now and paid out once ${NEEDS.payments} is connected.`;
 const STAFF_DASHBOARD = `Leads, accounts, revenue, alerts and activity are live. Call-based scores (prompt adherence, trust gain) wait for ${NEEDS.calling}.`;
 
 // First match wins: exact paths, or "/section/*" for a section page and everything under it
@@ -68,7 +70,9 @@ const RULES = [
   ["/internal-sales-representative/leads/*", working],
   ["/internal-sales-representative/crm/*", working],
   ["/internal-sales-representative/support-tickets", working],
+  ["/internal-sales-representative/billing/credits-adjustments", partial(CREDITS)],
   ["/internal-sales-representative/users", working],
+  ["/internal-sales-representative/users/*", partial(CUSTOMER_DETAIL)],
   ["/internal-sales-representative/user-portal", partial(`Creating the customer account works; share the activation link it shows. Emailing that link and taking the first payment wait for ${NEEDS.email} and ${NEEDS.payments}.`)],
   ["/internal-sales-representative/calendar", partial(CALENDAR)],
   ["/internal-sales-representative/playbook", working],
@@ -101,11 +105,14 @@ const RULES = [
   ["/super-admin/crm/*", working],
   ["/super-admin/support-tickets", working],
   ["/super-admin/users", working],
+  ["/super-admin/users/*", partial(CUSTOMER_DETAIL)],
   ["/super-admin/calendar", partial(CALENDAR)],
   ["/super-admin/calendar-announcements", partial(CALENDAR)],
   ["/super-admin/mail/*", partial(MAIL)],
   ["/super-admin/campaigns-journeys/*", preview(`Campaigns, segments and templates are coming in an upcoming update. Sending campaigns waits for ${NEEDS.email}.`)],
-  ["/super-admin/billing/*", preview(`Credit adjustments are coming in an upcoming update. Payments and revenue figures wait for ${NEEDS.payments}.`)],
+  ["/super-admin/plan-pricing-control", partial(`Plans, promo codes (checked at checkout), trial rules, report add-ons, enterprise defaults and billing rules all save. Customers are charged these prices once ${NEEDS.payments} is connected.`)],
+  ["/super-admin/billing/credits-adjustments", partial(CREDITS)],
+  ["/super-admin/billing/*", waiting("Payments, invoices and revenue figures", NEEDS.payments)],
 ];
 
 // Everything else (customer detail pages, billing, the remaining super admin

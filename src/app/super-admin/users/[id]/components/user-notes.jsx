@@ -245,18 +245,43 @@ const pageSizeOptions = [
   { value: 20, label: "20 / page" },
 ];
 
-export const UserNotes = () => {
-  const [notes, setNotes] = useState(INITIAL_NOTES);
-  const [selectedNoteId, setSelectedNoteId] = useState("1");
+const ROLE_NAMES = { super_admin: "Super Admin", sales_rep: "Sales Rep", support: "Support", admin_manager: "Admin Manager", auditor: "Auditor" };
+const day = (value) => new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+const time = (value) => new Date(value).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+
+// A note from the API in the shape this screen uses
+const toDesignNote = (note) => ({
+  id: note.id,
+  title: note.title || note.body.slice(0, 60),
+  content: note.body,
+  type: note.type,
+  isPinned: note.pinned,
+  createdBy: { name: note.author, role: ROLE_NAMES[note.authorRole] ?? "" },
+  createdDate: day(note.createdAt),
+  createdTime: time(note.createdAt),
+  updatedDate: day(note.updatedAt ?? note.createdAt),
+  updatedTime: time(note.updatedAt ?? note.createdAt),
+  activity: [
+    { label: "Note created", author: note.author, date: `${day(note.createdAt)} ${time(note.createdAt)}` },
+    ...(note.updatedAt ? [{ label: "Note updated", author: note.updatedBy ?? note.author, date: `${day(note.updatedAt)} ${time(note.updatedAt)}` }] : []),
+  ],
+});
+
+// account + api: the live customer page (notes are saved on the server); without them the sample notes are shown
+export const UserNotes = ({ account = null, api = null, onChanged = () => {} }) => {
+  const live = Boolean(account && api);
+  const [localNotes, setNotes] = useState(INITIAL_NOTES);
+  const notes = live ? account.notes.map(toDesignNote) : localNotes;
+  const [selectedNoteId, setSelectedNoteId] = useState(notes[0]?.id ?? null);
 
   // Modal State for Add / Edit Note
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [modalInitialData, setModalInitialData] = useState(null);
 
   // Form State for Right-hand Note Details Panel
-  const [formType, setFormType] = useState("Lead Insight");
-  const [formTitle, setFormTitle] = useState(INITIAL_NOTES[0].title);
-  const [formContent, setFormContent] = useState(INITIAL_NOTES[0].content);
+  const [formType, setFormType] = useState(notes[0]?.type ?? "Lead Insight");
+  const [formTitle, setFormTitle] = useState(notes[0]?.title ?? "");
+  const [formContent, setFormContent] = useState(notes[0]?.content ?? "");
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState("");
@@ -309,7 +334,16 @@ export const UserNotes = () => {
   };
 
   // Save handler from Modal
-  const handleModalSave = (noteData) => {
+  const handleModalSave = async (noteData) => {
+    if (live) {
+      const body = { title: noteData.title, body: noteData.content, type: noteData.type, pinned: noteData.isPinned };
+      const { results } = noteData.id ? await api.updateNote(noteData.id, body) : await api.addNote(body);
+      onChanged();
+      const saved = noteData.id ? results.find((note) => note.id === noteData.id) : results.find((note) => note.body === noteData.content && note.title === noteData.title);
+      if (saved) handleSelectNote(toDesignNote(saved));
+      toast.success(noteData.id ? "Note updated successfully!" : "New note added successfully!");
+      return;
+    }
     const now = new Date();
     const formattedDate = now.toLocaleDateString("en-US", {
       month: "short",
@@ -382,9 +416,15 @@ export const UserNotes = () => {
   };
 
   // Save handler from Right Panel
-  const handleSavePanelNote = () => {
+  const handleSavePanelNote = async () => {
     if (!formTitle.trim()) {
       toast.error("Please enter a note title");
+      return;
+    }
+    if (live) {
+      if (!formContent.trim()) return toast.error("Please enter the note");
+      await api.updateNote(selectedNoteId, { title: formTitle.trim(), body: formContent.trim(), type: formType }).catch(() => null);
+      onChanged();
       return;
     }
 
@@ -436,9 +476,12 @@ export const UserNotes = () => {
     if (note) setDeletingNote({ id: note.id, preview: note.title });
   };
 
-  const confirmDeleteNote = ({ id: noteId }) => {
+  const confirmDeleteNote = async ({ id: noteId }) => {
     const remaining = notes.filter((n) => n.id !== noteId);
-    setNotes(remaining);
+    if (live) {
+      await api.deleteNote(noteId);
+      onChanged();
+    } else setNotes(remaining);
     if (selectedNoteId === noteId && remaining.length > 0) {
       handleSelectNote(remaining[0]);
     }
@@ -1055,6 +1098,7 @@ export const UserNotes = () => {
 
       {/* ── Add / Edit Note Modal (Matching 2nd Image) ── */}
       <AddNoteModal
+        key={`${modalInitialData?.id ?? "new"}-${isAddModalOpen}`}
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         initialData={modalInitialData}

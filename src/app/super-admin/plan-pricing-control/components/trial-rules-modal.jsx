@@ -5,8 +5,9 @@ import { motion } from "framer-motion";
 import { X, Settings, Info, Check } from "lucide-react";
 import toast from "react-hot-toast";
 
-export const TrialRulesModal = ({ isOpen, onClose, onSave }) => {
-  const [rules, setRules] = useState({
+export const TrialRulesModal = ({ isOpen, onClose, onSave, initial = null }) => {
+  const [saving, setSaving] = useState(false);
+  const [rules, setRules] = useState(initial ?? {
     trialDuration: "7",
     durationUnit: "Days",
     newAccountsOnly: true,
@@ -49,11 +50,18 @@ export const TrialRulesModal = ({ isOpen, onClose, onSave }) => {
     toast.success("Trial rules reset to defaults");
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (onSave) onSave(rules);
-    toast.success("Trial rules saved successfully!");
-    onClose();
+    setSaving(true);
+    try {
+      await onSave?.(rules);
+      toast.success("Trial rules saved. New trials use them; the Free Trial plan's limits were updated.");
+      onClose();
+    } catch {
+      /* reported by the caller */
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (

@@ -22,64 +22,13 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import AuditInfo from "./audit-info";
-import ChangePlanModal from "./change-plan-modal";
-import ExtendSubscriptionModal from "./extend-subscription-modal";
 import AlertModal from "@/components/modals/alert-modal";
-import { ChangePlanDialog, DowngradePlanModal, CancelSubscriptionModal } from "./account-dialogs";
+import AdjustmentsLedger from "./adjustments-ledger";
+import { CancelSubscriptionModal } from "./account-dialogs";
 import Dropdown from "@/components/shared/dropdown/dropdown";
 
-const INITIAL_INVOICES = [
-  {
-    id: "INV-2025-0515",
-    date: "May 15, 2025",
-    amount: "$499.00",
-    rawAmount: 499.0,
-    status: "Paid",
-    period: "May 15, 2025 - Jun 15, 2025",
-    pdfName: "invoice_may_2025.pdf",
-  },
-  {
-    id: "INV-2025-0415",
-    date: "Apr 15, 2025",
-    amount: "$499.00",
-    rawAmount: 499.0,
-    status: "Paid",
-    period: "Apr 15, 2025 - May 15, 2025",
-    pdfName: "invoice_apr_2025.pdf",
-  },
-  {
-    id: "INV-2025-0315",
-    date: "Mar 15, 2025",
-    amount: "$499.00",
-    rawAmount: 499.0,
-    status: "Paid",
-    period: "Mar 15, 2025 - Apr 15, 2025",
-    pdfName: "invoice_mar_2025.pdf",
-  },
-  {
-    id: "INV-2025-0215",
-    date: "Feb 15, 2025",
-    amount: "$499.00",
-    rawAmount: 499.0,
-    status: "Paid",
-    period: "Feb 15, 2025 - Mar 15, 2025",
-    pdfName: "invoice_feb_2025.pdf",
-  },
-  {
-    id: "INV-2025-0115",
-    date: "Jan 15, 2025",
-    amount: "$499.00",
-    rawAmount: 499.0,
-    status: "Paid",
-    period: "Jan 15, 2025 - Feb 15, 2025",
-    pdfName: "invoice_jan_2025.pdf",
-  },
-];
 
-const FREQUENCY_OPTIONS = [
-  { value: "One-time", label: "One-time" },
-  { value: "Recurring", label: "Recurring" },
-];
+const FREQUENCY_OPTIONS = [{ value: "One-time", label: "One-time" }];
 
 const APPLY_TO_OPTIONS = [
   { value: "Next Invoice", label: "Next Invoice" },
@@ -94,72 +43,73 @@ const DISCOUNT_TYPE_OPTIONS = [
   { value: "Promotional Discount", label: "Promotional Discount" },
 ];
 
-export default function UserBillingSubscription({ onBack = () => {}, focus = null }) {
+const money = (dollars) => `$${Number(dollars).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const day = (value) => (value ? new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—");
+// The design's "Apply To" options → the ledger's values
+const APPLY_TO_SERVER = { "Next Invoice": "Next Invoice", "Current Balance": "Account Balance", "All Future Invoices": "All Future Invoices" };
+
+// Subscription & Billing tab on the live customer page.
+//   account: customer detail from the API; api: account calls (../../account-api)
+//   onAction(id): opens the page's dialogs (change_plan, pause_subscription…); onChanged(): reload after a change
+export default function UserBillingSubscription({ onBack = () => {}, focus = null, account, api, onAction = () => {}, onChanged = () => {} }) {
   // Opened from an Overview card: scroll to the section it refers to ("usage" | "invoices")
   useEffect(() => {
     if (!focus) return undefined;
     const timer = setTimeout(() => document.getElementById(`billing-${focus}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
     return () => clearTimeout(timer);
   }, [focus]);
-  // User Data Context
-  const [userData, setUserData] = useState({
-    name: "Jennifer Smith",
-    company: "Acme Inc.",
-    plan: "Premium Plan",
-    currentPlan: "Premium",
-    price: "$499.00",
-    currentPrice: 499,
-    initials: "JS",
-    currentExpiration: "June 15, 2025",
-    daysRemaining: 30,
-    avatar:
-      "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=160",
-  });
-
-  const [planPrice, setPlanPrice] = useState(499);
-  const [autoRenew, setAutoRenew] = useState(true);
+  const { subscription, balances, permissions, profile } = account;
+  const annual = subscription.billingCycle === "annual";
+  const planPrice = ((annual ? subscription.plan.priceAnnualCents * 12 : subscription.plan.priceMonthlyCents) * (profile.seats || 1)) / 100;
+  const userData = {
+    name: account.owner?.name ?? account.company,
+    company: account.company,
+    plan: `${subscription.plan.name} Plan`,
+    currentPlan: subscription.plan.name,
+    price: money(planPrice),
+    currentPrice: planPrice,
+    initials: (account.owner?.name ?? account.company).split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join(""),
+  };
+  const canWrite = permissions.canWrite && account.status !== "deleted";
+  const autoRenew = !subscription.cancelAtPeriodEnd;
   const [emailInvoices, setEmailInvoices] = useState(true);
 
-  // Calls Credit State (Capped at 50)
-  const [addCallsAmount, setAddCallsAmount] = useState("50");
+  // Calls / reports: plan allowance plus added credits (usage is counted once calling is connected)
+  const [addCallsAmount, setAddCallsAmount] = useState(String(permissions.limits?.calls ?? 50));
   const [callsFrequency, setCallsFrequency] = useState("One-time");
-  const [callBalance, setCallBalance] = useState({ used: 142, total: 500 });
-
-  // Report Credit State (Capped at 50)
-  const [addReportsAmount, setAddReportsAmount] = useState("10");
+  const callBalance = { used: balances.calls.used, total: balances.calls.total };
+  const [addReportsAmount, setAddReportsAmount] = useState(String(Math.min(10, permissions.limits?.reports ?? 10)));
   const [reportsFrequency, setReportsFrequency] = useState("One-time");
-  const [reportBalance, setReportBalance] = useState({ used: 18, total: 50 });
+  const reportBalance = { used: balances.reports.used, total: balances.reports.total };
 
-  // Discount / Adjustment State (Capped at 50)
+  // Discount / credit
   const [applyTo, setApplyTo] = useState("Next Invoice");
-  const [discountType, setDiscountType] = useState("Call Credit");
+  const [discountType, setDiscountType] = useState("Goodwill Credit");
   const [discountAmount, setDiscountAmount] = useState("50.00");
   const [discountNote, setDiscountNote] = useState("Goodwill credit");
-  const [appliedAdjustment, setAppliedAdjustment] = useState(-50.0);
+  const appliedAdjustment = -balances.creditCents / 100;
 
-  // Billing Contact State
-  const [billingContact] = useState({
-    name: "Jennifer Smith",
-    email: "jennifer.smith@acme.com",
-    phone: "(555) 123-4567",
-    address: "123 Main Street, Suite 400, Austin, TX 78701 USA",
-  });
-
-  // Invoice Recipients State
-  const [invoiceSettings, setInvoiceSettings] = useState({
-    primary: "jennifer.smith@acme.com",
-    additional: "jennifer.smith@acme.com",
-  });
-  const [editInvoiceForm, setEditInvoiceForm] = useState({
-    primary: "jennifer.smith@acme.com",
-    additional: "jennifer.smith@acme.com",
-  });
+  const billingContact = {
+    name: account.owner?.name ?? "—",
+    email: profile.billingEmail ?? account.owner?.email ?? "—",
+    phone: profile.phone ?? "—",
+    address: profile.address ?? "—",
+  };
+  const invoiceSettings = { primary: profile.billingEmail ?? account.owner?.email ?? "", additional: "" };
+  const [editInvoiceForm, setEditInvoiceForm] = useState(invoiceSettings);
+  const invoices = account.invoices.map((invoice) => ({
+    id: invoice.number,
+    date: day(invoice.issuedAt),
+    amount: invoice.amount,
+    rawAmount: invoice.amountCents / 100,
+    status: invoice.status[0].toUpperCase() + invoice.status.slice(1),
+    period: invoice.description,
+    pdfName: `${invoice.number}.pdf`,
+  }));
+  const renewsOn = subscription.currentPeriodEnd ? day(subscription.currentPeriodEnd) : "the end of this period";
 
   // --- Modals State ---
-  const [isChangePlanModalOpen, setIsChangePlanModalOpen] = useState(false);
-  const [isExtendModalOpen, setIsExtendModalOpen] = useState(false);
   const [isCancelAlertOpen, setIsCancelAlertOpen] = useState(false);
-  const [planDialog, setPlanDialog] = useState(null);
   const [isInvoicePreviewOpen, setIsInvoicePreviewOpen] = useState(false);
   const [isConfirmAddCallsOpen, setIsConfirmAddCallsOpen] = useState(false);
   const [isConfirmAddReportsOpen, setIsConfirmAddReportsOpen] = useState(false);
@@ -216,12 +166,20 @@ export default function UserBillingSubscription({ onBack = () => {}, focus = nul
     setIsConfirmAddCallsOpen(true);
   };
 
-  const handleConfirmAddCallsAction = () => {
-    const count = parseInt(addCallsAmount, 10);
-    setCallBalance((prev) => ({ ...prev, total: prev.total + count }));
-    setIsConfirmAddCallsOpen(false);
-    toast.success(`Successfully added ${count} calls ($${calculatedCallsCost})!`);
+  // Adds through the ledger: applied now (Super Admin, sales rep within limits) or sent for approval (Support)
+  const adjust = async (body, done) => {
+    try {
+      const result = await api.adjust(body);
+      done();
+      onChanged();
+      toast.success(result.status === "pending" ? `Sent for approval (${result.reference}).` : `${result.value} applied (${result.reference}).`);
+    } catch {
+      /* reported by api */
+    }
   };
+
+  const handleConfirmAddCallsAction = () =>
+    adjust({ kind: "calls", quantity: parseInt(addCallsAmount, 10), reason: `Added from Subscription & Billing (${callsFrequency})` }, () => setIsConfirmAddCallsOpen(false));
 
   const handleAddReports = (e) => {
     e?.preventDefault?.();
@@ -233,12 +191,8 @@ export default function UserBillingSubscription({ onBack = () => {}, focus = nul
     setIsConfirmAddReportsOpen(true);
   };
 
-  const handleConfirmAddReportsAction = () => {
-    const count = parseInt(addReportsAmount, 10);
-    setReportBalance((prev) => ({ ...prev, total: prev.total + count }));
-    setIsConfirmAddReportsOpen(false);
-    toast.success(`Successfully added ${count} report credits ($${calculatedReportsCost})!`);
-  };
+  const handleConfirmAddReportsAction = () =>
+    adjust({ kind: "reports", quantity: parseInt(addReportsAmount, 10), reason: `Added from Subscription & Billing (${reportsFrequency})` }, () => setIsConfirmAddReportsOpen(false));
 
   const handleApplyCredit = (e) => {
     e?.preventDefault?.();
@@ -250,31 +204,42 @@ export default function UserBillingSubscription({ onBack = () => {}, focus = nul
     setIsConfirmApplyCreditOpen(true);
   };
 
-  const handleConfirmApplyCreditAction = () => {
-    const amount = parseFloat(discountAmount);
-    setAppliedAdjustment(-amount);
-    setIsConfirmApplyCreditOpen(false);
-    toast.success(`Applied $${amount.toFixed(2)} ${discountType} to ${applyTo}!`);
-  };
+  const handleConfirmApplyCreditAction = () =>
+    adjust(
+      {
+        kind: discountType === "Promotional Discount" ? "discount" : "credit",
+        amount: parseFloat(discountAmount),
+        applyTo: APPLY_TO_SERVER[applyTo],
+        reason: `${discountType}${discountNote.trim() ? `: ${discountNote.trim()}` : ""}`,
+      },
+      () => setIsConfirmApplyCreditOpen(false)
+    );
 
-  const handleSaveInvoiceSettings = (e) => {
+  const handleSaveInvoiceSettings = async (e) => {
     e?.preventDefault?.();
     if (!editInvoiceForm.primary || !editInvoiceForm.primary.includes("@")) {
       toast.error("Please enter a valid primary email address.");
       return;
     }
-    setInvoiceSettings({
-      primary: editInvoiceForm.primary.trim(),
-      additional: editInvoiceForm.additional.trim(),
-    });
-    setIsEditInvoiceSettingsOpen(false);
-    toast.success("Invoice settings updated successfully!");
+    try {
+      await api.updateProfile({ billingEmail: editInvoiceForm.primary.trim() });
+      setIsEditInvoiceSettingsOpen(false);
+      onChanged();
+      toast.success("Invoice settings updated.");
+    } catch {
+      /* reported by api */
+    }
   };
 
-  const handleToggleAutoRenew = () => {
-    const nextVal = !autoRenew;
-    setAutoRenew(nextVal);
-    toast.success(nextVal ? "Auto-renew enabled." : "Auto-renew disabled.");
+  const handleToggleAutoRenew = async () => {
+    if (!canWrite) return;
+    try {
+      await api.cancel(autoRenew ? {} : { undo: true });
+      onChanged();
+      toast.success(autoRenew ? "Auto-renew off: the subscription ends at the end of this period." : "Auto-renew enabled.");
+    } catch {
+      /* reported by api */
+    }
   };
 
   const handleToggleEmailInvoices = () => {
@@ -283,8 +248,9 @@ export default function UserBillingSubscription({ onBack = () => {}, focus = nul
     toast.success(nextVal ? "Invoice emails enabled." : "Invoice emails paused.");
   };
 
+  // Invoice PDFs come from Stripe once it's connected
   const handleDownloadInvoice = (invoice) => {
-    toast.success(`Downloading ${invoice.id} (${invoice.pdfName})...`);
+    toast(`${invoice.id}: the PDF is available once Stripe billing is connected.`);
   };
 
   return (
@@ -314,24 +280,26 @@ export default function UserBillingSubscription({ onBack = () => {}, focus = nul
                       <span className="text-sm font-bold text-dark-black">
                         {userData.plan}
                       </span>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider text-emerald-600 bg-emerald-50 border border-emerald-200">
-                        ACTIVE
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider text-emerald-600 bg-emerald-50 border border-emerald-200 uppercase">
+                        {subscription.status === "trialing" ? "Trial" : subscription.status.replace("_", " ")}
                       </span>
                     </div>
                     <span className="text-xs text-light-black font-medium mt-0.5">
-                      ${planPrice} / month
+                      {money(planPrice)} / {annual ? "year" : "month"}
                     </span>
                   </div>
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-light-gray/60 flex flex-col gap-1">
                   <span className="text-[11px] text-light-black">
-                    Renews on Jun 15, 2025{" "}
-                    <span className="text-medium-black font-medium">(in 30 days)</span>
+                    {subscription.cancelAtPeriodEnd ? "Ends on" : "Renews on"} {renewsOn}
+                    {subscription.scheduledPlanName && (
+                      <span className="block text-medium-black font-medium">Switching to {subscription.scheduledPlanName} ({subscription.scheduledCycle}) at renewal</span>
+                    )}
                   </span>
                   <button
                     type="button"
-                    onClick={() => setIsChangePlanModalOpen(true)}
+                    onClick={() => onAction("change_plan")}
                     className="text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1 w-fit mt-1 cursor-pointer"
                   >
                     <span>View Plan Details</span>
@@ -371,21 +339,24 @@ export default function UserBillingSubscription({ onBack = () => {}, focus = nul
             <div className="flex flex-wrap items-center gap-3 pt-1">
               <button
                 type="button"
-                onClick={() => setPlanDialog("change")}
+                onClick={() => onAction("change_plan")}
+                disabled={!canWrite}
                 className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl border border-light-gray bg-white hover:bg-light-gray text-xs font-semibold text-dark-black/90 transition-all cursor-pointer shadow-2xs text-center"
               >
                 Change Plan
               </button>
               <button
                 type="button"
-                onClick={() => setPlanDialog("downgrade")}
+                onClick={() => onAction("pause_subscription")}
+                disabled={!canWrite}
                 className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl border border-light-gray bg-white hover:bg-light-gray text-xs font-semibold text-dark-black/90 transition-all cursor-pointer shadow-2xs text-center"
               >
-                Downgrade Subscription
+                {subscription.status === "paused" ? "Resume Subscription" : "Pause Subscription"}
               </button>
               <button
                 type="button"
                 onClick={() => setIsCancelAlertOpen(true)}
+                disabled={!canWrite || subscription.cancelAtPeriodEnd}
                 className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl border border-red-200 bg-red-50/50 hover:bg-red-50 text-xs font-semibold text-red-600 transition-all cursor-pointer shadow-2xs flex items-center justify-center gap-1.5"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -824,6 +795,9 @@ export default function UserBillingSubscription({ onBack = () => {}, focus = nul
             </div>
           </div>
 
+          {/* ── Credits & adjustments ledger ── */}
+          <AdjustmentsLedger adjustments={account.adjustments} isSuperAdmin={permissions.isSuperAdmin} onChanged={onChanged} />
+
           {/* ── 6. BILLING HISTORY CARD (invoice management) ── */}
           <div id="billing-invoices" className="scroll-mt-24 bg-white rounded-2xl border border-light-gray shadow-xs p-5 sm:p-6 flex flex-col gap-4">
             <h2 className="text-xs font-bold text-dark-black tracking-wider uppercase">
@@ -831,7 +805,8 @@ export default function UserBillingSubscription({ onBack = () => {}, focus = nul
             </h2>
 
             <div className="divide-y divide-light-gray/60 text-xs">
-              {INITIAL_INVOICES.slice(0, 4).map((inv) => (
+              {!invoices.length && <p className="py-3 text-light-black">No invoices yet. They appear here once billing runs through Stripe.</p>}
+              {invoices.slice(0, 4).map((inv) => (
                 <div
                   key={inv.id}
                   className="py-2.5 flex items-center justify-between gap-2 hover:bg-light-gray/30 px-1 rounded-lg transition-colors"
@@ -931,39 +906,18 @@ export default function UserBillingSubscription({ onBack = () => {}, focus = nul
       {/* MODALS                                                       */}
       {/* ═════════════════════════════════════════════════════════════ */}
 
-      {/* 1. Change Plan Modal (Quick Actions Overview Modal) */}
-      <ChangePlanModal
-        isOpen={isChangePlanModalOpen}
-        onClose={() => setIsChangePlanModalOpen(false)}
-        user={userData}
-        onConfirm={(planData) => {
-          if (planData?.name) {
-            setUserData((prev) => ({
-              ...prev,
-              plan: `${planData.name} Plan`,
-              currentPlan: planData.name,
-              currentPrice: planData.price,
-            }));
-            setPlanPrice(planData.price);
-          }
+      {/* Cancel Subscription: ends at the end of the current period */}
+      <CancelSubscriptionModal
+        isOpen={isCancelAlertOpen}
+        onClose={() => setIsCancelAlertOpen(false)}
+        summary={`${userData.plan}, ${money(planPrice)} / ${annual ? "year" : "month"}`}
+        endsOn={renewsOn}
+        endOnly
+        onConfirm={async ({ reason }) => {
+          await api.cancel({ reason });
+          onChanged();
         }}
       />
-
-      {/* 2. Extend Subscription Modal (Quick Actions Overview Modal) */}
-      <ExtendSubscriptionModal
-        isOpen={isExtendModalOpen}
-        onClose={() => setIsExtendModalOpen(false)}
-        user={userData}
-        onConfirm={() => {
-          toast.success("Subscription extension confirmed.");
-        }}
-      />
-
-      {/* 3. Cancel Subscription */}
-      <CancelSubscriptionModal isOpen={isCancelAlertOpen} onClose={() => setIsCancelAlertOpen(false)} onConfirm={() => setAutoRenew(false)} />
-
-      <ChangePlanDialog key={`change-${planDialog === "change"}`} isOpen={planDialog === "change"} onClose={() => setPlanDialog(null)} />
-      <DowngradePlanModal isOpen={planDialog === "downgrade"} onClose={() => setPlanDialog(null)} />
 
       {/* 4. Confirm Add Calls Modal */}
       <AlertModal

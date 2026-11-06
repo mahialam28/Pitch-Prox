@@ -10,7 +10,9 @@ export const RUN = Date.now().toString(36);
 
 // A signed-in (or anonymous) actor with its own cookie. `userAgent` imitates a browser.
 export function actor({ userAgent } = {}) {
-  let cookie = "";
+  // Every pitchprox_* cookie the app sets (the session, and the staff session kept during impersonation)
+  const jar = new Map();
+  const cookieHeader = () => [...jar].map(([name, value]) => `${name}=${value}`).join("; ");
   const call = async (method, path, body, { raw } = {}) => {
     const isForm = body instanceof FormData;
     const res = await fetch(BASE + path, {
@@ -18,13 +20,20 @@ export function actor({ userAgent } = {}) {
       redirect: "manual",
       headers: {
         ...(!isForm && { "Content-Type": "application/json" }),
-        ...(cookie && { Cookie: cookie }),
+        ...(jar.size && { Cookie: cookieHeader() }),
         ...(userAgent && { "User-Agent": userAgent }),
       },
       body: raw ?? (body === undefined || isForm ? body : JSON.stringify(body)),
     });
-    const session = res.headers.getSetCookie().find((c) => c.startsWith("pitchprox_session="));
-    if (session) cookie = session.split(";")[0];
+    for (const header of res.headers.getSetCookie()) {
+      const [pair, ...attributes] = header.split(";");
+      const [name, ...rest] = pair.split("=");
+      if (!name.startsWith("pitchprox_")) continue;
+      const value = rest.join("=");
+      const expired = !value || attributes.some((attribute) => /max-age=0\b/i.test(attribute.trim()) || /expires=thu, 01 jan 1970/i.test(attribute.trim()));
+      if (expired) jar.delete(name);
+      else jar.set(name, value);
+    }
     if (method === "GET" && !res.headers.get("content-type")?.includes("json")) {
       return { status: res.status, bytes: Buffer.from(await res.arrayBuffer()), headers: res.headers };
     }
@@ -34,7 +43,8 @@ export function actor({ userAgent } = {}) {
     return { status: res.status, json };
   };
   return {
-    cookie: () => cookie,
+    cookie: () => cookieHeader(),
+    hasCookie: (name) => jar.has(name),
     get: (path) => call("GET", path),
     post: (path, body, opts) => call("POST", path, body, opts),
     put: (path, body, opts) => call("PUT", path, body, opts),

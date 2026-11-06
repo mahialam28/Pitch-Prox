@@ -489,6 +489,7 @@ export default function UserReports() {
 
       {/* 2. Adjust Report Score Modal */}
       <AdjustReportScoreModal
+        key={`${selectedReport?.id ?? "none"}-${isAdjustScoreModalOpen}`}
         isOpen={isAdjustScoreModalOpen}
         onClose={() => setIsAdjustScoreModalOpen(false)}
         report={selectedReport}

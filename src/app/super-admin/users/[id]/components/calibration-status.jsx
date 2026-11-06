@@ -11,13 +11,15 @@ const CalibrationStatus = ({
   nextCalibration = "in 60days",
   onReset = () => {},
   onEdit = () => {},
+  canReset = true,
 }) => {
   // Resetting asks for confirmation first
   const [confirming, setConfirming] = useState(false);
-  const handleReset = () => {
-    onReset();
+  const handleReset = async () => {
+    await onReset();
     toast.success("Calibration reset. The user will be asked to calibrate again.");
   };
+  const completed = status === "Completed";
 
   return (
     <div className="bg-white rounded-2xl p-5 sm:p-6 border border-light-gray shadow-xs w-full shrink-0 flex flex-col justify-between">
@@ -28,10 +30,7 @@ const CalibrationStatus = ({
         </h3>
         <button
           type="button"
-          onClick={() => {
-            onEdit();
-            toast("Opening calibration editor...");
-          }}
+          onClick={onEdit}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-light-gray bg-white hover:bg-light-gray text-xs font-semibold text-dark-black/80 transition-colors cursor-pointer shadow-2xs"
         >
           <Edit2 className="w-3 h-3 text-light-black" />
@@ -40,7 +39,7 @@ const CalibrationStatus = ({
       </div>
 
       {/* ── Completed Status Box with Inline Reset Button ── */}
-      <div className="bg-[#F0FDF4] border border-[#DCFCE7] rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className={`${completed ? "bg-[#F0FDF4] border-[#DCFCE7]" : "bg-amber-50/60 border-amber-100"} border rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4`}>
         <div className="flex items-center gap-3.5 min-w-0">
           <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0 shadow-2xs">
             <RotateCcw className="w-4 h-4 text-emerald-600 stroke-[2.5]" />
@@ -50,14 +49,17 @@ const CalibrationStatus = ({
               {status}
             </h4>
             <p className="text-xs text-light-black mt-0.5 font-medium">
-              Completed on {completedDate}
+              {completed ? `Completed on ${completedDate}` : "The user hasn't calibrated yet."}
             </p>
-            <p className="text-[11px] text-light-black/70 mt-0.5 italic">
-              Next calibration {nextCalibration}
-            </p>
+            {nextCalibration && (
+              <p className="text-[11px] text-light-black/70 mt-0.5 italic">
+                {completed ? `Next calibration ${nextCalibration}` : nextCalibration}
+              </p>
+            )}
           </div>
         </div>
 
+        {canReset && completed && (
         <button
           type="button"
           onClick={() => setConfirming(true)}
@@ -66,6 +68,7 @@ const CalibrationStatus = ({
           <RotateCcw className="w-3 h-3 text-light-black" />
           <span>Reset Calibration</span>
         </button>
+        )}
       </div>
       <ConfirmDialog
         isOpen={confirming}

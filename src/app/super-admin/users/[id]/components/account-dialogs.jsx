@@ -97,8 +97,8 @@ export const SuspendAccountModal = ({ isOpen, onClose, name = SAMPLE_ACCOUNT.nam
     reasonLabel="Reason for suspending"
     reasons={SUSPEND_REASONS}
     confirmLabel="Suspend Account"
-    onConfirm={(reason) => {
-      onConfirm?.(reason);
+    onConfirm={async (reason) => {
+      await onConfirm?.(reason);
       showSavedToast("Account suspended", `${name} can no longer sign in or place calls.`);
     }}
   />
@@ -108,17 +108,17 @@ export const CancelAccountModal = ({ isOpen, onClose, onConfirm }) => (
   <ReasonConfirm
     isOpen={isOpen}
     onClose={onClose}
-    title="Cancel this account?"
+    title="Cancel this subscription?"
     icon={CircleX}
-    message="The subscription ends today and no further charges are made."
-    note="Remaining credits are forfeited."
+    message="The subscription ends at the end of the current billing period. No further charges are made after that."
+    note="You can undo this until the period ends."
     reasonLabel="Reason for cancelling"
     reasons={CANCEL_REASONS}
-    cancelLabel="Keep Account"
-    confirmLabel="Cancel Account"
-    onConfirm={(reason) => {
-      onConfirm?.(reason);
-      showSavedToast("Account cancelled", "The subscription has ended and billing has stopped.");
+    cancelLabel="Keep Subscription"
+    confirmLabel="Cancel Subscription"
+    onConfirm={async (reason) => {
+      await onConfirm?.(reason);
+      showSavedToast("Subscription cancelled", "It ends at the end of the current billing period.");
     }}
   />
 );
@@ -133,8 +133,8 @@ export const ReactivateAccountModal = ({ isOpen, onClose, onConfirm }) => (
     message="Access is restored immediately and billing resumes on the next cycle."
     confirmLabel="Reactivate Account"
     confirmVariant="primary"
-    onConfirm={() => {
-      onConfirm?.();
+    onConfirm={async () => {
+      await onConfirm?.();
       showSavedToast("Account reactivated", "The user can sign in and place calls again.");
     }}
   />
@@ -150,8 +150,8 @@ export const DeactivateAccountModal = ({ isOpen, onClose, onConfirm }) => (
     message="The account is hidden from active lists and the user cannot sign in. Billing is paused."
     confirmLabel="Deactivate"
     confirmVariant="primary"
-    onConfirm={() => {
-      onConfirm?.();
+    onConfirm={async () => {
+      await onConfirm?.();
       showSavedToast("Account deactivated", "Billing is paused until the account is reactivated.");
     }}
   />
@@ -168,8 +168,8 @@ export const ResetCalibrationModal = ({ isOpen, onClose, onConfirm }) => (
     note="Until they finish, AI prompts use default pacing and live calling stays locked."
     confirmLabel="Reset Calibration"
     confirmVariant="primary"
-    onConfirm={() => {
-      onConfirm?.();
+    onConfirm={async () => {
+      await onConfirm?.();
       showSavedToast("Calibration reset", "The user will be asked to calibrate again at next sign-in.");
     }}
   />
@@ -192,8 +192,8 @@ export const DeleteAccountModal = ({ isOpen, onClose, company = SAMPLE_ACCOUNT.c
       noteClassName="text-red-600"
       confirmLabel="Delete Account"
       confirmDisabled={typed !== "DELETE"}
-      onConfirm={() => {
-        onConfirm?.();
+      onConfirm={async () => {
+        await onConfirm?.();
         showSavedToast("Account deleted", `${company} and all of its data were removed.`);
       }}
     >
@@ -220,18 +220,30 @@ export const DeleteNoteModal = ({ note, onClose, onConfirm }) => (
 
 // ── Credits, discounts and plan changes ──────────────────────────────────────
 
-export const AddCreditsModal = ({ isOpen, onClose, kind = "calls", onConfirm }) => {
+// onConfirm({ quantity, reason }) saves it (live page) and returns the adjustment; `limit` caps one adjustment
+// (sales reps), and `needsApproval` says a Super Admin approves it first (Support).
+export const AddCreditsModal = ({ isOpen, onClose, kind = "calls", onConfirm, limit = null, needsApproval = false }) => {
   const isCalls = kind === "calls";
-  const [amount, setAmount] = useState(isCalls ? "100" : "10");
+  const [amount, setAmount] = useState(isCalls ? String(Math.min(100, limit ?? 100)) : "10");
   const [reason, setReason] = useState("");
   const [note, setNote] = useState("");
-  const [notify, setNotify] = useState(true);
-  const valid = Number(amount) > 0 && reason;
+  const [busy, setBusy] = useState(false);
+  const overLimit = limit !== null && Number(amount) > limit;
+  const valid = Number(amount) > 0 && reason && !overLimit;
+  const label = isCalls ? "calls" : "report credits";
 
-  const submit = () => {
-    onClose();
-    onConfirm?.(Number(amount));
-    showSavedToast(isCalls ? "Call credits added" : "Report credits added", `${Number(amount)} ${isCalls ? "calls were" : "report credits were"} added to this account.`);
+  const submit = async () => {
+    setBusy(true);
+    try {
+      const result = await onConfirm?.({ quantity: Number(amount), reason: note.trim() ? `${reason}: ${note.trim()}` : reason });
+      onClose();
+      if (result?.status === "pending") showSavedToast("Request sent for approval", `${Number(amount)} ${label} will be added once a Super Admin approves it.`);
+      else showSavedToast(isCalls ? "Call credits added" : "Report credits added", `${Number(amount)} ${label} ${Number(amount) === 1 ? "was" : "were"} added to this account.`);
+    } catch {
+      /* reported by the caller; keep the dialog open */
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -239,18 +251,19 @@ export const AddCreditsModal = ({ isOpen, onClose, kind = "calls", onConfirm }) 
       isOpen={isOpen}
       onClose={onClose}
       title={isCalls ? "Add Calls / Credits" : "Add Report Credits"}
-      subtitle={isCalls ? "Manually add call credits to this account." : "Manually add report credits to this account."}
+      subtitle={needsApproval ? "A Super Admin approves this before it's added." : isCalls ? "Manually add call credits to this account." : "Manually add report credits to this account."}
       size="sm"
       footer={
         <>
           <DialogButton onClick={onClose}>Cancel</DialogButton>
-          <DialogButton variant="primary" onClick={submit} disabled={!valid}>Add Credits</DialogButton>
+          <DialogButton variant="primary" onClick={submit} disabled={!valid || busy}>{needsApproval ? "Request Credits" : "Add Credits"}</DialogButton>
         </>
       }
     >
       <div className="space-y-5">
         <Field label={isCalls ? "Number of calls" : "Number of reports"} htmlFor="credit-amount">
           <input id="credit-amount" inputMode="numeric" value={amount} onChange={(event) => setAmount(event.target.value.replace(/\D/g, ""))} className={fieldClass} />
+          {limit !== null && <span className={`block text-[11px] mt-1 ${overLimit ? "text-red-600" : "text-light-black"}`}>You can add up to {limit} at a time.</span>}
         </Field>
         <Field label="Reason" htmlFor="credit-reason">
           <Select id="credit-reason" value={reason} onChange={setReason} options={CREDIT_REASONS} placeholder="Select a reason" />
@@ -258,7 +271,6 @@ export const AddCreditsModal = ({ isOpen, onClose, kind = "calls", onConfirm }) 
         <Field label="Note (optional)" htmlFor="credit-note">
           <TextArea id="credit-note" value={note} onChange={setNote} placeholder="Add an internal note" />
         </Field>
-        <Checkbox checked={notify} onChange={setNotify}>Notify the user by email</Checkbox>
       </div>
     </DialogModal>
   );
@@ -269,17 +281,32 @@ const DISCOUNT_TYPES = [
   { value: "fixed", label: "Fixed amount credit", description: "Example: $50 off" },
 ];
 
-export const ApplyDiscountModal = ({ isOpen, onClose }) => {
+// onConfirm({ amount, applyTo, reason }) in dollars; a percentage is worked out from `basePriceCents`
+// (the plan price for one billing period). `limitCents` caps it for sales reps.
+export const ApplyDiscountModal = ({ isOpen, onClose, onConfirm, basePriceCents = 0, limitCents = null, needsApproval = false }) => {
   const [type, setType] = useState("percent");
   const [value, setValue] = useState("20");
   const [duration, setDuration] = useState("One invoice");
   const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
   const isPercent = type === "percent";
-  const valid = Number(value) > 0 && (!isPercent || Number(value) <= 100) && reason;
+  const dollars = isPercent ? Math.round(basePriceCents * Number(value)) / 10000 : Number(value);
+  const overLimit = limitCents !== null && dollars * 100 > limitCents;
+  const valid = Number(value) > 0 && dollars > 0 && (!isPercent || Number(value) <= 100) && reason && !overLimit;
 
-  const submit = () => {
-    onClose();
-    showSavedToast("Discount applied", `${isPercent ? `${value}% off` : `$${Number(value).toFixed(2)} credit`} applies to the next invoice.`);
+  const submit = async () => {
+    setBusy(true);
+    try {
+      const label = isPercent ? `${value}% off` : `$${dollars.toFixed(2)} credit`;
+      const result = await onConfirm?.({ kind: "discount", amount: dollars, applyTo: duration === "One invoice" ? "Next Invoice" : "All Future Invoices", reason: `${reason} (${label}, ${duration.toLowerCase()})` });
+      onClose();
+      if (result?.status === "pending") showSavedToast("Request sent for approval", `${label} is applied once a Super Admin approves it.`);
+      else showSavedToast("Discount applied", `${label} applies to ${duration === "One invoice" ? "the next invoice" : `invoices for ${duration.toLowerCase()}`}.`);
+    } catch {
+      /* reported by the caller */
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -292,7 +319,7 @@ export const ApplyDiscountModal = ({ isOpen, onClose }) => {
       footer={
         <>
           <DialogButton onClick={onClose}>Cancel</DialogButton>
-          <DialogButton variant="primary" onClick={submit} disabled={!valid}>Apply Discount</DialogButton>
+          <DialogButton variant="primary" onClick={submit} disabled={!valid || busy}>{needsApproval ? "Request Discount" : "Apply Discount"}</DialogButton>
         </>
       }
     >
@@ -319,6 +346,12 @@ export const ApplyDiscountModal = ({ isOpen, onClose }) => {
         <Field label="Reason" htmlFor="discount-reason">
           <Select id="discount-reason" value={reason} onChange={setReason} options={CREDIT_REASONS} placeholder="Select a reason" />
         </Field>
+        {dollars > 0 && (
+          <p className={`text-xs ${overLimit ? "text-red-600" : "text-medium-black"}`}>
+            {isPercent ? `${value}% of the plan price is $${dollars.toFixed(2)}. ` : ""}
+            {limitCents !== null && `You can apply up to $${(limitCents / 100).toFixed(2)} at a time.`}
+          </p>
+        )}
       </div>
     </DialogModal>
   );
@@ -408,7 +441,8 @@ const CANCEL_TIMING = [
   { value: "now", label: "Immediately", description: "Access ends now, no refund" },
 ];
 
-export const CancelSubscriptionModal = ({ isOpen, onClose, onConfirm }) => {
+// summary: "Pro, $199.00 / month" and endsOn: the period end (live page). endOnly: cancelling now isn't offered
+export const CancelSubscriptionModal = ({ isOpen, onClose, onConfirm, summary = `${SAMPLE_ACCOUNT.plan}, ${SAMPLE_ACCOUNT.price}`, endsOn = SAMPLE_ACCOUNT.renews, endOnly = false }) => {
   const [reason, setReason] = useState("");
   const [timing, setTiming] = useState("end");
   const close = () => {
@@ -422,23 +456,24 @@ export const CancelSubscriptionModal = ({ isOpen, onClose, onConfirm }) => {
       onClose={close}
       title="Cancel subscription?"
       icon={CircleX}
-      message={`${SAMPLE_ACCOUNT.plan}, ${SAMPLE_ACCOUNT.price}.`}
+      message={`${summary}.`}
       cancelLabel="Keep Subscription"
       confirmLabel="Cancel Subscription"
       confirmDisabled={!reason}
-      onConfirm={() => {
-        onConfirm?.({ reason, timing });
-        showSavedToast(
-          "Subscription cancelled",
-          timing === "now" ? "Access has ended and no further charges are made." : `Access continues until ${SAMPLE_ACCOUNT.renews}.`
-        );
+      onConfirm={async () => {
+        await onConfirm?.({ reason, timing });
+        showSavedToast("Subscription cancelled", timing === "now" ? "Access has ended and no further charges are made." : `Access continues until ${endsOn}.`);
       }}
     >
       <div className="space-y-4">
         <Field label="Reason" htmlFor="cancel-sub-reason">
           <Select id="cancel-sub-reason" value={reason} onChange={setReason} options={CANCEL_REASONS} placeholder="Select a reason" />
         </Field>
-        <RadioCards label="When" value={timing} onChange={setTiming} options={CANCEL_TIMING} />
+        {endOnly ? (
+          <p className="text-xs text-medium-black">Access continues until {endsOn}. You can undo this until then.</p>
+        ) : (
+          <RadioCards label="When" value={timing} onChange={setTiming} options={CANCEL_TIMING} />
+        )}
       </div>
     </ConfirmDialog>
   );
@@ -454,7 +489,8 @@ const ACTIVITY = [
   { when: "May 14, 2025 02:25 PM", action: "Completed calibration", by: "Jennifer Smith" },
 ];
 
-export const ActivityLogModal = ({ isOpen, onClose }) => (
+// rows: [{ when, action, by }] (the live page passes the account's audit log)
+export const ActivityLogModal = ({ isOpen, onClose, rows = ACTIVITY }) => (
   <DialogModal
     isOpen={isOpen}
     onClose={onClose}
@@ -478,8 +514,13 @@ export const ActivityLogModal = ({ isOpen, onClose }) => (
   >
     <table className="w-full text-left text-sm">
       <tbody className="divide-y divide-gray-200 border-b border-gray-200">
-        {ACTIVITY.map((row) => (
-          <tr key={row.when + row.action}>
+        {!rows.length && (
+          <tr>
+            <td className="py-6 text-center text-light-black">No activity yet.</td>
+          </tr>
+        )}
+        {rows.map((row, index) => (
+          <tr key={`${row.when}-${row.action}-${index}`}>
             <td className="py-3 pr-4 text-medium-black whitespace-nowrap">{row.when}</td>
             <td className="py-3 pr-4 font-medium text-dark-black">{row.action}</td>
             <td className="py-3 text-medium-black whitespace-nowrap">{row.by}</td>
@@ -510,10 +551,18 @@ export const NewSupportTicketModal = ({ isOpen, onClose, onCreate }) => {
     onClose();
   };
 
-  const submit = () => {
-    onCreate?.({ subject: subject.trim(), category, priority, description: description.trim() });
-    showSavedToast("Ticket created", notify ? "The customer was emailed a copy of the ticket." : "The ticket was added to support history.");
-    close();
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    setBusy(true);
+    try {
+      const created = await onCreate?.({ subject: subject.trim(), category, priority, description: description.trim(), notify });
+      showSavedToast("Ticket created", `${created?.reference ?? "The ticket"} was added to support history.`);
+      close();
+    } catch {
+      /* reported by the caller */
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (

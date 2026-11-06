@@ -12,12 +12,13 @@ const defaultTiers = [
   { id: 4, reports: "50", price: "149.00", unitPrice: "$2.98", active: true },
 ];
 
-export const EditReportAddOnsModal = ({ isOpen, onClose, onSave }) => {
-  const [addOnStatus, setAddOnStatus] = useState(true);
-  const [tiers, setTiers] = useState(defaultTiers);
-  const [allowStacking, setAllowStacking] = useState(true);
-  const [reportRollover, setReportRollover] = useState(false);
-  const [maxBundlesPerCycle, setMaxBundlesPerCycle] = useState("10");
+// initial: saved settings ({ enabled, tiers, allowStacking, reportRollover, maxBundlesPerCycle })
+export const EditReportAddOnsModal = ({ isOpen, onClose, onSave, initial = null }) => {
+  const [addOnStatus, setAddOnStatus] = useState(initial?.enabled ?? true);
+  const [tiers, setTiers] = useState(initial?.tiers?.map((tier) => ({ ...tier, unitPrice: `$${(Number(tier.price) / Number(tier.reports || 1)).toFixed(2)}` })) ?? defaultTiers);
+  const [allowStacking, setAllowStacking] = useState(initial?.allowStacking ?? true);
+  const [reportRollover, setReportRollover] = useState(initial?.reportRollover ?? false);
+  const [maxBundlesPerCycle, setMaxBundlesPerCycle] = useState(initial?.maxBundlesPerCycle ?? "10");
 
   if (!isOpen) return null;
 
@@ -71,19 +72,21 @@ export const EditReportAddOnsModal = ({ isOpen, onClose, onSave }) => {
     toast.success("Changes reset");
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (onSave) {
-      onSave({
-        addOnStatus,
-        tiers,
+    try {
+      await onSave?.({
+        enabled: addOnStatus,
+        tiers: tiers.map(({ id, reports, price, active }) => ({ id, reports, price, active })),
         allowStacking,
         reportRollover,
         maxBundlesPerCycle,
       });
+      toast.success("Report Add-Ons updated.");
+      onClose();
+    } catch {
+      /* reported by the caller */
     }
-    toast.success("Report Add-Ons updated successfully!");
-    onClose();
   };
 
   return (

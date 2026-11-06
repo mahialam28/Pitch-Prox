@@ -6,7 +6,7 @@ const SESSION_DAYS = 7;
 
 // The user's signed-in devices (sessions that haven't expired), current first
 export async function listSessions(user) {
-  const rows = await query("SELECT id, ip, user_agent AS userAgent, created_at AS createdAt, last_seen_at AS lastSeenAt FROM sessions WHERE user_id = ? AND expires_at > CURRENT_TIMESTAMP ORDER BY id = ? DESC, COALESCE(last_seen_at, created_at) DESC", [user.id, user.sessionId]);
+  const rows = await query("SELECT id, ip, user_agent AS userAgent, created_at AS createdAt, last_seen_at AS lastSeenAt FROM sessions WHERE user_id = ? AND impersonation_id IS NULL AND expires_at > CURRENT_TIMESTAMP ORDER BY id = ? DESC, COALESCE(last_seen_at, created_at) DESC", [user.id, user.sessionId]);
   return rows.map((row) => ({ ...row, ...describeUserAgent(row.userAgent), isCurrent: row.id === user.sessionId }));
 }
 

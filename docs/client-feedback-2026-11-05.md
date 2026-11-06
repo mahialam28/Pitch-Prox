@@ -57,7 +57,7 @@ Status key:
 | 26–41 | Customer detail Call History / Usage & Activity: customer lead types, property address, homeowner profile, customer outcomes | Already done |
 | 42–44, 46 | Overview cards link to Billing details, the Usage & Credits section, the Invoice section and the Usage page | Done today (cards jump to the exact section) |
 | 47–50 | Add Calls / Reports / Discount capped at 50 with confirmation; Invoice Settings edit | Already done |
-| 51–54 | Reports: +8 alignment, remove recordings, internal notes, Calibration layout | Open |
+| 51–54 | Reports: +8 alignment, remove recordings, internal notes, Calibration layout | Done (screens); real reports appear once calling is connected |
 | 55 | Support: "PitchProX AI Suggested Reply" next to Send Reply | Already done |
 
 ## Super Admin
@@ -86,7 +86,7 @@ Status key:
 | 55 | Staff email shown but not editable | Already done |
 | 56 | Dashboard performance trend: switch between Users and Sales Reps | Done today |
 | 57, 152 | Remove "Start Call" (top right) | Done today (whole Super Admin portal) |
-| 59–60 | Plans & Pricing: enterprise totals; promo-code validation | Open |
+| 59–60 | Plans & Pricing: enterprise totals; promo-code validation | Done 2026-11-06: contradictory promo settings are refused by the server; codes are checked at checkout |
 | 61 | Performance Analytics metric tooltips | Mostly already done. "Revenue Churn" card still open. |
 | 62–65 | Billing: permanent adjustment trail, approval rules, proration notice, name → Subscription & Billing tab | Open |
 | 66–83 | Sales reps table, leaderboard (1st/2nd/3rd, re-ranking), rep profile tabs and coaching notes | Partly done: lead types and outcomes on the rep profile (73, 74, 76, 77). The rest is open. |

@@ -20,6 +20,8 @@ const STATUS = {
   "Pending payment": ["bg-amber-500", "text-amber-700"],
   Invited: ["bg-slate-400", "text-medium-black"],
   Canceled: ["bg-red-500", "text-red-600"],
+  Suspended: ["bg-red-500", "text-red-600"],
+  Deleted: ["bg-slate-400", "text-light-black"],
 };
 const COLORS = ["bg-[#0EADAB] text-white", "bg-indigo-500 text-white", "bg-orange-500 text-white", "bg-pink-500 text-white", "bg-sky-500 text-white"];
 
@@ -68,6 +70,8 @@ export const toUserRow = (account, index) => {
 export default function CustomersScreen() {
   const [data, setData] = useState(null);
 
+  const [version, setVersion] = useState(0);
+
   useEffect(() => {
     let cancelled = false;
     apiRequest("/api/v1/customers")
@@ -76,7 +80,7 @@ export default function CustomersScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [version]);
 
   return (
     <div className="w-full flex flex-col gap-6 pb-12">
@@ -86,7 +90,7 @@ export default function CustomersScreen() {
           canceled: (data?.results ?? []).filter((account) => account.status === "Canceled").length,
         }}
       />
-      <UserList users={(data?.results ?? []).map(toUserRow)} />
+      <UserList users={(data?.results ?? []).map(toUserRow)} onChanged={() => setVersion((value) => value + 1)} />
     </div>
   );
 }

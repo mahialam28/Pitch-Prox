@@ -15,7 +15,7 @@ export default function CompanyProfile({
     language: "English (US)",
     dateFormat: "MM/DD/YYYY",
   },
-  onEdit = () => {},
+  onEdit = null, // no Edit button for read-only viewers
 }) {
   return (
     <div className="bg-white rounded-2xl border border-light-gray shadow-xs p-5 sm:p-6 flex flex-col gap-5 w-full">
@@ -30,6 +30,7 @@ export default function CompanyProfile({
           </p>
         </div>
 
+        {onEdit && (
         <button
           type="button"
           onClick={onEdit}
@@ -38,6 +39,7 @@ export default function CompanyProfile({
           <Edit3 className="w-3.5 h-3.5 text-light-black" />
           <span>Edit</span>
         </button>
+        )}
       </div>
 
       {/* 3x3 Grid Details */}

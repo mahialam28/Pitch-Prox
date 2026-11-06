@@ -236,10 +236,13 @@ const UserCallHistory = ({ onBack = () => {} }) => {
 
   const activeTabIndex = TABS.findIndex((t) => t.key === activeTab);
 
-  // Reset page to 1 when filters or tabs change
-  useEffect(() => {
+  // Back to page 1 when filters or tabs change
+  const filterKey = [activeTab, dateRange, leadFilter, outcomeFilter, customFrom, customTo].join("|");
+  const [shownFilterKey, setShownFilterKey] = useState(filterKey);
+  if (shownFilterKey !== filterKey) {
+    setShownFilterKey(filterKey);
     setCurrentPage(1);
-  }, [activeTab, dateRange, leadFilter, outcomeFilter, customFrom, customTo]);
+  }
 
   // Tab scroll state
   const [tabCanScrollLeft, setTabCanScrollLeft] = useState(false);

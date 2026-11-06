@@ -67,6 +67,12 @@ const toTicket = (row) => ({
   assignedTo: row.agentId ? { id: row.agentId, name: row.agentName, email: row.agentEmail } : null,
 });
 
+// One customer account's tickets (the customer detail page's Support History)
+export async function listAccountTickets(organizationId) {
+  const rows = await query(`${TICKET_SELECT} WHERE support_tickets.organization_id = ? ORDER BY support_tickets.updated_at DESC LIMIT 200`, [organizationId]);
+  return rows.map((row) => ({ ...toTicket(row), firstResponseAt: row.firstResponseAt ?? null }));
+}
+
 // Every ticket (newest activity first), plus the counts for the page's tabs and cards.
 // openedByMe: only tickets this staff member opened for customers (Mail → Support Tickets)
 export async function listStaffTickets(user, { openedByMe = false } = {}) {

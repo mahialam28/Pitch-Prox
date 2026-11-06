@@ -15,7 +15,7 @@
 | 5 | Edit leads | ✅ | Edit page and table dropdowns save to the database. |
 | 6 | CRM prospect actions | ✅ | Edit, delete, stage moves, notes, and follow-ups all save. |
 | — | Staff accounts | ✅ | `npm run create-user` creates super admins and sales reps. |
-| — | Lint clean-up | 🟡 | 36 errors remain, all in Super Admin modules (customer detail, campaigns, compliance, playbook admin, sales reps, billing) and the customer call history; fix them in those phases. |
+| — | Lint clean-up | 🟡 | 21 errors remain (2026-11-06): 6 are in unused files listed under the Phase 3 notes (delete them); the rest are in billing invoices, compliance, playbook admin, the date/time pickers and the customer call history; fix them in those phases. |
 
 ---
 
@@ -26,7 +26,7 @@
 | 0. Foundations | Local dev + test databases, shared role/section permissions (sidebar and API use the same list), staff profiles, audit log, list/paging helpers, demo seed (`npm run db:seed`), test server on the separate `pitchprox_test` DB | ✅ Done 2026-11-05 |
 | 1. Staff & Onboarding | Add Employee invites (one-time activation link), Access Records, 8-step onboarding saved per employee (policy signatures, password + MFA choice, training, final sign-off, voice step for reps), portal locked until onboarding is done, Offboarding checklist that revokes access | ✅ Done 2026-11-05 |
 | 2. Sales Rep portal | Assigned leads/CRM, rep dashboard, calendar, internal mail, staff side of support tickets, user portal account creation, rep settings and tools | ✅ Done 2026-11-05 |
-| 3. Super Admin — customers & money | Users list/detail actions, notes, credits/discount/refund records, impersonation sessions, Plan & Pricing, billing queue, credits & adjustments | ❌ |
+| 3. Super Admin — customers & money | Users list/detail actions, notes, credits/discount/refund records, impersonation sessions, Plan & Pricing, credits & adjustments | ✅ Done 2026-11-06 (billing queue, invoices and payments wait for Stripe in phase 7) |
 | 4. Super Admin — team & operations | Sales reps (quotas, notes), dashboards, performance analytics, support dashboard, calendar & announcements, mail templates | ❌ |
 | 5. Campaigns & Journeys | Templates, segments, broadcast campaigns, journey builder, scheduled-send job runner | ❌ |
 | 6. Compliance & Audit | Policy versions, training logs, incidents, evidence uploads, audit-log page, AI governance, SOC 2, exports | ❌ |
@@ -36,7 +36,7 @@
 **Phase 0–1 notes**
 - Roles: `customer_admin`, `customer_member`, `sales_rep`, `super_admin`, `admin_manager`, `support`, `auditor`. Admin roles share `/super-admin`; `ADMIN_SECTIONS` in `src/utils.js/roles.js` decides each role's sidebar *and* which `/api/v1/admin/*` data it may load. Auditors can read but not change.
 - Invites: until an email service is connected, Add Employee shows the activation link for the admin to copy (valid 7 days, single use).
-- Tests: `npm run test:db`, then `npm run build && npm run test:server` (port 3001, test DB), then run `npm run test:api` with `BASE=http://localhost:3001` (see `tests/api/helpers.mjs`). 83 tests pass (Phase 2 adds `tests/api/sales.test.mjs`).
+- Tests: `npm run test:db`, then `npm run build && npm run test:server` (port 3001, test DB), then run `npm run test:api` with `BASE=http://localhost:3001` (see `tests/api/helpers.mjs`). 99 tests pass (Phase 2 adds `tests/api/sales.test.mjs`; Phase 3 adds `accounts.test.mjs` and `pricing.test.mjs`).
 
 **Phase 2 notes**
 - Ownership: leads and prospects have `assigned_to`. A rep sees only their own; Admin Manager / Super Admin (CRM section) see all of PitchProX's pipeline. Customer accounts have an owning rep (`customer_accounts.account_rep_id`).
@@ -47,6 +47,15 @@
 - Mail: each staff member sees only their own sent mail; emails wait in the outbox until an email service is connected. Templates are the built-in library.
 - Rep tools: Playbooks, AI Training and Calibration are open to reps; custom playbooks and training files belong to the rep, and staff get premium playbooks without buying them. Settings reuse the customer screens (account deletion and call-only preferences are hidden where they don't apply).
 - The Super Admin Calendar, Mail, Settings, CRM, Dashboard and Customers pages now reuse the same live screens as the Sales Rep portal.
+
+**Phase 3 notes**
+- Customer detail (`/super-admin/users/:id`, and the same page at `/internal-sales-representative/users/:id`): one shared page; what each role may do comes from the server (`account.permissions`). Sales reps open only their own accounts. Overview, Subscription & Billing, Account Settings, Notes and Support History are live; Call History, Usage, Reports and Calibration detail wait for calling (phase 7).
+- Credits & adjustments: one ledger (`account_adjustments`). Super Admin and sales reps apply directly (reps up to 50 calls / 50 reports / $50 at a time); Support's requests wait for a Super Admin's approval. Entries are never edited: a mistake is undone with a reversal (an opposite entry). Refunds are Super Admin only and are recorded now; money moves once Stripe is connected.
+- Subscription: plan or billing-cycle change now (prorated, preview shown first) or at renewal; pause until a date / resume; cancel at period end / undo.
+- Account status: suspending or deleting ends the customer's sessions and blocks sign-in; reps can't suspend; only a Super Admin deletes.
+- Impersonation: Super Admin and Support open a real session as a customer user (full access or read-only, 15 min–12 h). The staff session is kept aside and restored on exit; read-only is enforced on the server for every change; start/end and every change made while impersonating are in the audit log under the staff member's name. Impersonation sessions don't show in the customer's device list.
+- Plan & Pricing: plans (create, edit, archive; plans customers used can't be deleted), promo codes with checks that refuse contradictory settings (client item 60) and a validation endpoint used at checkout (`POST /api/v1/promo-codes/validate`; the rep's User Portal uses it and records the redemption), plus trial rules (they set the Free Trial plan's limits), report add-ons, enterprise defaults and billing rules. Support can view; only a Super Admin changes.
+- Unused files to delete: `src/app/internal-sales-representative/users/[id]/components/` (the rep page re-exports the Super Admin page) and `src/app/super-admin/plan-pricing-control/components/add-edit-plan-modal.jsx`.
 
 ## Current build plan
 Role by role, module by module — see **docs/build-plan.html**. Page status banners (module 0.1) are ✅ done: each page's label lives in `src/utils.js/page-status.js` — update it when a module is finished.

@@ -9,6 +9,7 @@ const AuditInfo = ({
   updatedBy = "Daniel Miller",
   lastLogin = "May 16, 2025, 9:42 AM",
   loginCount = 247,
+  loginCountLabel = "Login Count",
 }) => {
   return (
     <div className="w-full flex flex-col md:flex-row md:items-center justify-between gap-2 pt-2 px-1 text-[11px] text-light-black">
@@ -30,7 +31,7 @@ const AuditInfo = ({
         <span className="hidden sm:inline text-light-gray">•</span>
         <span>Last Login: {lastLogin}</span>
         <span className="hidden sm:inline text-light-gray">•</span>
-        <span>Login Count: <strong className="font-semibold text-dark-black/80">{loginCount}</strong></span>
+        <span>{loginCountLabel}: <strong className="font-semibold text-dark-black/80">{loginCount}</strong></span>
       </div>
     </div>
   );

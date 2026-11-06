@@ -17,6 +17,7 @@ import {
 import Sidebar from "@/components/shared/sidebar/sidebar";
 import Header from "@/components/shared/header/header";
 import { usePortalUser } from "@/components/shared/use-portal-user";
+import ImpersonationBar from "@/components/shared/impersonation-bar";
 
 export default function UserPortalShell({ user, children }) {
   const pathname = usePathname();
@@ -50,6 +51,7 @@ export default function UserPortalShell({ user, children }) {
       />
 
       <div className="flex-1 flex flex-col lg:ml-64 min-w-0">
+        <ImpersonationBar user={user} />
         <Header
           onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
           isSidebarOpen={sidebarOpen}

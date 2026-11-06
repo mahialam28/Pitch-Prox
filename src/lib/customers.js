@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { createId, hashPassword, hashToken, query } from "@/lib/db";
 import { ApiError } from "@/lib/api";
 import { recordAudit } from "@/lib/audit";
+import { redeemPromo, validatePromo } from "@/lib/pricing";
 import { requireCurrentUser } from "@/lib/auth";
 import { likePattern } from "@/lib/listing";
 import { ROLES, canAccessSection } from "@/utils.js/roles";
@@ -41,7 +42,7 @@ const healthOf = (row) => {
 
 const ACCOUNT_SELECT = `SELECT organizations.id AS organizationId, organizations.name AS company, organizations.created_at AS createdAt,
   owners.id AS ownerId, owners.name, owners.email, owners.password_set AS activated,
-  customer_accounts.contact_phone AS phone, customer_accounts.country, customer_accounts.seats, customer_accounts.source,
+  customer_accounts.contact_phone AS phone, customer_accounts.country, customer_accounts.status AS accountStatus, customer_accounts.seats, customer_accounts.source,
   reps.id AS repId, reps.name AS repName,
   plans.id AS planId, plans.name AS planName, plans.calls_per_month AS callsMax, plans.reports_per_month AS reportsMax,
   subscriptions.status AS subscriptionStatus, subscriptions.billing_cycle AS billingCycle,
@@ -61,7 +62,7 @@ const toAccount = (row) => ({
   calibrated: Boolean(row.calibrated),
   members: Number(row.members),
   accountNumber: `ACC-${row.organizationId.slice(-6).toUpperCase()}`,
-  status: !row.activated ? "Invited" : row.subscriptionStatus === "pending_payment" ? "Pending payment" : row.subscriptionStatus === "trialing" ? "Trial" : row.subscriptionStatus === "canceled" ? "Canceled" : "Active",
+  status: row.accountStatus === "suspended" ? "Suspended" : row.accountStatus === "deleted" ? "Deleted" : !row.activated ? "Invited" : row.subscriptionStatus === "pending_payment" ? "Pending payment" : row.subscriptionStatus === "trialing" ? "Trial" : row.subscriptionStatus === "canceled" ? "Canceled" : "Active",
   healthScore: healthOf(row),
 });
 
@@ -105,6 +106,9 @@ export async function createCustomerAccount(user, body) {
   if (!plan) throw new ApiError("Choose a plan.");
   const billingCycle = BILLING_CYCLES.includes(body.billingCycle) ? body.billingCycle : "monthly";
   const seats = Math.min(Math.max(Number.parseInt(body.seats, 10) || 1, 1), 500);
+  // A promo code is checked before anything is created
+  const promo = typeof body.promoCode === "string" && body.promoCode.trim() ? await validatePromo({ code: body.promoCode, planId: plan.id, billingCycle }) : null;
+  if (promo && !promo.valid) throw new ApiError(promo.message);
 
   const organizationId = createId("org");
   const ownerId = createId("user");
@@ -115,8 +119,9 @@ export async function createCustomerAccount(user, body) {
     organizationId, user.role === ROLES.SALES_REP ? user.id : null, text(body.phone, "Phone", 64), text(body.country, "Country", 80), seats, user.id,
   ]);
   await query("INSERT INTO subscriptions (organization_id, plan_id, status, billing_cycle, current_period_start) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)", [organizationId, plan.id, plan.isTrial ? "trialing" : "pending_payment", billingCycle]);
+  if (promo) await redeemPromo(promo.promoId, organizationId);
   const invite = await createActivation(ownerId, user.id);
-  await recordAudit(user, { action: "customer.created", entityType: "organization", entityId: organizationId, organizationId, summary: `Created ${company} (${email}) on ${plan.name}, ${seats} seat${seats === 1 ? "" : "s"}` });
+  await recordAudit(user, { action: "customer.created", entityType: "organization", entityId: organizationId, organizationId, summary: `Created ${company} (${email}) on ${plan.name}, ${seats} seat${seats === 1 ? "" : "s"}${promo ? `, promo ${promo.code} (${promo.discount.label})` : ""}` });
   const [row] = await query(`${ACCOUNT_SELECT} WHERE organizations.id = ?`, [organizationId]);
   return { account: toAccount(row), invite };
 }

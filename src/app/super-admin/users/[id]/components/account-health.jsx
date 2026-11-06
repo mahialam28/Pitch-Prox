@@ -9,11 +9,19 @@ const healthMetrics = [
   { id: "retention", label: "Retention", score: 88, max: 100 },
 ];
 
+const STATUS_TONE = {
+  Healthy: "bg-emerald-50 text-emerald-600 border-emerald-200",
+  "At Risk": "bg-amber-50 text-amber-600 border-amber-200",
+  Inactive: "bg-rose-50 text-rose-600 border-rose-200",
+};
+
+// metrics: [{ id, label, score, max }] (the live page passes what the score is made of)
 const AccountHealth = ({
   score = 92,
   maxScore = 100,
   status = "Healthy",
   lastCalculated = "May 16, 2025, 10:30 AM",
+  metrics = healthMetrics,
 }) => {
   return (
     <div className="bg-white rounded-2xl p-5 sm:p-6 border border-light-gray shadow-xs w-full flex-1 flex flex-col justify-between">
@@ -35,7 +43,7 @@ const AccountHealth = ({
               / {maxScore}
             </span>
           </div>
-          <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200">
+          <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border ${STATUS_TONE[status] ?? STATUS_TONE.Healthy}`}>
             {status}
           </span>
         </div>
@@ -75,7 +83,7 @@ const AccountHealth = ({
 
       {/* ── 2x2 Progress Metrics ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 pt-2 text-xs">
-        {healthMetrics.map((metric) => (
+        {metrics.map((metric) => (
           <div key={metric.id} className="space-y-1">
             <div className="flex items-center justify-between text-xs">
               <span className="text-light-black font-medium">{metric.label}</span>

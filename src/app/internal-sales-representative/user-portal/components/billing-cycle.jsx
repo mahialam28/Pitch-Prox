@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import DialogModal, { DialogButton } from "@/components/modals/dialog-modal";
 import toast from "react-hot-toast";
+import { apiRequest } from "@/lib/client-api";
 import Title from "@/components/texts/title";
 import Text from "@/components/texts/text";
 
@@ -47,13 +48,33 @@ const BillingCycle = ({
   const unitPrice =
     billingCycle === "monthly" ? planInfo.monthly : planInfo.annual;
 
-  const discountMultiplier = appliedPromo ? 0.9 : 1; // 10% discount on valid promo
-  const totalPrice = unitPrice * seats * discountMultiplier;
+  // Live: the code is checked by the server for this plan and billing cycle. Changing either
+  // drops it, since it may not apply any more.
+  const promoKey = `${selectedPlan}|${billingCycle}`;
+  const promo = onSendLink ? (appliedPromo?.key === promoKey ? appliedPromo : null) : appliedPromo ? { code: appliedPromo, discount: { type: "percent", value: 10, label: "10% Off" } } : null;
+  const subtotal = unitPrice * seats;
+  const discountAmount = !promo ? 0 : promo.discount.type === "percent" ? (subtotal * promo.discount.value) / 100 : promo.discount.type === "fixed" ? Math.min(subtotal, promo.discount.value / 100) : 0;
+  const totalPrice = subtotal - discountAmount;
 
-  const handleApplyPromo = (e) => {
+  const handleApplyPromo = async (e) => {
     e.preventDefault();
     if (!promoCode.trim()) {
       toast.error("Please enter a promo code.");
+      return;
+    }
+    if (onSendLink) {
+      try {
+        const result = await apiRequest("/api/v1/promo-codes/validate", { method: "POST", body: { code: promoCode, planId: selectedPlan, billingCycle } });
+        if (!result.valid) {
+          setAppliedPromo(null);
+          toast.error(result.message);
+          return;
+        }
+        setAppliedPromo({ ...result, key: promoKey });
+        toast.success(`Promo code "${result.code}" applied: ${result.discount.label}.`);
+      } catch (error) {
+        toast.error(error.message);
+      }
       return;
     }
     if (
@@ -75,7 +96,7 @@ const BillingCycle = ({
     if (!onSendLink) return setLinkSentOpen(true);
     setSending(true);
     try {
-      const result = await onSendLink();
+      const result = await onSendLink(promo?.code ?? null);
       if (!result) return;
       setInvite(result.invite);
       setLinkSentOpen(true);
@@ -177,11 +198,11 @@ const BillingCycle = ({
           </span>
         </div>
 
-        {appliedPromo && (
+        {promo && (
           <div className="flex justify-between items-center text-xs text-primary">
-            <span className="font-medium">Promo ({appliedPromo} - 10%)</span>
+            <span className="font-medium">Promo ({promo.code} - {promo.discount.label})</span>
             <span className="font-semibold font-secondary">
-              -${(unitPrice * seats * 0.1).toFixed(2)}
+              {discountAmount ? `-$${discountAmount.toFixed(2)}` : "Added"}
             </span>
           </div>
         )}
@@ -224,8 +245,8 @@ const BillingCycle = ({
         <div className="flex items-center gap-1.5 text-xs text-primary font-medium mt-2">
           <CheckCircle className="w-3.5 h-3.5" />
           <span>
-            {appliedPromo
-              ? `Promo code "${appliedPromo}" applied`
+            {promo
+              ? `Promo code "${promo.code}" applied`
               : "No promo code applied"}
           </span>
         </div>

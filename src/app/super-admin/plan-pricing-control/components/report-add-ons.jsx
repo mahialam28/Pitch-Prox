@@ -30,7 +30,18 @@ export const bundleOptions = [
   },
 ];
 
-export const ReportAddOns = ({ onEditPlan }) => {
+// tiers: the saved bundles ({ reports, price, active }); without them the design's examples are shown
+export const ReportAddOns = ({ onEditPlan, tiers = null }) => {
+  const bundles = tiers
+    ? tiers
+        .filter((tier) => tier.active)
+        .map((tier) => ({
+          id: `bundle-${tier.id}`,
+          reports: `${tier.reports} Reports`,
+          price: `$${Number(tier.price).toLocaleString("en-US", { maximumFractionDigits: 2 })}`,
+          unitPrice: `$${(Number(tier.price) / Number(tier.reports)).toFixed(2)} / report`,
+        }))
+    : bundleOptions;
   return (
     <div className="bg-white rounded-2xl border border-light-gray shadow-xs hover:shadow-sm transition-all duration-200 p-5 sm:p-6 flex flex-col justify-between h-full">
       {/* Top Header & Content */}
@@ -80,7 +91,7 @@ export const ReportAddOns = ({ onEditPlan }) => {
 
           {/* 4 Bundle Boxes Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-3.5">
-            {bundleOptions.map((bundle) => (
+            {bundles.map((bundle) => (
               <div
                 key={bundle.id}
                 className="bg-white border border-light-gray rounded-xl p-2.5 sm:p-3 flex flex-col items-center text-center shadow-2xs hover:border-slate-300 transition-colors"

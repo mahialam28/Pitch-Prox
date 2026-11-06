@@ -11,21 +11,36 @@ const retryOptions = [
   "Custom Schedule",
 ];
 
-export const BillingRules = () => {
-  const [annualDiscount, setAnnualDiscount] = useState("20");
-  const [gracePeriod, setGracePeriod] = useState("3");
-  const [retrySchedule, setRetrySchedule] = useState("3 attempts (1, 3, 7 days)");
+// initial: the saved billing rules; onSave(rules) stores them (Super Admin). Read-only without onSave.
+export const BillingRules = ({ initial = {}, onSave = null }) => {
+  const [annualDiscount, setAnnualDiscount] = useState(initial.annualDiscount ?? "20");
+  const [gracePeriod, setGracePeriod] = useState(initial.gracePeriod ?? "3");
+  const [retrySchedule, setRetrySchedule] = useState(initial.retrySchedule ?? "3 attempts (1, 3, 7 days)");
   const [isRetryOpen, setIsRetryOpen] = useState(false);
 
   // Toggle switch states
-  const [autoRenew, setAutoRenew] = useState(true);
-  const [trialAutoConvert, setTrialAutoConvert] = useState(true);
-  const [reportRollover, setReportRollover] = useState(false);
-  const [callRollover, setCallRollover] = useState(false);
+  const [autoRenew, setAutoRenew] = useState(initial.autoRenew ?? true);
+  const [trialAutoConvert, setTrialAutoConvert] = useState(initial.trialAutoConvert ?? true);
+  const [reportRollover, setReportRollover] = useState(initial.reportRollover ?? false);
+  const [callRollover, setCallRollover] = useState(initial.callRollover ?? false);
+  const rules = { annualDiscount, gracePeriod, retrySchedule, autoRenew, trialAutoConvert, reportRollover, callRollover };
 
+  // Saves the whole set with one change applied
+  const persist = async (changes) => {
+    if (!onSave) return;
+    try {
+      await onSave({ ...rules, ...changes });
+      showBillingRulesSavedToast();
+    } catch {
+      /* reported by the caller */
+    }
+  };
+
+  const TOGGLE_KEYS = { "Auto-Renew": "autoRenew", "Trial Auto-Convert": "trialAutoConvert", "Report Rollover": "reportRollover", "Call Rollover": "callRollover" };
   const handleToggle = (setter, current, name) => {
+    if (!onSave) return;
     setter(!current);
-    showBillingRulesSavedToast();
+    persist({ [TOGGLE_KEYS[name]]: !current });
   };
 
   return (
@@ -56,6 +71,7 @@ export const BillingRules = () => {
                 type="number"
                 value={annualDiscount}
                 onChange={(e) => setAnnualDiscount(e.target.value)}
+                onBlur={() => persist({ annualDiscount })}
                 className="w-14 text-center px-2 py-1 border border-light-gray rounded-lg text-xs font-semibold text-dark-black/85 focus:outline-hidden focus:border-primary"
               />
               <span className="text-xs font-semibold text-medium-black">%</span>
@@ -74,6 +90,7 @@ export const BillingRules = () => {
                 type="number"
                 value={gracePeriod}
                 onChange={(e) => setGracePeriod(e.target.value)}
+                onBlur={() => persist({ gracePeriod })}
                 className="w-14 text-center px-2 py-1 border border-light-gray rounded-lg text-xs font-semibold text-dark-black/85 focus:outline-hidden focus:border-primary"
               />
               <span className="text-xs font-semibold text-medium-black">days</span>
@@ -129,7 +146,7 @@ export const BillingRules = () => {
                       onClick={() => {
                         setRetrySchedule(opt);
                         setIsRetryOpen(false);
-                        showBillingRulesSavedToast();
+                        persist({ retrySchedule: opt });
                       }}
                       className={`w-full text-left px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
                         retrySchedule === opt

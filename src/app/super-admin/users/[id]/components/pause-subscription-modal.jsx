@@ -34,6 +34,14 @@ const modalVariants = {
   },
 };
 
+// A date `months` from today: { iso: "YYYY-MM-DD", label: "July 15, 2026" }
+const monthsAhead = (months) => {
+  const date = new Date();
+  date.setMonth(date.getMonth() + months);
+  const iso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  return { iso, label: date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) };
+};
+
 const DURATION_OPTIONS = [
   { id: "1_month", label: "1 Month", months: 1 },
   { id: "2_months", label: "2 Months", months: 2 },
@@ -57,9 +65,9 @@ export const PauseSubscriptionModal = ({
 }) => {
   const [selectedDuration, setSelectedDuration] = useState("1_month");
   const [autoResume, setAutoResume] = useState(true);
-  const [resumeDate, setResumeDate] = useState("July 15, 2025");
+  const [resumeDate, setResumeDate] = useState(() => monthsAhead(1).label);
   const [isCustomDateOpen, setIsCustomDateOpen] = useState(false);
-  const [customDateInput, setCustomDateInput] = useState("2025-07-15");
+  const [customDateInput, setCustomDateInput] = useState(() => monthsAhead(1).iso);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Close on Escape key
@@ -97,21 +105,14 @@ export const PauseSubscriptionModal = ({
   // Compute calculated resume date
   const handleDurationSelect = (option) => {
     setSelectedDuration(option.id);
-    if (option.id === "1_month") {
-      setResumeDate("July 15, 2025");
-      setCustomDateInput("2025-07-15");
-      setIsCustomDateOpen(false);
-    } else if (option.id === "2_months") {
-      setResumeDate("August 15, 2025");
-      setCustomDateInput("2025-08-15");
-      setIsCustomDateOpen(false);
-    } else if (option.id === "3_months") {
-      setResumeDate("September 15, 2025");
-      setCustomDateInput("2025-09-15");
-      setIsCustomDateOpen(false);
-    } else if (option.id === "custom") {
+    if (option.id === "custom") {
       setIsCustomDateOpen(true);
+      return;
     }
+    const date = monthsAhead(option.months);
+    setResumeDate(date.label);
+    setCustomDateInput(date.iso);
+    setIsCustomDateOpen(false);
   };
 
   const handleCustomDateChange = (e) => {
@@ -130,16 +131,18 @@ export const PauseSubscriptionModal = ({
     }
   };
 
-  const handlePauseSubmit = () => {
+  // The caller saves it (live page) and reports its own errors; the modal stays open on failure
+  const handlePauseSubmit = async () => {
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
-      toast.success(
-        `Subscription for ${user.name || "Jennifer Smith"} paused until ${resumeDate}.`
-      );
-      if (onConfirm) onConfirm({ duration: selectedDuration, resumeDate, autoResume });
+    try {
+      await onConfirm?.({ duration: selectedDuration, resumeDate, until: customDateInput, autoResume });
+      toast.success(`Subscription for ${user.name} paused until ${resumeDate}.`);
       onClose();
-    }, 600);
+    } catch {
+      /* reported by the caller */
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

@@ -5,12 +5,14 @@ import { motion } from "framer-motion";
 import { Tag, DollarSign, Users, TrendingUp, ArrowRight } from "lucide-react";
 import Link from "next/link";
 
-export const PricingKpiCards = ({ onOpenPromoCodes }) => {
+// stats: from /api/v1/admin/pricing (MRR counts active paid subscriptions; payments are taken once Stripe is connected)
+const dollars = (cents) => `$${Math.round(cents / 100).toLocaleString("en-US")}`;
+export const PricingKpiCards = ({ onOpenPromoCodes, stats = null }) => {
   const kpiData = [
     {
       id: "promo-codes",
       title: "Active Promo Codes",
-      value: "23",
+      value: stats ? String(stats.activePromos) : "—",
       badge: "Active",
       badgeStyle: "bg-emerald-50 text-emerald-600 border border-emerald-100",
       actionText: "View all promo codes",
@@ -21,8 +23,8 @@ export const PricingKpiCards = ({ onOpenPromoCodes }) => {
     {
       id: "monthly-revenue",
       title: "Monthly Subscription Revenue",
-      value: "$78,420",
-      subtext: "This month",
+      value: stats ? dollars(stats.mrrCents) : "—",
+      subtext: "Monthly recurring (active plans)",
       actionText: "View revenue report",
       icon: DollarSign,
       iconBg: "bg-purple-50 text-purple-600",
@@ -31,7 +33,7 @@ export const PricingKpiCards = ({ onOpenPromoCodes }) => {
     {
       id: "active-accounts",
       title: "Active Paid Accounts",
-      value: "1,248",
+      value: stats ? stats.payingCustomers.toLocaleString() : "—",
       subtext: "Accounts",
       actionText: "View accounts",
       icon: Users,
@@ -40,10 +42,10 @@ export const PricingKpiCards = ({ onOpenPromoCodes }) => {
     },
     {
       id: "trial-conversion",
-      title: "Trial-to-Paid Conversion",
-      value: "24.6%",
-      subtext: "Last 30 days",
-      actionText: "View conversion report",
+      title: "Accounts on Free Trial",
+      value: stats ? stats.trialing.toLocaleString() : "—",
+      subtext: "Trialing now",
+      actionText: "View accounts",
       icon: TrendingUp,
       iconBg: "bg-amber-50 text-amber-600",
       href: "/super-admin/performance-analytics",

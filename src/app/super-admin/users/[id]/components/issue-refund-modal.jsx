@@ -72,16 +72,7 @@ export const IssueRefundModal = ({
   const [internalNote, setInternalNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Sync default amount when modal opens or max changes
-  useEffect(() => {
-    if (isOpen) {
-      setRefundType("full");
-      setRefundAmount(maxRefundable.toFixed(2));
-      setRefundMethod("original");
-      setReason("Customer Satisfaction / Goodwill");
-      setInternalNote("");
-    }
-  }, [isOpen, maxRefundable]);
+  // The parent remounts this modal (key) each time it opens, so the form starts fresh
 
   // Close on Escape key
   useEffect(() => {
@@ -150,26 +141,16 @@ export const IssueRefundModal = ({
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
-      const destinationText =
-        refundMethod === "original"
-          ? "original payment method (VISA •••• 4242)"
-          : "account credit balance";
-      toast.success(
-        `Refund of $${amountNum.toFixed(2)} issued to ${user.name || "Jennifer Smith"} via ${destinationText}!`
-      );
-      if (onConfirm) {
-        onConfirm({
-          type: refundType,
-          amount: amountNum,
-          method: refundMethod,
-          reason,
-          internalNote,
-        });
-      }
-      onClose();
-    }, 650);
+    const destinationText = refundMethod === "original" ? "the original payment method" : "the account credit balance";
+    Promise.resolve(onConfirm?.({ type: refundType, amount: amountNum, method: refundMethod, reason, internalNote }))
+      .then(() => {
+        toast.success(`Refund of $${amountNum.toFixed(2)} recorded for ${user.name} (to ${destinationText}).`);
+        onClose();
+      })
+      .catch(() => {
+        /* reported by the caller */
+      })
+      .finally(() => setIsSubmitting(false));
   };
 
   return (

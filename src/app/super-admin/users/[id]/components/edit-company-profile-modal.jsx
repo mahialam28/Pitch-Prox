@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Building2, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
@@ -13,9 +13,7 @@ export default function EditCompanyProfileModal({
 }) {
   const [formData, setFormData] = useState(company);
 
-  useEffect(() => {
-    setFormData(company);
-  }, [company, isOpen]);
+  // The parent remounts this modal (key) each time it opens, so the form starts fresh
 
   if (!isOpen) return null;
 

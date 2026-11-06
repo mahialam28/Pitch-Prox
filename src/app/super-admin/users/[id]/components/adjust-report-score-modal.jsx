@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Edit3, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -10,17 +10,9 @@ export default function AdjustReportScoreModal({
   report = null,
   onSave = () => {},
 }) {
-  const [newScore, setNewScore] = useState(85);
+  // The parent remounts this modal (key) for each report, so it starts from that report's score
+  const [newScore, setNewScore] = useState(report?.score ?? 85);
   const [reason, setReason] = useState("");
-
-  useEffect(() => {
-    if (report?.score !== null && report?.score !== undefined) {
-      setNewScore(report.score);
-    } else {
-      setNewScore(85);
-    }
-    setReason("");
-  }, [report, isOpen]);
 
   if (!isOpen || !report) return null;
 

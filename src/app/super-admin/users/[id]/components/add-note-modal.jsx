@@ -48,27 +48,13 @@ export const AddNoteModal = ({
   initialData = null, // if editing existing note
   onSave = () => {},
 }) => {
-  const [noteType, setNoteType] = useState("Lead Insight");
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [isPinned, setIsPinned] = useState(false);
+  // The parent remounts this modal (key) for each note, so state starts from initialData
+  const [noteType, setNoteType] = useState(initialData?.type || "Lead Insight");
+  const [title, setTitle] = useState(initialData?.title || "");
+  const [content, setContent] = useState(initialData?.content || "");
+  const [isPinned, setIsPinned] = useState(Boolean(initialData?.isPinned));
   const [isTypeDropdownOpen, setIsTypeDropdownOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Sync state when modal opens or initialData changes
-  useEffect(() => {
-    if (initialData) {
-      setNoteType(initialData.type || "Lead Insight");
-      setTitle(initialData.title || "");
-      setContent(initialData.content || "");
-      setIsPinned(Boolean(initialData.isPinned));
-    } else {
-      setNoteType("Lead Insight");
-      setTitle("");
-      setContent("");
-      setIsPinned(false);
-    }
-  }, [initialData, isOpen]);
 
   // Close on Escape key
   useEffect(() => {
@@ -114,17 +100,12 @@ export const AddNoteModal = ({
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
-      onSave({
-        id: initialData?.id,
-        type: noteType,
-        title: title.trim(),
-        content: content.trim(),
-        isPinned,
-      });
-      onClose();
-    }, 400);
+    Promise.resolve(onSave({ id: initialData?.id, type: noteType, title: title.trim(), content: content.trim(), isPinned }))
+      .then(() => onClose())
+      .catch(() => {
+        /* reported by the caller; keep the modal open */
+      })
+      .finally(() => setIsSubmitting(false));
   };
 
   const isEditing = Boolean(initialData?.id);

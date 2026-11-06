@@ -23,7 +23,7 @@ export async function listPlans() {
 
 // Every company has a subscription; one that predates billing starts on the Free Trial
 export async function getSubscription(organizationId) {
-  const select = () => query("SELECT subscriptions.status, subscriptions.billing_cycle, subscriptions.current_period_start, subscriptions.current_period_end, plans.* FROM subscriptions JOIN plans ON plans.id = subscriptions.plan_id WHERE subscriptions.organization_id = ?", [organizationId]);
+  const select = () => query("SELECT subscriptions.status, subscriptions.billing_cycle, subscriptions.current_period_start, subscriptions.current_period_end, subscriptions.paused_until, subscriptions.cancel_at_period_end, subscriptions.scheduled_plan_id, subscriptions.scheduled_cycle, plans.* FROM subscriptions JOIN plans ON plans.id = subscriptions.plan_id WHERE subscriptions.organization_id = ?", [organizationId]);
   let [row] = await select();
   if (!row) {
     await query("INSERT IGNORE INTO subscriptions (organization_id, plan_id, status, current_period_start) VALUES (?, ?, 'trialing', CURRENT_TIMESTAMP)", [organizationId, TRIAL_PLAN_ID]);
@@ -36,6 +36,10 @@ export async function getSubscription(organizationId) {
     billingCycle: row.billing_cycle,
     currentPeriodStart: row.current_period_start,
     currentPeriodEnd: row.current_period_end,
+    pausedUntil: row.paused_until ?? null,
+    cancelAtPeriodEnd: Boolean(row.cancel_at_period_end),
+    scheduledPlanId: row.scheduled_plan_id ?? null,
+    scheduledCycle: row.scheduled_cycle ?? null,
     // Calls and reports are counted once calling is connected; until then nothing is used
     usage: {
       calls: { used: 0, total: plan.callsPerMonth },
