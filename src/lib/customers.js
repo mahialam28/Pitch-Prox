@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { createId, hashPassword, hashToken, query } from "@/lib/db";
 import { ApiError } from "@/lib/api";
 import { recordAudit } from "@/lib/audit";
+import { recordUserEvent } from "@/lib/campaigns/events";
 import { redeemPromo, validatePromo } from "@/lib/pricing";
 import { requireCurrentUser } from "@/lib/auth";
 import { likePattern } from "@/lib/listing";
@@ -156,5 +157,6 @@ export async function activateAccount(token, password) {
   await query("UPDATE account_invites SET accepted_at = NOW() WHERE id = ?", [invite.id]);
   const [user] = await query("SELECT id, name, role, organization_id AS organizationId FROM users WHERE id = ?", [invite.userId]);
   await recordAudit(user, { action: "customer.activated", entityType: "user", entityId: user.id, organizationId: user.organizationId, summary: `${user.name} activated their account` });
+  await recordUserEvent(user.id, "user_signed_up", { source: "sales" });
   return user;
 }

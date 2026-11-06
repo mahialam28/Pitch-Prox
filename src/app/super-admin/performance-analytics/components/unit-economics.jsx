@@ -74,7 +74,38 @@ const unitEconomicsData = [
   },
 ];
 
-export const UnitEconomics = () => {
+// Definitions from the client's change list (item 61)
+const TOOLTIPS = {
+  "cost-per-call": "Average direct platform cost to process and support one qualifying live call. May include telephony, transcription, AI, and infrastructure costs depending on the configured cost model.",
+  "ai-cost-user": "Average AI-related processing cost for a qualifying live call, including applicable model inference and AI processing expenses. (Does not represent total call delivery cost unless telephony and transcription are explicitly included.)",
+  "gross-margin": "Revenue remaining after subtracting direct costs required to deliver the service, including AI usage, telephony, transcription, payment processing, and other directly attributable service costs. (Does not include general operating expenses unless specifically configured.)",
+  cac: "Average acquisition cost required to obtain one new paying customer, based on included sales and marketing acquisition expenses divided by newly acquired customers during the defined period.",
+  "cost-free-trial": "Average direct cost incurred to support one trial account during the selected reporting period, including applicable AI, transcription, telephony, and infrastructure usage.",
+  arpu: "Average recurring revenue generated per active paying account. (Excludes one-time credits, refunds, and non-recurring charges.) Here: MRR divided by paying accounts.",
+};
+
+const InfoTip = ({ label, text }) => (
+  <span title={text} aria-label={`${label}: ${text}`} className="ml-auto inline-flex items-center justify-center w-4 h-4 rounded-full bg-light-gray text-[10px] font-bold text-medium-black cursor-help shrink-0">
+    i
+  </span>
+);
+
+// ARPU is live (MRR / paying accounts). Costs need the calling/AI provider bills and payments
+// (Stripe), so those cards wait until they're connected.
+const WAITING = {
+  "cost-per-call": "Needs calling",
+  "ai-cost-user": "Needs AI provider",
+  "gross-margin": "Needs Stripe + costs",
+  cac: "Needs Stripe + costs",
+  "cost-free-trial": "Needs calling + AI",
+};
+
+export const UnitEconomics = ({ unitEconomics }) => {
+  const cards = unitEconomicsData.map((card) =>
+    card.id === "arpu"
+      ? { ...card, value: unitEconomics?.arpuCents == null ? "—" : `$${Math.round(unitEconomics.arpuCents / 100).toLocaleString("en-US")}`, trend: "", subtext: "MRR per paying account", trendType: "dot" }
+      : { ...card, value: "—", trend: "", subtext: WAITING[card.id] ?? "Not connected yet", trendType: "dot" }
+  );
   return (
     <div className="w-full flex flex-col gap-3 sm:gap-4">
       {/* Section Header */}
@@ -84,7 +115,7 @@ export const UnitEconomics = () => {
 
       {/* 6-Column Responsive Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
-        {unitEconomicsData.map((card) => {
+        {cards.map((card) => {
           const Icon = card.icon;
           return (
             <div
@@ -101,6 +132,7 @@ export const UnitEconomics = () => {
                 <span className="text-[10px] font-bold text-light-black uppercase tracking-wider leading-tight">
                   {card.label}
                 </span>
+                <InfoTip label={card.label} text={TOOLTIPS[card.id]} />
               </div>
 
               {/* Value */}

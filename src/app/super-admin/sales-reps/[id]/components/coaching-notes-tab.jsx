@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   Plus,
   X,
@@ -17,12 +17,13 @@ import {
 import Dropdown from "@/components/shared/dropdown/dropdown";
 import AddCoachingNoteModal from "./add-coaching-note-modal";
 import toast from "react-hot-toast";
+import { addRepNote, deleteRepNote, loadRepNotes, updateRepNote } from "../../team-api";
 
 const dateRangeOptions = [
-  { value: "May 1 – May 31, 2026", label: "May 1 – May 31, 2026" },
-  { value: "April 1 – April 30, 2026", label: "April 1 – April 30, 2026" },
-  { value: "Last 30 Days", label: "Last 30 Days" },
-  { value: "This Quarter", label: "This Quarter" },
+  { value: "All time", label: "All time" },
+  { value: "This month", label: "This month" },
+  { value: "Last 30 days", label: "Last 30 days" },
+  { value: "Last 90 days", label: "Last 90 days" },
 ];
 
 const noteTypeFilterOptions = [
@@ -33,123 +34,11 @@ const noteTypeFilterOptions = [
   { value: "General Feedback", label: "General Feedback" },
 ];
 
-const coachFilterOptions = [
-  { value: "All coaches", label: "All coaches" },
-  { value: "Sarah Johnson", label: "Sarah Johnson" },
-  { value: "Michael Carter", label: "Michael Carter" },
-  { value: "Daniel Martine", label: "Daniel Martine" },
-];
-
 const extraFilterOptions = [
-  { value: "Filters", label: "Filters" },
+  { value: "Filters", label: "All statuses" },
   { value: "High Priority", label: "High Priority" },
-  { value: "Pending Due", label: "Pending Due" },
+  { value: "Open", label: "Open" },
   { value: "Completed", label: "Completed" },
-];
-
-const initialCoachingNotes = [
-  {
-    id: "CN-101",
-    date: "May 31, 2026",
-    time: "10:32 AM",
-    type: "Opportunity",
-    typeColor: "bg-purple-50 text-purple-600 border border-purple-200/80",
-    relatedCall: "Subscription Closed",
-    title: "Stronger objection handling needed",
-    insight: "Anchor value before presenting pricing.",
-    coach: "Sarah Johnson",
-    due: "Jun 5",
-    dueColor: "bg-amber-50 text-amber-700 border border-amber-200/80",
-  },
-  {
-    id: "CN-102",
-    date: "May 31, 2026",
-    time: "9:15 AM",
-    type: "Strength",
-    typeColor: "bg-indigo-50 text-indigo-600 border border-indigo-200/80",
-    relatedCall: "Demo Booked",
-    title: "Excellent demo transition",
-    insight: "Built trust and increased show rate.",
-    coach: "Sarah Johnson",
-    due: "Done",
-    dueColor: "bg-amber-50/80 text-amber-800 border border-amber-200",
-  },
-  {
-    id: "CN-103",
-    date: "May 30, 2026",
-    time: "4:32 PM",
-    type: "Action Item",
-    typeColor: "bg-purple-50 text-purple-600 border border-purple-200/80",
-    relatedCall: "Trial Started",
-    title: "Follow-up consistency",
-    insight: "Send recap within one hour after calls.",
-    coach: "Sarah Johnson",
-    due: "Jun 2",
-    dueColor: "bg-amber-50 text-amber-700 border border-amber-200/80",
-  },
-  {
-    id: "CN-104",
-    date: "May 30, 2026",
-    time: "2:18 PM",
-    type: "Opportunity",
-    typeColor: "bg-purple-50 text-purple-600 border border-purple-200/80",
-    relatedCall: "Follow-up Scheduled",
-    title: "Pacing adjustment",
-    insight: "Slow the middle section to invite response.",
-    coach: "Michael Carter",
-    due: "Jun 10",
-    dueColor: "bg-amber-50 text-amber-700 border border-amber-200/80",
-  },
-  {
-    id: "CN-105",
-    date: "May 29, 2026",
-    time: "3:41 PM",
-    type: "Strength",
-    typeColor: "bg-indigo-50 text-indigo-600 border border-indigo-200/80",
-    relatedCall: "Objection Handling",
-    title: "Strong use of ROI framing",
-    insight: "Keep leveraging real numbers.",
-    coach: "Sarah Johnson",
-    due: "Done",
-    dueColor: "bg-amber-50/80 text-amber-800 border border-amber-200",
-  },
-];
-
-const focusAreas = [
-  {
-    title: "Objection Handling",
-    priority: "High • Due Jun 5",
-    insight: "Improve value anchoring before pricing.",
-    progress: 40,
-    color: "bg-primary",
-  },
-  {
-    title: "Follow-up Consistency",
-    priority: "Medium • Due Jun 2",
-    insight: "Send recaps faster after every call.",
-    progress: 75,
-    color: "bg-primary",
-  },
-  {
-    title: "Emotional Pacing",
-    priority: "Low • Due Jun 10",
-    insight: "Maintain a steady pace throughout the call.",
-    progress: 55,
-    color: "bg-primary",
-  },
-];
-
-const recentStrengths = [
-  {
-    title: "Great rapport in opening",
-    date: "May 31, 2026",
-    desc: "Mirrored the prospect's concerns effectively.",
-  },
-  {
-    title: "Excellent demo engagement",
-    date: "May 29, 2026",
-    desc: "Connected product value to discovery insights.",
-  },
 ];
 
 const pillFilterTabs = [
@@ -160,62 +49,118 @@ const pillFilterTabs = [
   { id: "General Feedback", label: "General Feedback" },
 ];
 
-export default function CoachingNotesTab({ rep }) {
-  const repName = rep?.name || "Ryan Anderson";
+const TYPE_COLORS = {
+  Strength: "bg-indigo-50 text-indigo-600 border border-indigo-200/80",
+  Opportunity: "bg-purple-50 text-purple-600 border border-purple-200/80",
+  "Action Item": "bg-amber-50 text-amber-700 border border-amber-200/80",
+  "General Feedback": "bg-slate-100 text-slate-600 border border-slate-200",
+};
+const shortDate = (value) => new Date(`${value}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
-  // Filter States
-  const [dateRange, setDateRange] = useState("May 1 – May 31, 2026");
+// API note → table row
+const toRow = (note) => {
+  const created = new Date(note.createdAt);
+  const done = Boolean(note.completedAt);
+  const overdue = !done && note.dueDate && new Date(`${note.dueDate}T23:59:59`) < new Date();
+  return {
+    ...note,
+    created,
+    date: created.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+    time: created.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+    typeColor: TYPE_COLORS[note.type] ?? TYPE_COLORS["General Feedback"],
+    relatedCall: note.relatedTo || "—",
+    insight: note.body,
+    coach: note.authorName,
+    done,
+    due: done ? "Done" : note.dueDate ? shortDate(note.dueDate) : "No due date",
+    dueColor: done ? "bg-emerald-50 text-emerald-600 border border-emerald-200/80" : overdue ? "bg-rose-50 text-rose-600 border border-rose-200/80" : "bg-amber-50 text-amber-700 border border-amber-200/80",
+  };
+};
+const RANGE_DAYS = { "Last 30 days": 30, "Last 90 days": 90 };
+
+// Live coaching notes (shared with the rep). Managers add, complete and delete; Support views.
+export default function CoachingNotesTab({ rep, canManage = false }) {
+  const repName = rep?.name ?? "";
+
+  const [dateRange, setDateRange] = useState("All time");
   const [noteType, setNoteType] = useState("All note types");
   const [coach, setCoach] = useState("All coaches");
   const [extraFilter, setExtraFilter] = useState("Filters");
   const [activePill, setActivePill] = useState("all");
 
-  // Coaching Notes Data
-  const [notesList, setNotesList] = useState(initialCoachingNotes);
+  const [data, setData] = useState(null);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [activeActionId, setActiveActionId] = useState(null);
   const [openNote, setOpenNote] = useState(null);
-  const markComplete = (note) => {
-    setNotesList((list) => list.map((item) => (item.id === note.id ? { ...item, due: "Done", dueColor: "bg-emerald-50 text-emerald-600" } : item)));
-    setOpenNote(null);
-    toast.success(`Marked "${note.title}" as complete`);
-  };
   const PAGE_SIZE = 5;
 
+  const reload = useCallback(() => loadRepNotes(rep.id).then(setData).catch((error) => toast.error(error.message)), [rep.id]);
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  const notesList = (data?.notes ?? []).map(toRow);
+  const coachFilterOptions = [{ value: "All coaches", label: "All coaches" }, ...(data?.coaches ?? []).map((name) => ({ value: name, label: name }))];
+
+  const setComplete = async (note, completed) => {
+    try {
+      await updateRepNote(rep.id, note.id, { completed });
+      setOpenNote(null);
+      toast.success(`${completed ? "Marked" : "Reopened"} "${note.title}"`);
+      reload();
+    } catch (error) {
+      toast.error(error.message);
+    }
+  };
+  const removeNote = async (note) => {
+    if (!window.confirm(`Delete the coaching note "${note.title}"?`)) return;
+    try {
+      await deleteRepNote(rep.id, note.id);
+      setOpenNote(null);
+      toast.success("Coaching note deleted");
+      reload();
+    } catch (error) {
+      toast.error(error.message);
+    }
+  };
+
   const handleResetFilters = () => {
-    setDateRange("May 1 – May 31, 2026");
+    setDateRange("All time");
     setNoteType("All note types");
     setCoach("All coaches");
     setExtraFilter("Filters");
     setActivePill("all");
+    setCurrentPage(1);
   };
 
-  const handleAddNote = (newNote) => {
-    setNotesList((prev) => [
-      {
-        ...newNote,
-        typeColor:
-          newNote.type === "Strength"
-            ? "bg-indigo-50 text-indigo-600 border border-indigo-200/80"
-            : "bg-purple-50 text-purple-600 border border-purple-200/80",
-        dueColor:
-          newNote.due === "Done"
-            ? "bg-amber-50/80 text-amber-800 border border-amber-200"
-            : "bg-amber-50 text-amber-700 border border-amber-200/80",
-      },
-      ...prev,
-    ]);
+  const handleAddNote = async (newNote) => {
+    await addRepNote(rep.id, { kind: "coaching", ...newNote });
+    reload();
   };
 
   // Filtered Notes
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
   const filteredNotes = notesList.filter((item) => {
     if (activePill !== "all" && item.type !== activePill) return false;
     if (noteType !== "All note types" && item.type !== noteType) return false;
     if (coach !== "All coaches" && item.coach !== coach) return false;
+    if (extraFilter === "High Priority" && item.priority !== "High") return false;
+    if (extraFilter === "Open" && item.done) return false;
+    if (extraFilter === "Completed" && !item.done) return false;
+    if (dateRange === "This month" && item.created < monthStart) return false;
+    if (RANGE_DAYS[dateRange] && (new Date() - item.created) / 86400000 > RANGE_DAYS[dateRange]) return false;
     return true;
   });
   const totalPages = Math.max(1, Math.ceil(filteredNotes.length / PAGE_SIZE));
+  const stats = data?.stats ?? { thisMonth: 0, lastMonth: 0, actionItems: 0, actionItemsDone: 0, topFocus: null };
+  const monthDiff = stats.thisMonth - stats.lastMonth;
+  const focusAreas = (data?.focus ?? []).map((note) => ({
+    title: note.title,
+    priority: [note.priority ? `${note.priority}` : null, note.dueDate ? `Due ${shortDate(note.dueDate)}` : null].filter(Boolean).join(" • ") || note.type,
+    insight: note.body,
+  }));
+  const recentStrengths = (data?.strengths ?? []).map((note) => ({ title: note.title, date: new Date(note.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }), desc: note.body }));
 
   return (
     <div className="w-full flex flex-col gap-6 animate-in fade-in duration-200">
@@ -239,7 +184,7 @@ export default function CoachingNotesTab({ rep }) {
               <Dropdown
                 items={dateRangeOptions}
                 selected={dateRange}
-                onSelect={(val) => setDateRange(val)}
+                onSelect={(val) => { setDateRange(val); setCurrentPage(1); }}
                 variant="small"
                 placement="bottom"
                 className="w-full"
@@ -251,7 +196,7 @@ export default function CoachingNotesTab({ rep }) {
               <Dropdown
                 items={noteTypeFilterOptions}
                 selected={noteType}
-                onSelect={(val) => setNoteType(val)}
+                onSelect={(val) => { setNoteType(val); setCurrentPage(1); }}
                 variant="small"
                 placement="bottom"
                 className="w-full"
@@ -263,7 +208,7 @@ export default function CoachingNotesTab({ rep }) {
               <Dropdown
                 items={coachFilterOptions}
                 selected={coach}
-                onSelect={(val) => setCoach(val)}
+                onSelect={(val) => { setCoach(val); setCurrentPage(1); }}
                 variant="small"
                 placement="bottom"
                 className="w-full"
@@ -287,20 +232,20 @@ export default function CoachingNotesTab({ rep }) {
               <Dropdown
                 items={extraFilterOptions}
                 selected={extraFilter}
-                onSelect={(val) => setExtraFilter(val)}
+                onSelect={(val) => { setExtraFilter(val); setCurrentPage(1); }}
                 variant="small"
                 placement="bottom"
                 className="w-full"
               />
             </div>
 
-            <button
+            {canManage && <button
               type="button"
               onClick={() => setAddModalOpen(true)}
               className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs sm:text-sm font-semibold shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
             >
               <span>Add Coaching Note</span>
-            </button>
+            </button>}
           </div>
         </div>
       </div>
@@ -314,10 +259,10 @@ export default function CoachingNotesTab({ rep }) {
           </span>
           <div className="mt-0.5">
             <h3 className="text-2xl sm:text-3xl font-bold text-dark-black/90 font-secondary tracking-tight">
-              87 / 100
+              —
             </h3>
-            <p className="text-xs font-semibold text-emerald-600 mt-1">
-              ↑ 6 pts vs previous period
+            <p className="text-xs font-semibold text-light-black mt-1">
+              Scored from calls once calling is connected
             </p>
           </div>
         </div>
@@ -328,11 +273,11 @@ export default function CoachingNotesTab({ rep }) {
             TOP FOCUS AREA
           </span>
           <div className="mt-0.5">
-            <h3 className="text-xl sm:text-2xl font-bold text-dark-black/90 font-secondary tracking-tight leading-tight">
-              Objection Handling
+            <h3 className="text-xl sm:text-2xl font-bold text-dark-black/90 font-secondary tracking-tight leading-tight break-words">
+              {stats.topFocus ?? "None open"}
             </h3>
             <p className="text-xs font-semibold text-emerald-600 mt-1">
-              Priority for improvement
+              {stats.topFocus ? "Most urgent open item" : "No open opportunities or action items"}
             </p>
           </div>
         </div>
@@ -344,10 +289,10 @@ export default function CoachingNotesTab({ rep }) {
           </span>
           <div className="mt-0.5">
             <h3 className="text-2xl sm:text-3xl font-bold text-dark-black/90 font-secondary tracking-tight">
-              12
+              {stats.thisMonth}
             </h3>
-            <p className="text-xs font-semibold text-emerald-600 mt-1">
-              ↑ 3 vs previous period
+            <p className={`text-xs font-semibold mt-1 ${monthDiff > 0 ? "text-emerald-600" : monthDiff < 0 ? "text-rose-500" : "text-light-black"}`}>
+              {monthDiff ? `${monthDiff > 0 ? "↑" : "↓"} ${Math.abs(monthDiff)} vs last month` : "Same as last month"}
             </p>
           </div>
         </div>
@@ -359,10 +304,10 @@ export default function CoachingNotesTab({ rep }) {
           </span>
           <div className="mt-0.5">
             <h3 className="text-2xl sm:text-3xl font-bold text-dark-black/90 font-secondary tracking-tight">
-              8 / 12
+              {stats.actionItemsDone} / {stats.actionItems}
             </h3>
             <p className="text-xs font-semibold text-emerald-600 mt-1">
-              67% completion rate
+              {stats.actionItems ? `${Math.round((stats.actionItemsDone / stats.actionItems) * 100)}% completion rate` : "No action items yet"}
             </p>
           </div>
         </div>
@@ -379,7 +324,7 @@ export default function CoachingNotesTab({ rep }) {
                 Coaching Notes History
               </h3>
               <span className="text-xs text-light-black">
-                Showing {filteredNotes.length} of 12 notes
+                Showing {filteredNotes.length} of {notesList.length} notes
               </span>
             </div>
 
@@ -389,7 +334,7 @@ export default function CoachingNotesTab({ rep }) {
                 <button
                   key={pill.id}
                   type="button"
-                  onClick={() => setActivePill(pill.id)}
+                  onClick={() => { setActivePill(pill.id); setCurrentPage(1); }}
                   className={`px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                     activePill === pill.id
                       ? "bg-primary text-white shadow-xs"
@@ -404,20 +349,27 @@ export default function CoachingNotesTab({ rep }) {
 
           {/* Table */}
           <div className="overflow-x-auto w-full [-ms-overflow-style:none] [scrollbar-width:thin]">
-            <table className="w-full text-left border-collapse min-w-[960px]">
+            <table className="w-full text-left border-collapse min-w-[1040px]">
               <thead>
                 <tr className="border-b border-light-gray text-[10.5px] font-bold text-light-black uppercase tracking-wider select-none">
-                  <th className="pb-3 px-3 text-left">DATE / TIME</th>
-                  <th className="pb-3 px-3 text-left">TYPE</th>
-                  <th className="pb-3 px-3 text-left">RELATED CALL</th>
-                  <th className="pb-3 px-3 text-left">COACHING INSIGHT</th>
-                  <th className="pb-3 px-3 text-left">COACH</th>
-                  <th className="pb-3 px-3 text-left">DUE</th>
-                  <th className="pb-3 px-3 text-right"></th>
+                  <th className="pb-3 px-4 text-left">DATE / TIME</th>
+                  <th className="pb-3 px-4 text-left">TYPE</th>
+                  <th className="pb-3 px-4 text-left">RELATED CALL</th>
+                  <th className="pb-3 px-4 text-left">COACHING INSIGHT</th>
+                  <th className="pb-3 px-4 text-left">COACH</th>
+                  <th className="pb-3 px-4 text-left">DUE</th>
+                  <th className="pb-3 px-4 text-right"></th>
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-light-gray/60 text-xs">
+                {!filteredNotes.length && (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-xs text-light-black">
+                      {data ? (notesList.length ? "No notes match these filters." : "No coaching notes yet.") : "Loading…"}
+                    </td>
+                  </tr>
+                )}
                 {filteredNotes.slice((Math.min(currentPage, totalPages) - 1) * PAGE_SIZE, Math.min(currentPage, totalPages) * PAGE_SIZE).map((item) => (
                   <tr
                     key={item.id}
@@ -425,7 +377,7 @@ export default function CoachingNotesTab({ rep }) {
                     className="hover:bg-light-gray/40 transition-colors group cursor-pointer"
                   >
                     {/* Date / Time */}
-                    <td className="py-3.5 px-3 text-left whitespace-nowrap">
+                    <td className="py-4 px-4 text-left whitespace-nowrap">
                       <div>
                         <p className="font-semibold text-dark-black/85 text-xs">
                           {item.date}
@@ -437,7 +389,7 @@ export default function CoachingNotesTab({ rep }) {
                     </td>
 
                     {/* Type Pill */}
-                    <td className="py-3.5 px-3 text-left whitespace-nowrap">
+                    <td className="py-4 px-4 text-left whitespace-nowrap">
                       <span
                         className={`inline-flex items-center text-[10.5px] font-bold px-2.5 py-0.5 rounded-full ${item.typeColor}`}
                       >
@@ -446,12 +398,12 @@ export default function CoachingNotesTab({ rep }) {
                     </td>
 
                     {/* Related Call */}
-                    <td className="py-3.5 px-3 text-left whitespace-nowrap text-dark-black/80 font-medium text-xs">
+                    <td className="py-4 px-4 text-left whitespace-nowrap text-dark-black/80 font-medium text-xs">
                       {item.relatedCall}
                     </td>
 
                     {/* Coaching Insight */}
-                    <td className="py-3.5 px-3 text-left max-w-[320px]">
+                    <td className="py-4 px-4 text-left max-w-[320px]">
                       <div>
                         <p className="font-bold text-dark-black/90 text-xs group-hover:text-primary transition-colors">
                           {item.title}
@@ -463,12 +415,12 @@ export default function CoachingNotesTab({ rep }) {
                     </td>
 
                     {/* Coach */}
-                    <td className="py-3.5 px-3 text-left whitespace-nowrap text-dark-black/80 text-xs">
+                    <td className="py-4 px-4 text-left whitespace-nowrap text-dark-black/80 text-xs">
                       {item.coach}
                     </td>
 
                     {/* Due */}
-                    <td className="py-3.5 px-3 text-left whitespace-nowrap">
+                    <td className="py-4 px-4 text-left whitespace-nowrap">
                       <span
                         className={`inline-flex items-center text-[10.5px] font-bold px-2.5 py-0.5 rounded-full ${item.dueColor}`}
                       >
@@ -477,7 +429,7 @@ export default function CoachingNotesTab({ rep }) {
                     </td>
 
                     {/* Actions */}
-                    <td className="py-3.5 px-3 text-right whitespace-nowrap relative">
+                    <td className="py-4 px-4 text-right whitespace-nowrap relative">
                       <button
                         type="button"
                         onClick={(e) => {
@@ -506,16 +458,30 @@ export default function CoachingNotesTab({ rep }) {
                           >
                             View Details
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setActiveActionId(null);
-                              markComplete(item);
-                            }}
-                            className="w-full px-3.5 py-2 text-xs text-dark-black/80 hover:bg-light-gray cursor-pointer"
-                          >
-                            Mark Complete
-                          </button>
+                          {canManage && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveActionId(null);
+                                setComplete(item, !item.done);
+                              }}
+                              className="w-full px-3.5 py-2 text-xs text-dark-black/80 hover:bg-light-gray cursor-pointer"
+                            >
+                              {item.done ? "Reopen" : "Mark Complete"}
+                            </button>
+                          )}
+                          {canManage && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveActionId(null);
+                                removeNote(item);
+                              }}
+                              className="w-full px-3.5 py-2 text-xs text-rose-600 hover:bg-light-gray cursor-pointer"
+                            >
+                              Delete
+                            </button>
+                          )}
                         </div>
                       )}
                     </td>
@@ -527,14 +493,7 @@ export default function CoachingNotesTab({ rep }) {
 
           {/* Footer with Link & Pagination */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-5 mt-2 border-t border-light-gray select-none">
-            <button
-              type="button"
-              onClick={() => toast.success("Loading complete coaching archive...")}
-              className="text-xs font-semibold text-primary hover:text-primary/80 inline-flex items-center gap-1 cursor-pointer transition-colors"
-            >
-              <span>View all coaching notes</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+            <span className="text-xs text-light-black">{filteredNotes.length} note{filteredNotes.length === 1 ? "" : "s"}</span>
 
             <div className="flex items-center gap-1">
               <span className="text-xs text-light-black mr-2">Page {Math.min(currentPage, totalPages)} of {totalPages}</span>
@@ -583,11 +542,12 @@ export default function CoachingNotesTab({ rep }) {
                 Focus Areas & Action Plan
               </h3>
               <p className="text-xs text-light-black mt-0.5">
-                AI-prioritized coaching actions based on performance patterns.
+                Open opportunities and action items, most urgent first.
               </p>
             </div>
 
             <div className="flex flex-col gap-4 pt-1">
+              {!focusAreas.length && <p className="text-xs text-light-black">Nothing open right now.</p>}
               {focusAreas.map((area, idx) => (
                 <div key={idx} className="flex flex-col gap-1.5">
                   <div className="flex items-center justify-between text-xs">
@@ -603,29 +563,10 @@ export default function CoachingNotesTab({ rep }) {
                     {area.insight}
                   </p>
 
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full ${area.color} rounded-full transition-all duration-500`}
-                        style={{ width: `${area.progress}%` }}
-                      />
-                    </div>
-                    <span className="text-[11px] font-bold text-dark-black/75 shrink-0">
-                      {area.progress}%
-                    </span>
-                  </div>
                 </div>
               ))}
             </div>
 
-            <button
-              type="button"
-              onClick={() => toast.success("Opening detailed action plan...")}
-              className="text-xs font-semibold text-primary hover:text-primary/80 inline-flex items-center gap-1 cursor-pointer transition-colors pt-1"
-            >
-              <span>View full action plan</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
           </div>
 
           {/* Card 2: Recent Strengths */}
@@ -640,6 +581,7 @@ export default function CoachingNotesTab({ rep }) {
             </div>
 
             <div className="flex flex-col gap-3">
+              {!recentStrengths.length && <p className="text-xs text-light-black">No strengths recorded yet.</p>}
               {recentStrengths.map((item, idx) => (
                 <div
                   key={idx}
@@ -664,12 +606,12 @@ export default function CoachingNotesTab({ rep }) {
       </div>
 
       {/* Add Coaching Note Modal */}
-      <AddCoachingNoteModal
-        isOpen={addModalOpen}
+      {addModalOpen && <AddCoachingNoteModal
+        isOpen
         onClose={() => setAddModalOpen(false)}
         repName={repName}
         onAdd={handleAddNote}
-      />
+      />}
 
       {/* Note details: reps see their coaching notes on their own dashboard and mark them complete there too */}
       {openNote && (
@@ -683,15 +625,16 @@ export default function CoachingNotesTab({ rep }) {
               </div>
               <span className={`inline-flex items-center text-[10.5px] font-bold px-2.5 py-0.5 rounded-full ${openNote.dueColor}`}>{openNote.due === "Done" ? "Completed" : `Due ${openNote.due}`}</span>
             </div>
-            <p className="text-sm text-dark-black/80 leading-relaxed">{openNote.insight}</p>
+            <p className="text-sm text-dark-black/80 leading-relaxed whitespace-pre-line">{openNote.insight}</p>
+            {openNote.priority && <p className="text-xs text-medium-black">Priority: {openNote.priority}</p>}
             <p className="text-xs text-medium-black">Related call: {openNote.relatedCall}</p>
             <p className="text-[11px] text-light-black bg-light-gray/50 rounded-xl px-3 py-2">
-              The rep receives this note on their dashboard (Coaching Notes) with an email notification, and can mark it complete there.
+              The rep sees this note on their dashboard (My Coaching Notes) and can mark it complete there. Email notifications come once an email service is connected.
             </p>
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setOpenNote(null)} className="px-4 py-2 rounded-xl border border-light-gray text-sm font-semibold text-dark-black hover:bg-light-gray cursor-pointer">Close</button>
-              {openNote.due !== "Done" && (
-                <button type="button" onClick={() => markComplete(openNote)} className="px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-medium-teal cursor-pointer">Mark Complete</button>
+              {canManage && (
+                <button type="button" onClick={() => setComplete(openNote, !openNote.done)} className="px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-medium-teal cursor-pointer">{openNote.done ? "Reopen" : "Mark Complete"}</button>
               )}
             </div>
           </div>

@@ -3,9 +3,9 @@
 import React from "react";
 import Link from "next/link";
 import { Flame, AlertCircle, Clock, Users, Zap, ListChecks } from "lucide-react";
-import { SAVED_SEGMENTS, membersOf } from "../user-segments";
+import { segmentUpdatedLabel } from "../user-segments";
 
-export default function SavedSegments({ segments = SAVED_SEGMENTS }) {
+export default function SavedSegments({ segments = [] }) {
   const getIcon = (type, color) => {
     switch (type) {
       case "flame":
@@ -40,7 +40,7 @@ export default function SavedSegments({ segments = SAVED_SEGMENTS }) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
         {segments.map((seg) => {
-          const iconConfig = getIcon(seg.iconType, seg.color);
+          const iconConfig = getIcon(seg.type === "Static" ? "user" : seg.system ? "alert" : "flame");
           const IconComponent = iconConfig.Icon;
 
           return (
@@ -63,7 +63,7 @@ export default function SavedSegments({ segments = SAVED_SEGMENTS }) {
                       {seg.name}
                     </span>
                     <span className="text-[11px] text-light-black font-semibold mt-0.5">
-                      {membersOf(seg).length}{" "}
+                      {seg.memberCount}{" "}
                       <span className="font-normal">users</span>
                     </span>
                   </div>
@@ -82,7 +82,7 @@ export default function SavedSegments({ segments = SAVED_SEGMENTS }) {
                   {seg.type === "Static" ? <ListChecks className="w-3 h-3" /> : <Zap className="w-3 h-3" />}
                   {seg.type ?? "Dynamic"}{seg.system ? " · System" : ""}
                 </span>
-                <span>{seg.updatedAt}</span>
+                <span>{segmentUpdatedLabel(seg)}</span>
               </div>
             </Link>
           );

@@ -9,13 +9,15 @@ import {
   ChevronLeft,
 } from "lucide-react";
 import Link from "next/link";
+import { ProfileAvatar } from "@/components/shared/avatar-editor";
+import { rosterStatus } from "../../team-api";
 
 export default function RepProfileHeader({
   rep,
   onEditProfile,
   onImpersonate,
 }) {
-
+  const status = rosterStatus(rep);
   return (
     <div className="w-full flex flex-col gap-4">
       {/* Back button link */}
@@ -35,13 +37,7 @@ export default function RepProfileHeader({
         <div className="flex items-start sm:items-center gap-3.5 sm:gap-4">
           {/* Avatar with status border */}
           <div className="relative shrink-0">
-            <div className="w-13 h-13 sm:w-15 sm:h-15 rounded-full overflow-hidden border-2 border-primary shadow-2xs bg-slate-100">
-              <img
-                src={rep.avatar}
-                alt={rep.name}
-                className="w-full h-full object-cover"
-              />
-            </div>
+            <ProfileAvatar name={rep.name} className="w-13 h-13 sm:w-15 sm:h-15 !border-primary" />
           </div>
 
           {/* Name, Role, and Meta Contact Info */}
@@ -51,15 +47,15 @@ export default function RepProfileHeader({
               <h1 className="text-lg sm:text-xl font-bold text-dark-black/90 font-secondary tracking-tight">
                 {rep.name}
               </h1>
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-600 border border-emerald-200/80">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                <span>{rep.status}</span>
+              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${status.badge}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
+                <span>{status.label}</span>
               </span>
             </div>
 
             {/* Role Title */}
             <p className="text-xs font-semibold text-light-black">
-              {rep.role}
+              {rep.jobTitle}
             </p>
 
             {/* Meta Row: Email, Phone, Employee ID, Manager */}
@@ -71,7 +67,7 @@ export default function RepProfileHeader({
 
               <span className="inline-flex items-center gap-1.5">
                 <Phone className="w-3.5 h-3.5 text-light-black shrink-0" />
-                <span className="text-dark-black/75">{rep.phone}</span>
+                <span className="text-dark-black/75">{rep.phone || "No phone"}</span>
               </span>
 
               <span className="inline-flex items-center gap-1.5">
@@ -79,7 +75,7 @@ export default function RepProfileHeader({
                 <span>
                   Employee ID:{" "}
                   <strong className="font-semibold text-dark-black/85">
-                    {rep.employeeId}
+                    {rep.employeeId ?? "—"}
                   </strong>
                 </span>
               </span>
@@ -89,7 +85,7 @@ export default function RepProfileHeader({
                 <span>
                   Manager:{" "}
                   <strong className="font-semibold text-dark-black/85">
-                    {rep.manager}
+                    {rep.managerName ?? "None"}
                   </strong>
                 </span>
               </span>
@@ -99,25 +95,25 @@ export default function RepProfileHeader({
 
         {/* Right: Action Buttons */}
         <div className="flex items-center gap-2 self-stretch sm:self-start lg:self-center shrink-0">
-          {/* Impersonate Rep Button */}
-          <button
+          {/* Impersonate Rep: only where offered (staff sessions can't be impersonated yet) */}
+          {onImpersonate && <button
             type="button"
             onClick={onImpersonate}
             className="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl border border-light-gray bg-white hover:bg-light-gray text-xs font-semibold text-dark-black/80 transition-all duration-200 cursor-pointer shadow-2xs flex items-center justify-center gap-1.5 whitespace-nowrap"
           >
             <Eye className="w-3.5 h-3.5 text-light-black" />
             <span>Impersonate Rep</span>
-          </button>
+          </button>}
 
-          {/* Edit Profile Button */}
-          <button
+          {/* Edit Profile Button (managers only) */}
+          {onEditProfile && <button
             type="button"
             onClick={onEditProfile}
             className="flex-1 sm:flex-initial px-3.5 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-semibold shadow-xs transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
           >
             <Edit className="w-3.5 h-3.5" />
             <span>Edit Profile</span>
-          </button>
+          </button>}
         </div>
       </div>
     </div>

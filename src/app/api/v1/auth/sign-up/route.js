@@ -4,6 +4,7 @@ import { createSession } from "@/lib/auth";
 import { jsonError, readJson, withApi } from "@/lib/api";
 import { ROLES } from "@/utils.js/roles";
 import { TRIAL_PLAN_ID } from "@/lib/plan-catalog";
+import { recordUserEvent } from "@/lib/campaigns/events";
 
 export const runtime = "nodejs";
 
@@ -34,6 +35,9 @@ export const POST = withApi(async (request) => {
   // Customer account record + Free Trial subscription (used by the admin and sales dashboards)
   await query("INSERT IGNORE INTO customer_accounts (organization_id, source, created_by) VALUES (?, 'self_signup', ?)", [organizationId, userId]);
   await query("INSERT IGNORE INTO subscriptions (organization_id, plan_id, status, current_period_start) VALUES (?, ?, 'trialing', CURRENT_TIMESTAMP)", [organizationId, TRIAL_PLAN_ID]);
+  // Lifecycle events for Campaigns & Journeys
+  await recordUserEvent(userId, "user_signed_up", { source: "self_signup" });
+  await recordUserEvent(userId, "trial_started", { planId: TRIAL_PLAN_ID });
   await createSession(userId);
   return NextResponse.json({ user: { id: userId, name, email, role: ROLES.CUSTOMER_ADMIN, organizationId } }, { status: 201 });
 });

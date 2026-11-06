@@ -12,118 +12,103 @@ import {
 import Title from "@/components/texts/title";
 import Text from "@/components/texts/text";
 
-const kpiCards = [
+const money = (cents) => `$${Math.round(cents / 100).toLocaleString("en-US")}`;
+const percent = (value) => (value == null ? "—" : `${value}%`);
+
+// Sparkline from daily snapshots (flat until there are two days of history)
+function sparkline(values) {
+  if (values.length < 2) return { pathD: "M 0 30 L 200 30 L 200 48 L 0 48 Z", strokeD: "M 0 30 L 200 30" };
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const points = values.map((value, index) => [(index / (values.length - 1)) * 200, max === min ? 26 : 40 - ((value - min) / (max - min)) * 30]);
+  const strokeD = points.map(([x, y], index) => `${index ? "L" : "M"} ${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
+  return { strokeD, pathD: `${strokeD} L 200 48 L 0 48 Z` };
+}
+
+// Trend against the snapshot from 30 days ago, when there is one
+const versus = (now, before, { format, lowerIsBetter = false }) => {
+  if (before == null) return { value: "", subtext: "History builds from today", isPositive: true, direction: null };
+  const diff = now - before;
+  return { value: format(Math.abs(diff)), subtext: "vs 30 days ago", isPositive: lowerIsBetter ? diff <= 0 : diff >= 0, direction: diff >= 0 ? "up" : "down" };
+};
+
+const buildCards = ({ kpis, history }) => [
   {
     id: "mrr",
     title: "Monthly Recurring Revenue (MRR)",
-    tooltip: "Normalized monthly recurring subscription revenue from active paid accounts. Excludes one-time fees, credits, refunds, taxes, and non-recurring purchases unless specifically included.",
-    value: "$358,420",
-    trend: {
-      value: "12.4%",
-      isPositive: true,
-      direction: "down",
-      subtext: "vs Apr 1 - Apr 30: $318,820",
-    },
+    tooltip: "Monthly value of active paid subscriptions (plan price × seats; annual plans counted per month). Collected revenue is shown once Stripe is connected.",
+    value: money(kpis.mrrCents),
+    trend: versus(kpis.mrrCents, kpis.mrrBeforeCents, { format: money }),
     icon: CircleDollarSign,
     iconBg: "bg-emerald-50 text-emerald-600",
     lineColor: "#10B981",
     gradientId: "sa-grad-mrr",
-    pathD: "M 0 34 Q 30 38 60 35 T 130 24 T 200 12 L 200 48 L 0 48 Z",
-    strokeD: "M 0 34 Q 30 38 60 35 T 130 24 T 200 12",
+    ...sparkline(history.map((row) => row.mrrCents)),
   },
   {
     id: "growth",
     title: "Net Account Growth",
-    tooltip: "New paying accounts minus accounts that canceled or became inactive during the selected period.",
-    value: "+14.2%",
-    trend: {
-      value: "2.1% pts",
-      isPositive: true,
-      direction: "down",
-      subtext: "vs Apr 1 - Apr 30",
-    },
+    tooltip: "New paying accounts minus cancellations requested in the last 30 days.",
+    value: `${kpis.netAccountGrowth >= 0 ? "+" : ""}${kpis.netAccountGrowth}`,
+    trend: { value: percent(kpis.netAccountGrowthPct), subtext: `${kpis.newPaying} new, ${kpis.canceled} cancelled (30 days)`, isPositive: kpis.netAccountGrowth >= 0, direction: kpis.netAccountGrowth >= 0 ? "up" : "down" },
     icon: TrendingUp,
     iconBg: "bg-indigo-50 text-indigo-600",
     lineColor: "#6366F1",
     gradientId: "sa-grad-growth",
-    pathD: "M 0 34 Q 35 32 70 36 T 140 22 T 200 10 L 200 48 L 0 48 Z",
-    strokeD: "M 0 34 Q 35 32 70 36 T 140 22 T 200 10",
+    ...sparkline(history.map((row) => row.active)),
   },
   {
     id: "subscribers",
     title: "Active Subscribers",
-    tooltip: "Accounts with an active paid subscription at the end of the selected period.",
-    value: "2,846",
-    trend: {
-      value: "8.7%",
-      isPositive: true,
-      direction: "down",
-      subtext: "vs Apr 1 - Apr 30",
-    },
+    tooltip: "Accounts with an active paid subscription right now.",
+    value: kpis.activeSubscribers.toLocaleString("en-US"),
+    trend: versus(kpis.activeSubscribers, kpis.activeBefore, { format: (value) => String(value) }),
     icon: Users,
     iconBg: "bg-sky-50 text-sky-600",
     lineColor: "#3B82F6",
     gradientId: "sa-grad-subs",
-    pathD: "M 0 34 Q 30 32 65 36 T 135 22 T 200 10 L 200 48 L 0 48 Z",
-    strokeD: "M 0 34 Q 30 32 65 36 T 135 22 T 200 10",
+    ...sparkline(history.map((row) => row.active)),
   },
   {
     id: "trial-conv",
     title: "Free Trial Conversion",
-    tooltip: "Percentage of trial accounts that become paid subscribers within the defined conversion window after the trial begins or ends.",
-    value: "18.7%",
-    trend: {
-      value: "2.3% pts",
-      isPositive: true,
-      direction: "down",
-      subtext: "vs Apr 1 - Apr 30",
-    },
+    tooltip: "Share of self sign-ups (who start on the free trial) that are now on a paid plan.",
+    value: percent(kpis.trialConversion),
+    trend: { value: "", subtext: `${kpis.trialing} on trial now`, isPositive: true, direction: null },
     icon: FlaskConical,
     iconBg: "bg-purple-50 text-purple-600",
-    lineColor: "#A855F7",
+    lineColor: "#8B5CF6",
     gradientId: "sa-grad-trial",
-    pathD: "M 0 30 Q 30 28 60 38 T 130 24 T 200 10 L 200 48 L 0 48 Z",
-    strokeD: "M 0 30 Q 30 28 60 38 T 130 24 T 200 10",
+    ...sparkline(history.map((row) => row.trialing)),
   },
   {
     id: "churn",
     title: "Churn Rate",
-    tooltip: "Percentage of paying accounts that canceled or became inactive during the selected reporting period relative to the eligible paying account base for that period.",
-    value: "2.8%",
-    trend: {
-      value: "0.6% pts",
-      isPositive: false,
-      direction: "up",
-      subtext: "vs Apr 1 - Apr 30",
-    },
+    tooltip: "Paying accounts that asked to cancel in the last 30 days, as a share of paying accounts.",
+    value: percent(kpis.churnRate),
+    trend: kpis.churnBefore == null || kpis.churnRate == null || kpis.churnRate === kpis.churnBefore ? { value: "", subtext: "Last 30 days", isPositive: true, direction: null } : { value: `${Math.abs(kpis.churnRate - kpis.churnBefore).toFixed(1)} pts`, subtext: "vs the 30 days before", isPositive: kpis.churnRate <= kpis.churnBefore, direction: kpis.churnRate >= kpis.churnBefore ? "up" : "down" },
     icon: TrendingDown,
     iconBg: "bg-red-50 text-red",
     lineColor: "#FF4842",
     gradientId: "sa-grad-churn",
-    pathD: "M 0 30 Q 35 26 70 36 T 140 24 T 200 10 L 200 48 L 0 48 Z",
-    strokeD: "M 0 30 Q 35 26 70 36 T 140 24 T 200 10",
+    ...sparkline([]),
   },
   {
     id: "revenue-churn",
     title: "Revenue Churn",
-    tooltip: "Percentage of recurring revenue lost from cancellations, downgrades, and other recurring-revenue reductions during the selected reporting period.",
-    value: "1.9%",
-    trend: {
-      value: "0.3% pts",
-      isPositive: false,
-      direction: "up",
-      subtext: "vs Apr 1 - Apr 30",
-    },
+    tooltip: "Monthly value of subscriptions that asked to cancel in the last 30 days, as a share of MRR.",
+    value: percent(kpis.revenueChurn),
+    trend: { value: "", subtext: "Last 30 days", isPositive: true, direction: null },
     icon: TrendingDown,
     iconBg: "bg-red-50 text-red",
     lineColor: "#FF4842",
     gradientId: "sa-grad-churn-revenue",
-    pathD: "M 0 30 Q 35 26 70 36 T 140 24 T 200 10 L 200 48 L 0 48 Z",
-    strokeD: "M 0 30 Q 35 26 70 36 T 140 24 T 200 10",
+    ...sparkline([]),
   },
 ];
 
-export const AnalyticsHeader = () => {
+export const AnalyticsHeader = ({ data }) => {
+  const kpiCards = data ? buildCards(data) : [];
   return (
     <div className="w-full flex flex-col gap-5 sm:gap-6">
       {/* Page Title & Subtitle */}
@@ -132,7 +117,7 @@ export const AnalyticsHeader = () => {
           Performance
         </Title>
         <Text variant="small" className="text-medium-black font-normal">
-          Financial, operational, and growth intelligence center
+          Financial, operational, and growth intelligence center{data ? ` · updated ${new Date(data.generatedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}
         </Text>
       </div>
 
@@ -181,7 +166,7 @@ export const AnalyticsHeader = () => {
                       card.trend.isPositive ? "text-emerald-600" : "text-red"
                     }`}
                   >
-                    <span>{card.trend.direction === "down" ? "▾" : "▴"}</span>
+                    {card.trend.direction && <span>{card.trend.direction === "down" ? "▾" : "▴"}</span>}
                     <span>{card.trend.value}</span>
                   </span>
                   <span className="text-[10px] text-light-black font-medium truncate">

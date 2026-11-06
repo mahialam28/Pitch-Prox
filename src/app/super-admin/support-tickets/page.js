@@ -1,15 +1,19 @@
 "use client";
 
-import React from "react";
+import React, { Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { LayoutDashboard } from "lucide-react";
 import SupportTicketsScreen from "@/app/internal-sales-representative/support-tickets/support-tickets-screen";
 
-// Live customer support queue with the admin drawer actions (Reassign, Escalate)
-export default function SupportTicketsPage() {
+// Live customer support queue with the admin drawer actions (Reassign, Escalate).
+// ?ticket=<id> opens that ticket (links from the Support Dashboard).
+function SupportTickets() {
+  const ticketId = useSearchParams().get("ticket");
   return (
     <SupportTicketsScreen
       adminActions
+      initialTicketId={ticketId}
       headerProps={{
         addTicketHref: null,
         actions: (
@@ -22,5 +26,13 @@ export default function SupportTicketsPage() {
         ),
       }}
     />
+  );
+}
+
+export default function SupportTicketsPage() {
+  return (
+    <Suspense>
+      <SupportTickets />
+    </Suspense>
   );
 }

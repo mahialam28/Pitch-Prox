@@ -22,10 +22,11 @@ const preview = (message = "This page shows sample data and isn't connected yet.
 const waiting = (feature, need) => ({ status: "waiting", message: `${feature} isn't connected yet — waiting for ${need}.` });
 const partial = (message) => ({ status: "partial", message });
 const working = { status: "working" };
-const MAIL = `Emails and support tickets save and are listed, but emails are only delivered once ${NEEDS.email} is connected. Templates are the built-in library; the AI draft button inserts sample text until ${NEEDS.ai} is connected.`;
-const CALENDAR = "Calendar events save and are shared by visibility (everyone, internal, management or private). Announcements are coming in an upcoming update.";
+const MAIL = `Emails and support tickets save and are listed, but emails are only delivered once ${NEEDS.email} is connected. Templates (built-in, team and your own) are live; the AI draft button inserts sample text until ${NEEDS.ai} is connected.`;
+const CALENDAR = `Calendar events and announcements are live: events are shared by visibility (everyone, internal, management or private) and announcements reach the roles they are meant for. Emailing announcements waits for ${NEEDS.email}.`;
 const CUSTOMER_DETAIL = `Account details, notes, support history, credits and adjustments, plan changes (with proration), pause, cancel, suspend and impersonation are live. Call history, usage, reports and calibration detail wait for ${NEEDS.calling}; invoices and refunds are processed once ${NEEDS.payments} is connected.`;
 const CREDITS = `Credits, discounts, approvals and reversals are live and kept in the ledger. Refunds are recorded now and paid out once ${NEEDS.payments} is connected.`;
+const SALES_TEAM = `Reps, quotas, booked revenue, coaching and manager notes, profile settings and the activity log are live. Revenue is booked from accounts sold until ${NEEDS.payments} is connected; calls, call reports and AI scores wait for ${NEEDS.calling}.`;
 const STAFF_DASHBOARD = `Leads, accounts, revenue, alerts and activity are live. Call-based scores (prompt adherence, trust gain) wait for ${NEEDS.calling}.`;
 
 // First match wins: exact paths, or "/section/*" for a section page and everything under it
@@ -103,13 +104,16 @@ const RULES = [
   ["/super-admin/settings/notifications", working],
   ["/super-admin/dashboard", partial(STAFF_DASHBOARD)],
   ["/super-admin/crm/*", working],
+  ["/super-admin/sales-reps/*", partial(SALES_TEAM)],
   ["/super-admin/support-tickets", working],
+  ["/super-admin/support-dashboard", partial("Tickets, SLA, workload, performance and activity are live. Customer satisfaction (CSAT) needs surveys, which come in a later update.")],
   ["/super-admin/users", working],
   ["/super-admin/users/*", partial(CUSTOMER_DETAIL)],
   ["/super-admin/calendar", partial(CALENDAR)],
   ["/super-admin/calendar-announcements", partial(CALENDAR)],
   ["/super-admin/mail/*", partial(MAIL)],
-  ["/super-admin/campaigns-journeys/*", preview(`Campaigns, segments and templates are coming in an upcoming update. Sending campaigns waits for ${NEEDS.email}.`)],
+  ["/super-admin/performance-analytics", partial(`Revenue (subscription value), growth, churn, cancellations, at-risk accounts, rep quotas, insights and alerts are live; trends fill in day by day. Collected revenue and costs wait for ${NEEDS.payments}; AI, call and telephony numbers wait for ${NEEDS.calling}.`)],
+  ["/super-admin/campaigns-journeys/*", partial(`Segments, templates, broadcast campaigns, lifecycle journeys and event-triggered transactional emails are live and run every few minutes. Emails wait in the outbox until ${NEEDS.email} is connected; opens, clicks, call usage and payment events fill in once email, calling and ${NEEDS.payments} are connected.`)],
   ["/super-admin/plan-pricing-control", partial(`Plans, promo codes (checked at checkout), trial rules, report add-ons, enterprise defaults and billing rules all save. Customers are charged these prices once ${NEEDS.payments} is connected.`)],
   ["/super-admin/billing/credits-adjustments", partial(CREDITS)],
   ["/super-admin/billing/*", waiting("Payments, invoices and revenue figures", NEEDS.payments)],

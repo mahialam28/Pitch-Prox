@@ -2,104 +2,24 @@
 
 import React, { useState } from "react";
 import {
-  Building2,
-  ArrowUp,
   Users,
-  ShieldCheck,
   Zap,
   TrendingUp,
-  Sparkles,
-  Award,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
 
-export const repEfficiencyInsightsData = [
-  {
-    id: "insight-1",
-    title: "Retention-qualified accounts up 18%",
-    description: "More long-term value being created",
-    trend: "1.9%",
-    trendDirection: "down",
-    trendColor: "text-emerald-600",
-    icon: Building2,
-    iconBg: "bg-sky-50 text-sky-600",
-  },
-  {
-    id: "insight-2",
-    title: "Upgrade revenue outperforming subscriptions",
-    description: "Expansion revenue up 32% this month",
-    trend: "1.9%",
-    trendDirection: "down",
-    trendColor: "text-emerald-600",
-    icon: ArrowUp,
-    iconBg: "bg-purple-50 text-purple-600",
-  },
-  {
-    id: "insight-3",
-    title: "Top reps generate lower churn",
-    description: "Churn rate from top 20% reps is 1.9%",
-    trend: "1.9%",
-    trendDirection: "down",
-    trendColor: "text-emerald-600",
-    icon: Users,
-    iconBg: "bg-indigo-50 text-indigo-600",
-  },
-  {
-    id: "insight-4",
-    title: "High trust gain correlates with upgrades",
-    description: "Users with trust score > 80 upgrade 2.4x more",
-    trend: "1.9%",
-    trendDirection: "down",
-    trendColor: "text-emerald-600",
-    icon: ShieldCheck,
-    iconBg: "bg-emerald-50 text-emerald-600",
-  },
-  {
-    id: "insight-5",
-    title: "Call follow-up velocity increased by 24%",
-    description: "Average response time dropped to under 12 minutes",
-    trend: "2.4%",
-    trendDirection: "up",
-    trendColor: "text-emerald-600",
-    icon: Zap,
-    iconBg: "bg-amber-50 text-amber-600",
-  },
-  {
-    id: "insight-6",
-    title: "Pipeline conversion momentum peaked this week",
-    description: "Qualified leads converted at 42% across senior reps",
-    trend: "4.1%",
-    trendDirection: "up",
-    trendColor: "text-emerald-600",
-    icon: TrendingUp,
-    iconBg: "bg-teal-50 text-teal-600",
-  },
-  {
-    id: "insight-7",
-    title: "Playbook adherence drove 3x deal size",
-    description: "Reps utilizing objection playbooks closed larger tiers",
-    trend: "3.5%",
-    trendDirection: "up",
-    trendColor: "text-emerald-600",
-    icon: Sparkles,
-    iconBg: "bg-purple-50 text-purple-600",
-  },
-  {
-    id: "insight-8",
-    title: "Enterprise upsell milestone reached",
-    description: "8 enterprise expansions finalized in the current billing cycle",
-    trend: "1.8%",
-    trendDirection: "up",
-    trendColor: "text-emerald-600",
-    icon: Award,
-    iconBg: "bg-rose-50 text-rose-600",
-  },
-];
+// Insights are written by the server from the team's own numbers (lib/business-analytics)
+const TONES = {
+  positive: { icon: TrendingUp, iconBg: "bg-emerald-50 text-emerald-600" },
+  warning: { icon: Zap, iconBg: "bg-amber-50 text-amber-600" },
+  neutral: { icon: Users, iconBg: "bg-sky-50 text-sky-600" },
+};
 
 const ITEMS_PER_PAGE = 4;
 
-export const SalesInsights = () => {
+export const SalesInsights = ({ insights = [] }) => {
+  const repEfficiencyInsightsData = insights.map((item) => ({ ...item, description: item.detail, ...(TONES[item.tone] ?? TONES.neutral) }));
   const [currentPage, setCurrentPage] = useState(1);
 
   const totalItems = repEfficiencyInsightsData.length;
@@ -122,6 +42,7 @@ export const SalesInsights = () => {
 
         {/* Paginated Insights List */}
         <div className="w-full space-y-3">
+          {!paginatedInsights.length && <p className="text-xs text-light-black">Insights appear as leads, accounts and quotas build up.</p>}
           {paginatedInsights.map((item) => {
             const Icon = item.icon;
             return (
@@ -138,24 +59,16 @@ export const SalesInsights = () => {
                   </div>
 
                   <div className="flex flex-col min-w-0 leading-tight">
-                    <span className="font-semibold text-dark-black/80 text-xs sm:text-sm truncate group-hover:text-primary transition-colors">
+                    <span className="font-semibold text-dark-black/80 text-xs sm:text-sm group-hover:text-primary transition-colors">
                       {item.title}
                     </span>
-                    <span className="text-xs text-medium-black truncate mt-1">
+                    <span className="text-xs text-medium-black mt-1">
                       {item.description}
                     </span>
                   </div>
                 </div>
 
-                {/* Right Trend Indicator */}
-                <div
-                  className={`flex items-center gap-0.5 text-xs font-semibold shrink-0 ${item.trendColor}`}
-                >
-                  <span className="text-[10px]">
-                    {item.trendDirection === "down" ? "▾" : "▴"}
-                  </span>
-                  <span>{item.trend}</span>
-                </div>
+
               </div>
             );
           })}

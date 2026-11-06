@@ -11,28 +11,20 @@ import {
   Tooltip,
   CartesianGrid,
 } from "recharts";
+import { dollars } from "../../team-api";
 
-const chartData = [
-  { day: "May 1", calls: 12, closed: 2, target: 15, cumulative: 2 },
-  { day: "May 3", calls: 18, closed: 3, target: 15, cumulative: 5 },
-  { day: "May 5", calls: 14, closed: 2, target: 15, cumulative: 7 },
-  { day: "May 7", calls: 16, closed: 4, target: 15, cumulative: 11 },
-  { day: "May 10", calls: 15, closed: 3, target: 15, cumulative: 14 },
-  { day: "May 12", calls: 20, closed: 5, target: 15, cumulative: 19 },
-  { day: "May 15", calls: 17, closed: 4, target: 15, cumulative: 23 },
-  { day: "May 17", calls: 19, closed: 5, target: 15, cumulative: 28 },
-  { day: "May 20", calls: 22, closed: 6, target: 15, cumulative: 34 },
-  { day: "May 22", calls: 21, closed: 5, target: 15, cumulative: 39 },
-  { day: "May 25", calls: 24, closed: 7, target: 15, cumulative: 46 },
-  { day: "May 27", calls: 23, closed: 6, target: 15, cumulative: 52 },
-  { day: "May 31", calls: 18, closed: 4, target: 15, cumulative: 56 },
-];
-
-export default function MonthlyPerformanceChart({ rep }) {
-  const quotaPercent = 112;
-  const currentClosed = 56;
-  const targetQuota = 50;
-  const remaining = Math.max(0, targetQuota - currentClosed);
+// This month day by day: accounts closed (bars), booked revenue so far (line) and the
+// straight-line pace to the quota (dashed). Calls appear once calling is connected.
+export default function MonthlyPerformanceChart({ rep, daily = [], monthLabel }) {
+  const quota = rep.quotaCents == null ? null : rep.quotaCents / 100;
+  const chartData = daily.map((day) => ({
+    day: day.label,
+    closed: day.closed,
+    cumulative: Math.round(day.cumulativeCents / 100),
+    ...(quota != null && { target: Math.round((quota * day.day) / daily.length) }),
+  }));
+  const quotaPercent = rep.attainment ?? 0;
+  const remaining = quota == null ? null : Math.max(0, quota - rep.revenueCents / 100);
 
   // SVG Gauge calculation for full circle
   const radius = 46;
@@ -48,27 +40,23 @@ export default function MonthlyPerformanceChart({ rep }) {
             Monthly Performance
           </h3>
           <span className="text-xs text-light-black font-normal">
-            (May 1 – May 31, 2025)
+            ({monthLabel})
           </span>
         </div>
 
         {/* Legend */}
         <div className="flex items-center gap-4 text-[11px] text-light-black font-medium flex-wrap">
           <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-xs bg-[#22E2B9]" />
-            <span>Calls</span>
-          </div>
-          <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-xs bg-primary" />
-            <span>Subscription Closed</span>
+            <span>Accounts Closed</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-4 border-t-2 border-dashed border-medium-teal" />
-            <span>Target</span>
+            <span>Quota Pace</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-4 h-0.5 bg-dark-black" />
-            <span>Closed (Cumulative)</span>
+            <span>Booked Revenue (Cumulative)</span>
           </div>
         </div>
       </div>
@@ -98,8 +86,7 @@ export default function MonthlyPerformanceChart({ rep }) {
                 yAxisId="left"
                 tickLine={false}
                 axisLine={false}
-                domain={[0, 30]}
-                ticks={[0, 10, 20, 30]}
+                allowDecimals={false}
                 tick={{ fill: "#A5B1B5", fontSize: 10 }}
               />
               {/* Right Y Axis for Cumulative Deals */}
@@ -108,13 +95,13 @@ export default function MonthlyPerformanceChart({ rep }) {
                 orientation="right"
                 tickLine={false}
                 axisLine={false}
-                domain={[0, 80]}
-                ticks={[0, 20, 40, 60, 80]}
+                tickFormatter={(value) => `$${value >= 1000 ? `${Math.round(value / 1000)}k` : value}`}
                 tick={{ fill: "#A5B1B5", fontSize: 10 }}
               />
               {/* Tooltip lists the series in legend order: Calls, Subscription Closed, Target, then Closed (Cumulative) */}
               <Tooltip
-                itemSorter={(item) => ["calls", "closed", "target", "cumulative"].indexOf(item.dataKey)}
+                itemSorter={(item) => ["closed", "target", "cumulative"].indexOf(item.dataKey)}
+                formatter={(value, name) => (name === "Accounts Closed" ? value : `$${Number(value).toLocaleString("en-US")}`)}
                 contentStyle={{
                   backgroundColor: "#FFFFFF",
                   borderRadius: "12px",
@@ -125,16 +112,8 @@ export default function MonthlyPerformanceChart({ rep }) {
               />
               <Bar
                 yAxisId="left"
-                dataKey="calls"
-                name="Calls"
-                fill="#22E2B9"
-                barSize={7}
-                radius={[4, 4, 0, 0]}
-              />
-              <Bar
-                yAxisId="left"
                 dataKey="closed"
-                name="Subscription Closed"
+                name="Accounts Closed"
                 fill="#0EADAB"
                 barSize={7}
                 radius={[4, 4, 0, 0]}
@@ -143,7 +122,7 @@ export default function MonthlyPerformanceChart({ rep }) {
                 yAxisId="right"
                 type="monotone"
                 dataKey="target"
-                name="Target"
+                name="Quota Pace"
                 stroke="#4A7F91"
                 strokeDasharray="4 4"
                 strokeWidth={1.5}
@@ -153,10 +132,10 @@ export default function MonthlyPerformanceChart({ rep }) {
                 yAxisId="right"
                 type="monotone"
                 dataKey="cumulative"
-                name="Closed (Cumulative)"
+                name="Booked Revenue"
                 stroke="#080C1D"
                 strokeWidth={3}
-                dot={{ fill: "#080C1D", r: 2 }}
+                dot={false}
               />
             </ComposedChart>
           </ResponsiveContainer>
@@ -195,13 +174,13 @@ export default function MonthlyPerformanceChart({ rep }) {
 
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
               <span className="text-2xl font-bold text-dark-black/90 font-secondary leading-none">
-                {quotaPercent}%
+                {quota == null ? "—" : `${quotaPercent}%`}
               </span>
               <span className="text-[10px] text-light-black font-semibold mt-1">
-                {currentClosed} / {targetQuota}
+                {dollars(rep.revenueCents)} / {dollars(rep.quotaCents)}
               </span>
               <span className="text-[9px] text-light-black uppercase tracking-wider">
-                Subscriptions
+                {quota == null ? "No quota set" : "Booked revenue"}
               </span>
             </div>
           </div>
@@ -213,7 +192,7 @@ export default function MonthlyPerformanceChart({ rep }) {
                 Monthly Target
               </span>
               <span className="text-sm font-bold text-dark-black/90 font-secondary">
-                {targetQuota}
+                {dollars(rep.quotaCents)}
               </span>
             </div>
             <div>
@@ -221,7 +200,7 @@ export default function MonthlyPerformanceChart({ rep }) {
                 Remaining
               </span>
               <span className="text-sm font-bold text-dark-black/90 font-secondary">
-                {remaining}
+                {remaining == null ? "—" : `$${Math.round(remaining).toLocaleString("en-US")}`}
               </span>
             </div>
           </div>

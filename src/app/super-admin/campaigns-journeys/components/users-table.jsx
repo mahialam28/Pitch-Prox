@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { Search } from "lucide-react";
-import { PLATFORM_USERS, STATUS_TONE, formatDay, segmentNamesOf } from "../user-segments";
+import { STATUS_TONE, formatDay, segmentNamesOf } from "../user-segments";
 
 const Badge = ({ value }) => (
   <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${STATUS_TONE[value] ?? "bg-slate-100 text-slate-600"}`}>{value}</span>
@@ -13,7 +13,8 @@ const PAGE_SIZE = 8;
 // PitchProX users (customers) for segments: User Name, Email, Plan, Subscription Status, Trial Status,
 // Call Usage, Calibration Status, Payment Status, Last Login, Signup Date, Segment.
 // selectable: checkboxes (used to build or add to Static segments)
-export default function UsersTable({ users = PLATFORM_USERS, title = "Users", subtitle, selectable = false, selectedIds = [], onToggle, actions = null }) {
+// users / segments come from GET /api/v1/campaigns/segments. Call usage stays 0% until calling is connected.
+export default function UsersTable({ users = [], segments: allSegments = [], loading = false, title = "Users", subtitle, selectable = false, selectedIds = [], onToggle, actions = null }) {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const filtered = users.filter((item) => `${item.name} ${item.email} ${item.plan}`.toLowerCase().includes(query.trim().toLowerCase()));
@@ -60,11 +61,11 @@ export default function UsersTable({ users = PLATFORM_USERS, title = "Users", su
           <tbody className="divide-y divide-light-gray/60 text-xs">
             {!rows.length && (
               <tr>
-                <td colSpan={selectable ? 12 : 11} className="py-8 text-center text-light-black">No users match.</td>
+                <td colSpan={selectable ? 12 : 11} className="py-8 text-center text-light-black">{loading ? "Loading users…" : users.length ? "No users match." : "No customer users yet."}</td>
               </tr>
             )}
             {rows.map((item) => {
-              const segments = segmentNamesOf(item);
+              const segments = segmentNamesOf(item, allSegments);
               return (
                 <tr key={item.id} className="hover:bg-primary/5">
                   {selectable && (
@@ -75,7 +76,10 @@ export default function UsersTable({ users = PLATFORM_USERS, title = "Users", su
                   <td className="py-3 px-2">
                     <div className="flex items-center gap-2 whitespace-nowrap">
                       <span className="w-7 h-7 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center">{item.initials}</span>
-                      <span className="font-semibold text-dark-black/85">{item.name}</span>
+                      <span className="flex flex-col">
+                        <span className="font-semibold text-dark-black/85">{item.name}</span>
+                        <span className="text-[10px] text-light-black">{item.company}</span>
+                      </span>
                     </div>
                   </td>
                   <td className="py-3 px-2 text-medium-black">{item.email}</td>
@@ -109,7 +113,7 @@ export default function UsersTable({ users = PLATFORM_USERS, title = "Users", su
           Showing {filtered.length ? (current - 1) * PAGE_SIZE + 1 : 0}–{Math.min(current * PAGE_SIZE, filtered.length)} of {filtered.length} users
         </span>
         <div className="flex items-center gap-1.5">
-          {Array.from({ length: pages }, (_, index) => (
+          {Array.from({ length: Math.min(pages, 10) }, (_, index) => (
             <button
               key={index}
               type="button"

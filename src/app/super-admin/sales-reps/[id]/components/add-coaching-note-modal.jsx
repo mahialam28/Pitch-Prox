@@ -12,13 +12,6 @@ const noteTypeOptions = [
   { value: "General Feedback", label: "General Feedback" },
 ];
 
-const coachOptions = [
-  { value: "Sarah Johnson", label: "Sarah Johnson" },
-  { value: "Michael Carter", label: "Michael Carter" },
-  { value: "Daniel Martine", label: "Daniel Martine" },
-  { value: "Emily Smith", label: "Emily Smith" },
-];
-
 const priorityOptions = [
   { value: "High", label: "High Priority" },
   { value: "Medium", label: "Medium Priority" },
@@ -27,43 +20,32 @@ const priorityOptions = [
 
 export default function AddCoachingNoteModal({ isOpen, onClose, repName, onAdd }) {
   const [noteType, setNoteType] = useState("Opportunity");
-  const [coach, setCoach] = useState("Sarah Johnson");
   const [title, setTitle] = useState("");
   const [insight, setInsight] = useState("");
-  const [relatedCall, setRelatedCall] = useState("Subscription Closed");
-  const [dueDate, setDueDate] = useState("Jun 15");
+  const [relatedCall, setRelatedCall] = useState("");
+  const [dueDate, setDueDate] = useState("");
   const [priority, setPriority] = useState("Medium");
   const [submitting, setSubmitting] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  // The signed-in manager is recorded as the coach
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!title.trim()) {
-      toast.error("Please enter a coaching insight title");
+    if (!title.trim() || !insight.trim()) {
+      toast.error("Add a title and the feedback detail");
       return;
     }
-
     setSubmitting(true);
-    setTimeout(() => {
-      setSubmitting(false);
-      const newNote = {
-        id: `CN-${Date.now()}`,
-        date: "May 31, 2026",
-        time: "11:45 AM",
-        type: noteType,
-        relatedCall: relatedCall,
-        title: title,
-        insight: insight || "Follow standard playbook objection guidelines.",
-        coach: coach,
-        due: dueDate || "Jun 15",
-        priority: priority,
-      };
-
-      if (onAdd) onAdd(newNote);
-      toast.success("Coaching note added successfully!");
+    try {
+      await onAdd?.({ type: noteType, title: title.trim(), body: insight.trim(), relatedTo: relatedCall.trim() || null, dueDate: dueDate || null, priority });
+      toast.success("Coaching note added");
       onClose();
-    }, 400);
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -106,11 +88,11 @@ export default function AddCoachingNoteModal({ isOpen, onClose, repName, onAdd }
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-dark-black/80">Coach</label>
+                <label className="text-xs font-semibold text-dark-black/80">Priority</label>
                 <Dropdown
-                  items={coachOptions}
-                  selected={coach}
-                  onSelect={(val) => setCoach(val)}
+                  items={priorityOptions}
+                  selected={priority}
+                  onSelect={(val) => setPriority(val)}
                   variant="default"
                   placement="bottom"
                   className="w-full"
@@ -124,6 +106,7 @@ export default function AddCoachingNoteModal({ isOpen, onClose, repName, onAdd }
               <input
                 type="text"
                 required
+                maxLength={160}
                 placeholder="e.g. Stronger objection handling needed"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -136,6 +119,8 @@ export default function AddCoachingNoteModal({ isOpen, onClose, repName, onAdd }
               <label className="text-xs font-semibold text-dark-black/80">Actionable Feedback / Detail</label>
               <textarea
                 rows={3}
+                required
+                maxLength={5000}
                 placeholder="e.g. Anchor value and establish urgency before presenting pricing numbers."
                 value={insight}
                 onChange={(e) => setInsight(e.target.value)}
@@ -146,9 +131,11 @@ export default function AddCoachingNoteModal({ isOpen, onClose, repName, onAdd }
             {/* Related Call & Due Date */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-dark-black/80">Related Call Outcome</label>
+                <label className="text-xs font-semibold text-dark-black/80">Related Call / Account</label>
                 <input
                   type="text"
+                  maxLength={160}
+                  placeholder="Optional"
                   value={relatedCall}
                   onChange={(e) => setRelatedCall(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-xl border border-light-gray text-xs text-dark-black/90 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
@@ -158,9 +145,8 @@ export default function AddCoachingNoteModal({ isOpen, onClose, repName, onAdd }
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-semibold text-dark-black/80">Target Due Date</label>
                 <input
-                  type="text"
+                  type="date"
                   value={dueDate}
-                  placeholder="e.g. Jun 15"
                   onChange={(e) => setDueDate(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-xl border border-light-gray text-xs text-dark-black/90 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                 />

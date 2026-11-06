@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { createId, hashToken, query } from "@/lib/db";
 import { ApiError } from "@/lib/api";
 import { recordAudit } from "@/lib/audit";
+import { recordAccountEvent } from "@/lib/campaigns/events";
 import { SESSION_COOKIE, STAFF_SESSION_COOKIE, createSession, requireCurrentUser, swapToStaffSession } from "@/lib/auth";
 import { getSubscription, listInvoices } from "@/lib/billing";
 import { listAccountTickets } from "@/lib/support-staff";
@@ -347,7 +348,8 @@ export async function previewChange({ account }, { planId, billingCycle, when })
   if (!plan) throw new ApiError("Choose a plan.");
   const cycle = CYCLES.includes(billingCycle) ? billingCycle : subscription.billingCycle ?? "monthly";
   const seats = Number(account.seats) || 1;
-  const priceOf = (cents, c) => (c === "annual" ? cents.annual : cents.monthly) * seats;
+  // Price of one billing period. Plans store the per-month price when billed annually, so a year is 12 of those.
+  const priceOf = (cents, c) => (c === "annual" ? cents.annual * 12 : cents.monthly) * seats;
   const current = priceOf({ monthly: subscription.plan.priceMonthlyCents, annual: subscription.plan.priceAnnualCents }, subscription.billingCycle ?? "monthly");
   const next = priceOf({ monthly: plan.price_monthly_cents, annual: plan.price_annual_cents }, cycle);
   const periodDays = (subscription.billingCycle ?? "monthly") === "annual" ? 365 : 30;
@@ -362,6 +364,9 @@ export async function previewChange({ account }, { planId, billingCycle, when })
     when: immediate ? "now" : "renewal",
     currentPriceCents: current,
     newPriceCents: next,
+    // Per month, to compare plans on different billing cycles
+    currentMonthlyCents: (subscription.billingCycle ?? "monthly") === "annual" ? Math.round(current / 12) : current,
+    newMonthlyCents: cycle === "annual" ? Math.round(next / 12) : next,
     unusedCreditCents: immediate ? unusedCredit : 0,
     dueNowCents: dueNow,
     creditGeneratedCents: immediate ? Math.max(0, unusedCredit - next) : 0,
@@ -373,12 +378,30 @@ export async function previewChange({ account }, { planId, billingCycle, when })
 
 export async function changeSubscription({ user, account }, body) {
   const preview = await previewChange({ account }, body);
+  const [before] = await query("SELECT plans.is_trial AS isTrial FROM subscriptions JOIN plans ON plans.id = subscriptions.plan_id WHERE subscriptions.organization_id = ?", [account.organization_id]);
   if (preview.when === "now") {
     await query("UPDATE subscriptions SET plan_id = ?, billing_cycle = ?, current_period_start = NOW(), scheduled_plan_id = NULL, scheduled_cycle = NULL WHERE organization_id = ?", [preview.plan.id, preview.billingCycle, account.organization_id]);
   } else {
     await query("UPDATE subscriptions SET scheduled_plan_id = ?, scheduled_cycle = ? WHERE organization_id = ?", [preview.plan.id, preview.billingCycle, account.organization_id]);
   }
-  await recordAudit(user, { action: "billing.plan_changed", entityType: "account", entityId: account.organization_id, organizationId: account.organization_id, summary: `${preview.when === "now" ? "Changed" : "Scheduled change of"} ${account.company} to ${preview.plan.name} (${preview.billingCycle})` });
+  // Old and new monthly value are kept so analytics can tell upgrades from downgrades
+  await recordAudit(user, {
+    action: "billing.plan_changed",
+    entityType: "account",
+    entityId: account.organization_id,
+    organizationId: account.organization_id,
+    summary: `${preview.when === "now" ? "Changed" : "Scheduled change of"} ${account.company} to ${preview.plan.name} (${preview.billingCycle})`,
+    metadata: { when: preview.when, toPlanId: preview.plan.id, billingCycle: preview.billingCycle, fromMonthlyCents: preview.currentMonthlyCents, toMonthlyCents: preview.newMonthlyCents },
+  });
+  // Lifecycle events (Campaigns & Journeys) when the change takes effect now
+  if (preview.when === "now") {
+    const data = { planId: preview.plan.id, planName: preview.plan.name };
+    if (Number(before?.isTrial)) {
+      await recordAccountEvent(account.organization_id, "trial_converted", data);
+      await recordAccountEvent(account.organization_id, "subscription_started", data);
+    } else if (preview.newMonthlyCents > preview.currentMonthlyCents) await recordAccountEvent(account.organization_id, "plan_upgraded", data);
+    else if (preview.newMonthlyCents < preview.currentMonthlyCents) await recordAccountEvent(account.organization_id, "plan_downgraded", data);
+  }
   return preview;
 }
 
@@ -395,7 +418,8 @@ export async function pauseSubscription({ user, account }, { until, resume }) {
 
 export async function cancelSubscription({ user, account }, { undo, reason }) {
   const why = undo ? null : text(reason, "Reason", 200);
-  await query("UPDATE subscriptions SET cancel_at_period_end = ? WHERE organization_id = ?", [undo ? 0 : 1, account.organization_id]);
+  await query("UPDATE subscriptions SET cancel_at_period_end = ?, cancel_reason = ?, cancel_requested_at = ? WHERE organization_id = ?", [undo ? 0 : 1, why, undo ? null : new Date(), account.organization_id]);
+  if (!undo) await recordAccountEvent(account.organization_id, "subscription_cancelled", { reason: why });
   await recordAudit(user, { action: undo ? "billing.cancellation_undone" : "billing.subscription_cancelled", entityType: "account", entityId: account.organization_id, organizationId: account.organization_id, summary: undo ? `Kept ${account.company}'s subscription` : `${account.company}'s subscription ends at the end of the current period${why ? ` (${why})` : ""}` });
 }
 

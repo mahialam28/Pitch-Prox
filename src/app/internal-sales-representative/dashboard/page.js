@@ -10,6 +10,7 @@ import SearchUser from "./components/search-user";
 import EmployeeRoster from "./components/employee-roster";
 import OperationalAlerts from "./components/operational-alerts";
 import RecentActivity from "./components/recent-activity";
+import MyCoachingNotes from "./components/my-coaching-notes";
 import { apiRequest } from "@/lib/client-api";
 import { showError } from "@/lib/alerts";
 
@@ -33,6 +34,8 @@ export default function DashboardPage() {
     <div className="w-full flex flex-col gap-6 pb-12">
       <DashboardHeader />
       <OverviewStats overview={data.overview} />
+      {/* Reps receive their managers' coaching notes here */}
+      {data.scope === "rep" && <MyCoachingNotes />}
       <div className="w-full grid grid-cols-1 2xl:grid-cols-2 gap-6 items-stretch">
         <div className="flex w-full min-w-0">
           <PerformanceTrend trend={data.trend} />

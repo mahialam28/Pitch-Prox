@@ -130,7 +130,7 @@ export async function salesDashboard({ user, ownOnly }) {
     scope: ownOnly ? "rep" : "company",
     overview: {
       conversionMomentum: percent(qualified, totalLeads),
-      leadToSubscription: percent(totalAccounts, totalLeads),
+      leadToSubscription: Math.min(100, percent(totalAccounts, totalLeads)),
       leads: totalLeads,
       accounts: totalAccounts,
       promptAdherence: null,
@@ -142,7 +142,8 @@ export async function salesDashboard({ user, ownOnly }) {
       name: rep.name,
       accounts: Number(rep.accounts),
       convMom: `${percent(rep.qualified, rep.leads)}%`,
-      lead: `${percent(rep.accounts, rep.leads)}%`,
+      // Accounts don't always start as a lead, so this is capped at 100%
+      lead: `${Math.min(100, percent(rep.accounts, rep.leads))}%`,
       status: rep.status === "active" ? "ACTIVE" : "OFFBOARDING",
     })),
     insights: [

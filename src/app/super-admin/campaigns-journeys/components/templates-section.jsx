@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Search, Plus, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 import Dropdown from "@/components/shared/dropdown/dropdown";
 import TemplateCard from "./template-card";
-import { CAMPAIGN_TEMPLATES } from "../templates-data";
+import { toTemplateCard } from "../campaign-api";
 
 const CATEGORY_OPTIONS = [
   { value: "all", label: "All categories" },
@@ -17,6 +17,9 @@ const STATUS_OPTIONS = [
   { value: "ACTIVE", label: "Active" },
   { value: "DRAFT", label: "Draft" },
   { value: "ARCHIVED", label: "Archived" },
+  { value: "Marketing", label: "Marketing emails" },
+  { value: "Lifecycle", label: "Lifecycle emails" },
+  { value: "Transactional", label: "Transactional emails" },
 ];
 
 const PAGE_SIZE_OPTIONS = [
@@ -25,7 +28,8 @@ const PAGE_SIZE_OPTIONS = [
   { value: "24", label: "24 / page" },
 ];
 
-export default function TemplatesSection() {
+// templates: from GET /api/v1/campaigns/templates (loaded by TemplatesTab)
+export default function TemplatesSection({ templates = [], loading = false, canManage = true }) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -35,7 +39,7 @@ export default function TemplatesSection() {
 
   // Filtered Templates List
   const filteredTemplates = useMemo(() => {
-    return CAMPAIGN_TEMPLATES.filter((template) => {
+    return templates.map(toTemplateCard).filter((template) => {
       // Search filter
       const matchesSearch =
         template.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -49,11 +53,11 @@ export default function TemplatesSection() {
 
       // Status filter
       const matchesStatus =
-        selectedStatus === "all" || template.status === selectedStatus;
+        selectedStatus === "all" || template.status === selectedStatus || template.emailType === selectedStatus;
 
       return matchesSearch && matchesCategory && matchesStatus;
     });
-  }, [searchQuery, selectedCategory, selectedStatus]);
+  }, [templates, searchQuery, selectedCategory, selectedStatus]);
 
   // Pagination calculation
   const totalItems = filteredTemplates.length;
@@ -136,7 +140,7 @@ export default function TemplatesSection() {
           </div>
 
           {/* + New Template Solid Teal Button */}
-          <button
+          {canManage && <button
             type="button"
             onClick={() =>
               router.push("/super-admin/campaigns-journeys/templates/new-template")
@@ -145,7 +149,7 @@ export default function TemplatesSection() {
           >
             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
             <span>New Template</span>
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -159,7 +163,7 @@ export default function TemplatesSection() {
       ) : (
         <div className="w-full bg-white rounded-2xl border border-light-gray p-12 text-center flex flex-col items-center justify-center gap-3">
           <p className="text-sm font-medium text-light-black">
-            No templates found matching your search or filters.
+            {loading ? "Loading templates…" : "No templates found matching your search or filters."}
           </p>
           <button
             type="button"

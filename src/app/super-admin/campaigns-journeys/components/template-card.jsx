@@ -124,7 +124,12 @@ export default function TemplateCard({ template }) {
             </span>
           ) : (
             <span className="inline-flex items-center text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide bg-slate-100 text-slate-600 border border-slate-200">
-              DRAFT
+              {template.status}
+            </span>
+          )}
+          {template.triggerEventLabel && (
+            <span className="inline-flex items-center text-[9px] font-bold px-2 py-0.5 rounded-full tracking-wide bg-purple-50 text-purple-600 border border-purple-200" title="Sent automatically on this event">
+              On: {template.triggerEventLabel}
             </span>
           )}
         </div>

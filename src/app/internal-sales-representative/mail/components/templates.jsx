@@ -4,12 +4,14 @@ import React from "react";
 import Link from "next/link";
 import { Mail } from "lucide-react";
 import Text from "@/components/texts/text";
-import { allTemplates } from "../templates/templates-data";
+import { useMailTemplates } from "../templates/use-mail-templates";
 import { usePortal } from "@/components/shared/use-portal";
 
 export default function QuickTemplates({ onSelectTemplate }) {
   const portal = usePortal();
-  const templatesData = allTemplates.slice(0, 4);
+  // The employee's own and team templates first, then the built-in library
+  const { templates } = useMailTemplates();
+  const templatesData = templates.slice(0, 4);
 
   return (
     <div className="grow bg-white rounded-2xl border border-light-gray p-6 shadow-sm">

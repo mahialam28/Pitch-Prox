@@ -1,42 +1,17 @@
 "use client";
 
 import React from "react";
-import { PhoneCall, Zap, Filter, Heart, ArrowUpRight } from "lucide-react";
+import { PhoneCall, Zap, Filter, DollarSign } from "lucide-react";
+import { dollars, pct, trend } from "../../team-api";
 
 export default function RepKpiStats({ rep }) {
+  const closed = trend(rep.closed, rep.closedPrev);
+  const revenue = trend(rep.revenueCents, rep.revenuePrevCents, (cents) => dollars(cents));
   const kpiData = [
-    {
-      id: "total-calls",
-      label: "TOTAL CALLS",
-      value: rep.totalCalls || "128",
-      trend: "↑ 12 vs last 30 days",
-      icon: PhoneCall,
-      iconBg: "bg-emerald-50 text-emerald-600",
-    },
-    {
-      id: "subs-closed",
-      label: "SUBSCRIPTIONS CLOSED",
-      value: rep.subscriptionsClosed || "56",
-      trend: "↑ 8 vs last 30 days",
-      icon: Zap,
-      iconBg: "bg-purple-50 text-purple-600",
-    },
-    {
-      id: "lead-to-sub",
-      label: "LEAD TO SUBSCRIPTION",
-      value: rep.leadToSub || "34.2%",
-      trend: "↑ 6.1% vs last 30 days",
-      icon: Filter,
-      iconBg: "bg-blue-50 text-blue-600",
-    },
-    {
-      id: "trust-gain",
-      label: "AVG. TRUST GAIN",
-      value: rep.trustGain || "+28.7",
-      trend: "↑ 3.2 vs last 30 days",
-      icon: Heart,
-      iconBg: "bg-orange-50 text-orange-500",
-    },
+    { id: "total-calls", label: "TOTAL CALLS", value: "—", trend: { text: "Needs call data", positive: null }, icon: PhoneCall, iconBg: "bg-emerald-50 text-emerald-600" },
+    { id: "subs-closed", label: "SUBSCRIPTIONS CLOSED", value: rep.closed, trend: closed, icon: Zap, iconBg: "bg-purple-50 text-purple-600" },
+    { id: "revenue", label: "BOOKED REVENUE", value: dollars(rep.revenueCents), trend: revenue, icon: DollarSign, iconBg: "bg-blue-50 text-blue-600" },
+    { id: "lead-to-sub", label: "LEAD TO SUBSCRIPTION", value: pct(rep.leadToSubscription), trend: { text: `${rep.accounts} accounts from ${rep.leads} leads`, positive: null }, icon: Filter, iconBg: "bg-orange-50 text-orange-500" },
   ];
 
   return (
@@ -68,8 +43,8 @@ export default function RepKpiStats({ rep }) {
             </div>
 
             {/* Trend */}
-            <div className="text-[10.5px] font-semibold text-emerald-600 flex items-center gap-1">
-              <span>{kpi.trend}</span>
+            <div className={`text-[10.5px] font-semibold flex items-center gap-1 ${kpi.trend.positive === true ? "text-emerald-600" : kpi.trend.positive === false ? "text-rose-500" : "text-light-black"}`}>
+              <span>{kpi.trend.text}</span>
             </div>
           </div>
         );

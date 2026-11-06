@@ -14,8 +14,8 @@ const formatMinutes = (minutes) => {
 
 // Live support queue shared by the sales rep and admin portals.
 // adminActions adds Reassign to the ticket drawer; headerProps let a portal tweak the header.
-export default function SupportTicketsScreen({ adminActions = false, headerProps = {} }) {
-  const tickets = useStaffTickets();
+export default function SupportTicketsScreen({ adminActions = false, headerProps = {}, initialTicketId = null }) {
+  const tickets = useStaffTickets({ initialTicketId });
   const stats = tickets.stats;
 
   return (

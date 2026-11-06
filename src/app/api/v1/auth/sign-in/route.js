@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createId, query, verifyPassword } from "@/lib/db";
 import { createSession, requestClient } from "@/lib/auth";
 import { jsonError, readJson, withApi } from "@/lib/api";
+import { recordLogin } from "@/lib/campaigns/events";
 
 export const runtime = "nodejs";
 
@@ -25,6 +26,7 @@ export const POST = withApi(async (request) => {
   if (user.account_status === "suspended") return jsonError("This account is suspended. Contact PitchProX support.", 403);
   if (user.account_status === "deleted") return jsonError("This account has been closed.", 403);
   if (user.staff_status === "deactivated") return jsonError("This account has been deactivated. Contact your administrator.", 403);
+  await recordLogin(user);
   await createSession(user.id);
   return NextResponse.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role, organizationId: user.organization_id, staffStatus: user.staff_status ?? null } });
 });

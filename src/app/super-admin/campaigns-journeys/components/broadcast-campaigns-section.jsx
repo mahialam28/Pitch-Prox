@@ -1,76 +1,63 @@
 "use client";
 
 import React from "react";
-import { showExportStartedToast } from "@/lib/toast";
 import { Badge, Card, CardLink, DashboardGrid, DataTable, KpiRow, StackedList } from "@/components/shared/dashboard-ui";
+import { formatWhen, percent, useApi } from "../campaign-api";
 
-// Broadcast Campaigns overview (design only, sample data).
-
-const KPIS = [
-  { label: "Campaigns Sent (30 days)", value: "24", note: "4 from last month", trend: "up" },
-  { label: "Emails Delivered", value: "96,420", note: "98.1% delivered" },
-  { label: "Avg. Open Rate", value: "44.8%", note: "2.1% from last month", trend: "up" },
-  { label: "Avg. Click Rate", value: "8.6%", note: "0.8% from last month", trend: "up" },
-  { label: "Unsubscribe Rate", value: "0.4%", note: "0.1% from last month", trend: "down" },
-];
-
-const CAMPAIGNS = [
-  { name: "Product Update - May", type: "Newsletter", audience: "All active users", status: "Scheduled", sent: "-", open: "-", click: "-", schedule: "May 20, 2025 · 9:00 AM" },
-  { name: "Trial Reminder Push", type: "Promotional", audience: "Trial users (186)", status: "Sent", sent: "3,420", open: "48.2%", click: "9.1%", schedule: "May 14, 2025 · 10:00 AM" },
-  { name: "Win-back Offer", type: "Promotional", audience: "Inactive 30+ days", status: "Sent", sent: "1,204", open: "31.5%", click: "5.2%", schedule: "May 10, 2025 · 2:00 PM" },
-  { name: "Playbook Launch: SPIN Selling", type: "Announcement", audience: "Premium prospects", status: "Draft", sent: "-", open: "-", click: "-", schedule: "Not scheduled" },
-  { name: "Calibration Reminder", type: "Transactional", audience: "Not calibrated (412)", status: "Sent", sent: "892", open: "55.1%", click: "12.4%", schedule: "May 06, 2025 · 9:00 AM" },
-  { name: "Billing Update Notice", type: "Transactional", audience: "Pro plan users", status: "Paused", sent: "-", open: "-", click: "-", schedule: "On hold" },
-];
-
-const STATUS_TONE = { Scheduled: "blue", Sent: "green", Draft: "gray", Paused: "amber" };
-
-const ISSUES = [
-  { title: "Win-back Offer", subtitle: "42 bounced · 18 unsubscribed", badge: { tone: "amber", label: "May 10" } },
-  { title: "Trial Reminder Push", subtitle: "12 blocked as spam", badge: { tone: "amber", label: "May 14" } },
-];
-
-const SEND_TIMES = [
-  { title: "Tuesday", subtitle: "4:00 PM - 6:00 PM", badge: { tone: "green", label: "48% open" } },
-  { title: "Thursday", subtitle: "10:00 AM - 12:00 PM", badge: { tone: "green", label: "45% open" } },
-  { title: "Monday", subtitle: "9:00 AM - 11:00 AM", badge: { tone: "blue", label: "41% open" } },
-];
-
+// Broadcast Campaigns overview (live). Opens and clicks appear once an email service reports them.
+const STATUS_TONE = { scheduled: "blue", sent: "green", sending: "blue", canceled: "gray", failed: "red" };
 const outlineButton = "w-full py-2.5 rounded-lg border border-primary text-primary text-sm font-medium hover:bg-primary/5 cursor-pointer";
 
 export default function BroadcastCampaignsSection({ onCreateCampaign, onCreateSegment, onViewAnalytics, onViewIssues }) {
+  const campaigns = useApi("/api/v1/campaigns/broadcasts");
+  const overview = useApi("/api/v1/campaigns/overview");
+  const rows = campaigns.data?.results ?? [];
+  const totals = rows.reduce((sum, row) => ({ total: sum.total + row.stats.total, sent: sum.sent + row.stats.sent, queued: sum.queued + row.stats.queued, opened: sum.opened + row.stats.opened, clicked: sum.clicked + row.stats.clicked, skipped: sum.skipped + row.stats.skipped }), { total: 0, sent: 0, queued: 0, opened: 0, clicked: 0, skipped: 0 });
+  const kpis = [
+    { label: "Campaigns Sent (30 days)", value: String(overview.data?.campaigns.sent30 ?? "—"), note: `${overview.data?.campaigns.scheduled ?? 0} scheduled` },
+    { label: "Emails Delivered", value: String(totals.sent), note: totals.queued ? `${totals.queued} waiting for an email service` : "All handed over", good: !totals.queued },
+    { label: "Avg. Open Rate", value: percent(totals.opened, totals.sent), note: totals.sent ? "Of delivered emails" : "Needs delivered emails" },
+    { label: "Avg. Click Rate", value: percent(totals.clicked, totals.sent), note: totals.sent ? "Of delivered emails" : "Needs delivered emails" },
+    { label: "Unsubscribed", value: String(overview.data?.suppressed ?? 0), note: `${totals.skipped} emails skipped` },
+  ];
+  const issues = (overview.data?.issues ?? []).slice(0, 4).map((issue) => ({ title: issue.subject, subtitle: `${issue.email} · ${issue.reason ?? issue.status}`, badge: { tone: issue.status === "failed" ? "red" : "amber", label: issue.status } }));
+
   return (
     <div className="flex flex-col gap-5 font-secondary">
-      <KpiRow kpis={KPIS} />
+      <KpiRow kpis={kpis} />
       <DashboardGrid
         main={
           <>
-            <Card title="Broadcast Campaigns" action={<CardLink onClick={showExportStartedToast}>Export</CardLink>}>
-              <DataTable
-                rowKey={(row) => row.name}
-                rows={CAMPAIGNS}
-                columns={[
-                  {
-                    key: "name",
-                    label: "Campaign",
-                    render: (row) => (
-                      <span>
-                        <span className="block font-medium text-dark-black">{row.name}</span>
-                        <span className="block text-[11px] text-light-black">{row.type}</span>
-                      </span>
-                    ),
-                  },
-                  { key: "audience", label: "Audience" },
-                  { key: "status", label: "Status", render: (row) => <Badge tone={STATUS_TONE[row.status]}>{row.status}</Badge> },
-                  { key: "sent", label: "Sent" },
-                  { key: "open", label: "Open Rate" },
-                  { key: "click", label: "Click Rate" },
-                  { key: "schedule", label: "Schedule" },
-                ]}
-              />
+            <Card title="Broadcast Campaigns" action={<CardLink onClick={onCreateCampaign}>Create campaign</CardLink>}>
+              {!rows.length ? (
+                <p className="text-sm text-light-black py-6 text-center">{campaigns.data ? "No campaigns yet." : "Loading…"}</p>
+              ) : (
+                <DataTable
+                  rowKey={(row) => row.id}
+                  rows={rows.slice(0, 10)}
+                  columns={[
+                    {
+                      key: "name",
+                      label: "Campaign",
+                      render: (row) => (
+                        <span>
+                          <span className="block font-medium text-dark-black">{row.name}</span>
+                          <span className="block text-[11px] text-light-black">{row.templateName ?? "—"} · {row.emailType ?? ""}</span>
+                        </span>
+                      ),
+                    },
+                    { key: "segmentName", label: "Audience", render: (row) => `${row.segmentName ?? "—"}${row.status === "scheduled" ? "" : ` (${row.recipients})`}` },
+                    { key: "status", label: "Status", render: (row) => <Badge tone={STATUS_TONE[row.status]}>{row.status}</Badge> },
+                    { key: "sent", label: "Delivered", render: (row) => (row.status === "scheduled" ? "—" : `${row.stats.sent} / ${row.stats.total}`) },
+                    { key: "open", label: "Open Rate", render: (row) => (row.openRate == null ? "—" : `${row.openRate}%`) },
+                    { key: "click", label: "Click Rate", render: (row) => (row.clickRate == null ? "—" : `${row.clickRate}%`) },
+                    { key: "schedule", label: "Schedule", render: (row) => formatWhen(row.sentAt ?? row.scheduledAt) },
+                  ]}
+                />
+              )}
             </Card>
             <Card title="Recent Delivery Issues" action={<CardLink onClick={onViewIssues}>View all</CardLink>}>
-              <StackedList items={ISSUES} />
+              {issues.length ? <StackedList items={issues} /> : <p className="text-sm text-light-black">No failed or skipped emails.</p>}
             </Card>
           </>
         }
@@ -86,7 +73,7 @@ export default function BroadcastCampaignsSection({ onCreateCampaign, onCreateSe
               </div>
             </Card>
             <Card title="Best Send Time">
-              <StackedList items={SEND_TIMES} />
+              <p className="text-sm text-light-black">Worked out from opens once an email service reports them.</p>
             </Card>
           </>
         }

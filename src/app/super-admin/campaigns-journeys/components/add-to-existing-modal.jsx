@@ -2,13 +2,15 @@
 
 import React, { useState } from "react";
 import DialogModal, { DialogButton } from "@/components/modals/dialog-modal";
-import { SAVED_SEGMENTS } from "../user-segments";
+import { showError } from "@/lib/alerts";
+import { campaignApi } from "../campaign-api";
 import { showSavedToast } from "@/lib/toast";
 
 // Add selected users to an existing Static segment (Dynamic segments fill themselves from their rules)
-export default function AddToExistingModal({ isOpen, onClose, segments = SAVED_SEGMENTS, selectedUserIds = [], onAddSuccess }) {
+export default function AddToExistingModal({ isOpen, onClose, segments = [], selectedUserIds = [], onAddSuccess }) {
   const staticSegments = segments.filter((segment) => segment.type === "Static");
   const [segmentId, setSegmentId] = useState("");
+  const [saving, setSaving] = useState(false);
   const count = selectedUserIds.length;
   const target = staticSegments.find((segment) => segment.id === segmentId) ?? staticSegments[0];
 
@@ -24,11 +26,19 @@ export default function AddToExistingModal({ isOpen, onClose, segments = SAVED_S
           <DialogButton onClick={onClose}>Cancel</DialogButton>
           <DialogButton
             variant="primary"
-            disabled={!target || !count}
-            onClick={() => {
-              onAddSuccess?.(target);
-              showSavedToast("Users added", `${count} ${count === 1 ? "user was" : "users were"} added to "${target.name}".`);
-              onClose();
+            disabled={!target || !count || saving}
+            onClick={async () => {
+              setSaving(true);
+              try {
+                await campaignApi.addSegmentUsers(target.id, selectedUserIds);
+                onAddSuccess?.(target);
+                showSavedToast("Users added", `${count} ${count === 1 ? "user was" : "users were"} added to "${target.name}".`);
+                onClose();
+              } catch (error) {
+                showError("Users not added", error.message);
+              } finally {
+                setSaving(false);
+              }
             }}
           >
             Add Users
@@ -41,7 +51,7 @@ export default function AddToExistingModal({ isOpen, onClose, segments = SAVED_S
           Static segment
           <select value={target?.id ?? ""} onChange={(event) => setSegmentId(event.target.value)} className="h-10 px-3 rounded-xl border border-light-gray text-sm text-dark-black outline-none focus:border-primary">
             {staticSegments.map((segment) => (
-              <option key={segment.id} value={segment.id}>{segment.name} ({(segment.userIds ?? []).length} users)</option>
+              <option key={segment.id} value={segment.id}>{segment.name} ({segment.memberCount} users)</option>
             ))}
           </select>
         </label>

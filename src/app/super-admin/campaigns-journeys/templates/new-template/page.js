@@ -1,8 +1,10 @@
 "use client";
 
-import React from "react";
 import NewTemplateForm from "../components/new-template-form";
+import { useCanManage } from "../../campaign-api";
 
+// New email template (live)
 export default function NewTemplatePage() {
-  return <NewTemplateForm backUrl="/super-admin/campaigns-journeys?tab=templates" />;
+  const canManage = useCanManage();
+  return <NewTemplateForm canManage={canManage} />;
 }

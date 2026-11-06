@@ -1,60 +1,18 @@
 "use client";
 
 import React from "react";
-import { Edit3, Send, UploadCloud } from "lucide-react";
+import { Activity } from "lucide-react";
 
-export const OVERVIEW_ACTIVITIES = [
-  {
-    id: "1",
-    title: 'Journey "Upgrade Push" was edited',
-    author: "Daniel Miller",
-    timeAgo: "1 hour ago",
-    icon: Edit3,
-    iconColor: "text-blue-500 bg-blue-50 border-blue-100",
-  },
-  {
-    id: "2",
-    title: 'Campaign "Product Update - May" scheduled',
-    author: "Sarah Johnson",
-    timeAgo: "3 hours ago",
-    icon: Send,
-    iconColor: "text-emerald-600 bg-emerald-50 border-emerald-100",
-  },
-  {
-    id: "3",
-    title: 'Template "Trial Reminder" updated',
-    author: "Emily Brown",
-    timeAgo: "5 hours ago",
-    icon: UploadCloud,
-    iconColor: "text-purple-600 bg-purple-50 border-purple-100",
-  },
-];
+const ago = (value) => {
+  const minutes = Math.max(0, Math.round((Date.now() - new Date(value)) / 60000));
+  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 1440) return `${Math.floor(minutes / 60)} h ago`;
+  return `${Math.floor(minutes / 1440)} d ago`;
+};
+// audit entries from GET /api/v1/campaigns/overview → the list's shape
+export const toActivities = (entries = []) => entries.map((entry) => ({ id: entry.id, title: entry.summary, author: entry.actor ?? "System", timeAgo: ago(entry.createdAt), icon: Activity }));
 
-export const LIFECYCLE_ACTIVITIES = [
-  {
-    id: "1",
-    title: 'Journey "Trial Onboarding" was edited',
-    author: "Daniel Miller",
-    timeAgo: "1 hour ago",
-  },
-  {
-    id: "2",
-    title: 'Journey "Trial Nurture" started',
-    author: "Sarah Johnson",
-    timeAgo: "2 hours ago",
-  },
-  {
-    id: "3",
-    title: 'Journey "Trial Expiring Soon" completed',
-    author: "Emily Brown",
-    timeAgo: "4 hours ago",
-  },
-];
-
-export default function RecentActivitySection({
-  activities = OVERVIEW_ACTIVITIES,
-  showIcons = true,
-}) {
+export default function RecentActivitySection({ activities = [], showIcons = true }) {
   return (
     <div className="bg-white rounded-2xl p-5 sm:p-6 border border-light-gray shadow-xs w-full flex flex-col justify-between">
       {/* Header */}
@@ -64,6 +22,7 @@ export default function RecentActivitySection({
         </h3>
       </div>
 
+      {!activities.length && <p className="text-xs text-light-black">No campaign activity yet.</p>}
       {/* Activity List */}
       {showIcons ? (
         <div className="relative pl-1">

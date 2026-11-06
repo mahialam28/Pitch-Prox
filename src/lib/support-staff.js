@@ -38,7 +38,7 @@ export function slaFor(ticket, now = new Date()) {
   return { status: left <= hours * 3600000 * 0.25 ? "At Risk" : "On Track", dueAt: due.toISOString(), minutesLeft: Math.round(left / 60000) };
 }
 
-const TICKET_SELECT = `SELECT support_tickets.id, support_tickets.number, support_tickets.subject, support_tickets.category, support_tickets.priority,
+export const TICKET_SELECT = `SELECT support_tickets.id, support_tickets.number, support_tickets.subject, support_tickets.category, support_tickets.priority,
   support_tickets.status, support_tickets.created_at AS createdAt, support_tickets.updated_at AS updatedAt,
   support_tickets.first_response_at AS firstResponseAt, support_tickets.escalated_at AS escalatedAt, support_tickets.resolved_at AS resolvedAt,
   support_tickets.organization_id AS organizationId, organizations.name AS company, organizations.created_at AS memberSince,
@@ -49,7 +49,7 @@ const TICKET_SELECT = `SELECT support_tickets.id, support_tickets.number, suppor
   JOIN users AS creators ON creators.id = support_tickets.created_by
   LEFT JOIN users AS agents ON agents.id = support_tickets.assigned_to`;
 
-const toTicket = (row) => ({
+export const toTicket = (row) => ({
   id: row.id,
   number: row.number,
   reference: `TKT-${row.number}`,

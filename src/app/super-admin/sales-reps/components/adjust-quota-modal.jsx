@@ -10,54 +10,23 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import Dropdown from "@/components/shared/dropdown/dropdown";
+import { ProfileAvatar } from "@/components/shared/avatar-editor";
+import { saveQuotas } from "../team-api";
 
-const initialReps = [
-  {
-    id: "rep-1",
-    name: "Sarah Jenkins",
-    avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100",
-    currentQuota: 150000,
-    newQuota: 157500,
-    change: "+5.0%",
-    isPositive: true,
-  },
-  {
-    id: "rep-2",
-    name: "Michael Chen",
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100",
-    currentQuota: 150000,
-    newQuota: 157500,
-    change: "+5.0%",
-    isPositive: true,
-  },
-  {
-    id: "rep-3",
-    name: "Elena Rodriguez",
-    avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=100",
-    currentQuota: 120000,
-    newQuota: 120000,
-    change: "0.0%",
-    isPositive: null,
-  },
-  {
-    id: "rep-4",
-    name: "Ryan Anderson",
-    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100",
-    currentQuota: 180000,
-    newQuota: 189000,
-    change: "+5.0%",
-    isPositive: true,
-  },
-  {
-    id: "rep-5",
-    name: "David Martinez",
-    avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100",
-    currentQuota: 130000,
-    newQuota: 136500,
-    change: "+5.0%",
-    isPositive: true,
-  },
-];
+// Quotas are monthly booked-revenue targets in whole dollars (lib/sales-team)
+const toRow = (rep) => {
+  const current = rep.quotaCents == null ? 0 : Math.round(rep.quotaCents / 100);
+  return { id: rep.id, name: rep.name, hasQuota: rep.quotaCents != null, currentQuota: current, newQuota: current, change: "0.0%", isPositive: null };
+};
+const withChange = (row, newQuota) => {
+  const diff = row.currentQuota ? ((newQuota - row.currentQuota) / row.currentQuota) * 100 : newQuota ? 100 : 0;
+  return { ...row, newQuota, change: row.currentQuota ? `${diff > 0 ? "+" : ""}${diff.toFixed(1)}%` : newQuota ? "New" : "0.0%", isPositive: diff > 0 ? true : diff < 0 ? false : null };
+};
+const nextMonthKey = (key) => {
+  const [year, month] = key.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+};
 
 const adjustmentTypeOptions = [
   { value: "Percentage Increase (+)", label: "Percentage Increase (+)" },
@@ -65,73 +34,43 @@ const adjustmentTypeOptions = [
   { value: "Fixed Target Set", label: "Fixed Target Set" },
 ];
 
-export default function AdjustQuotaModal({ isOpen, onClose }) {
-  const [bulkEnabled, setBulkEnabled] = useState(true);
+// Mounted only while open. `reps` are the current reps with this month's quota; `focusRep` pre-filters to one rep.
+export default function AdjustQuotaModal({ isOpen, onClose, reps = [], month, focusRep, onSaved }) {
+  const [bulkEnabled, setBulkEnabled] = useState(!focusRep);
   const [adjustmentType, setAdjustmentType] = useState("Percentage Increase (+)");
-  const [percentageValue, setPercentageValue] = useState("5");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [repsList, setRepsList] = useState(initialReps);
+  const [percentageValue, setPercentageValue] = useState("0");
+  const [searchTerm, setSearchTerm] = useState(focusRep?.name ?? "");
+  const [repsList, setRepsList] = useState(() => reps.filter((rep) => rep.status !== "deactivated").map(toRow));
+  const [starting, setStarting] = useState("this");
   const [saving, setSaving] = useState(false);
 
   if (!isOpen) return null;
 
+  // Bulk mode applies the percentage (or a fixed target) to every rep in the list
+  const applyBulk = (type, value) => {
+    const num = parseFloat(value) || 0;
+    setRepsList((prev) =>
+      prev.map((row) => {
+        if (type === "Fixed Target Set") return withChange(row, Math.max(0, Math.round(num)));
+        const factor = type.includes("Decrease") ? 1 - num / 100 : 1 + num / 100;
+        return withChange(row, Math.max(0, Math.round(row.currentQuota * factor)));
+      })
+    );
+  };
+
   const handlePercentageChange = (val) => {
     setPercentageValue(val);
-    const num = parseFloat(val) || 0;
-    if (bulkEnabled) {
-      setRepsList((prev) =>
-        prev.map((rep) => {
-          const factor = adjustmentType.includes("Decrease") ? 1 - num / 100 : 1 + num / 100;
-          const updated = Math.round(rep.currentQuota * factor);
-          const diff = ((updated - rep.currentQuota) / rep.currentQuota) * 100;
-          return {
-            ...rep,
-            newQuota: updated,
-            change: `${diff > 0 ? "+" : ""}${diff.toFixed(1)}%`,
-            isPositive: diff > 0 ? true : diff < 0 ? false : null,
-          };
-        })
-      );
-    }
+    if (bulkEnabled) applyBulk(adjustmentType, val);
   };
 
   const handleAdjustmentTypeSelect = (type) => {
     setAdjustmentType(type);
-    const num = parseFloat(percentageValue) || 0;
-    if (bulkEnabled) {
-      setRepsList((prev) =>
-        prev.map((rep) => {
-          const factor = type.includes("Decrease") ? 1 - num / 100 : 1 + num / 100;
-          const updated = Math.round(rep.currentQuota * factor);
-          const diff = ((updated - rep.currentQuota) / rep.currentQuota) * 100;
-          return {
-            ...rep,
-            newQuota: updated,
-            change: `${diff > 0 ? "+" : ""}${diff.toFixed(1)}%`,
-            isPositive: diff > 0 ? true : diff < 0 ? false : null,
-          };
-        })
-      );
-    }
+    if (bulkEnabled) applyBulk(type, percentageValue);
   };
 
   const handleIndividualQuotaChange = (id, val) => {
-    const rawVal = val.replace(/[^0-9]/g, "");
-    const num = parseInt(rawVal, 10) || 0;
-    setRepsList((prev) =>
-      prev.map((rep) => {
-        if (rep.id === id) {
-          const diff = ((num - rep.currentQuota) / rep.currentQuota) * 100;
-          return {
-            ...rep,
-            newQuota: num,
-            change: `${diff > 0 ? "+" : ""}${diff.toFixed(1)}%`,
-            isPositive: diff > 0 ? true : diff < 0 ? false : null,
-          };
-        }
-        return rep;
-      })
-    );
+    const num = parseInt(val.replace(/[^0-9]/g, ""), 10) || 0;
+    setRepsList((prev) => prev.map((row) => (row.id === id ? withChange(row, num) : row)));
   };
 
   const filteredReps = repsList.filter((rep) =>
@@ -144,16 +83,25 @@ export default function AdjustQuotaModal({ isOpen, onClose }) {
   const variance = proposedTotal - currentTotal;
   const variancePercent = `${variance >= 0 ? "+" : ""}${currentTotal ? ((variance / currentTotal) * 100).toFixed(1) : "0.0"}%`;
 
-  const handleApplyChanges = () => {
+  const handleApplyChanges = async () => {
+    // Only reps whose quota changes (or who get one for the first time)
+    const changed = repsList.filter((row) => row.newQuota !== row.currentQuota || (!row.hasQuota && row.newQuota > 0));
+    if (!changed.length) {
+      toast.error("No quota changes to apply.");
+      return;
+    }
     setSaving(true);
-    setTimeout(() => {
-      setSaving(false);
-      // The saved quotas become the new baseline for the next change
-      setRepsList((prev) => prev.map((rep) => ({ ...rep, currentQuota: rep.newQuota, change: "0.0%", isPositive: null })));
-      setPercentageValue("0");
-      toast.success("Sales quota adjustments applied successfully!");
+    try {
+      const target = starting === "next" ? nextMonthKey(month) : month;
+      await saveQuotas(changed.map((row) => ({ userId: row.id, quotaCents: row.newQuota * 100 })), target);
+      toast.success(`Quotas updated for ${changed.length} rep${changed.length === 1 ? "" : "s"}.`);
+      onSaved?.();
       onClose();
-    }, 500);
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -236,7 +184,7 @@ export default function AdjustQuotaModal({ isOpen, onClose }) {
               {/* Percentage Value Input */}
               <div>
                 <label className="block text-[10px] font-bold text-light-black uppercase tracking-wider mb-1.5">
-                  PERCENTAGE VALUE
+                  {adjustmentType === "Fixed Target Set" ? "TARGET ($)" : "PERCENTAGE VALUE"}
                 </label>
                 <div className="relative">
                   <input
@@ -244,11 +192,12 @@ export default function AdjustQuotaModal({ isOpen, onClose }) {
                     value={percentageValue}
                     onChange={(e) => handlePercentageChange(e.target.value)}
                     disabled={!bulkEnabled}
+                    min="0"
                     placeholder="5"
                     className="w-full bg-white px-3.5 py-2 rounded-xl border border-light-gray text-xs font-semibold text-dark-black/85 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-60 disabled:bg-light-gray/60 pr-8 transition-all"
                   />
                   <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-light-black pointer-events-none">
-                    %
+                    {adjustmentType === "Fixed Target Set" ? "$" : "%"}
                   </span>
                 </div>
               </div>
@@ -286,6 +235,11 @@ export default function AdjustQuotaModal({ isOpen, onClose }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-light-gray/60 text-xs">
+                  {!filteredReps.length && (
+                    <tr>
+                      <td colSpan={4} className="py-6 text-center text-xs text-light-black">No sales reps found.</td>
+                    </tr>
+                  )}
                   {filteredReps.map((rep) => (
                     <tr
                       key={rep.id}
@@ -294,13 +248,7 @@ export default function AdjustQuotaModal({ isOpen, onClose }) {
                       {/* Representative */}
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-light-gray bg-slate-100">
-                            <img
-                              src={rep.avatar}
-                              alt={rep.name}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
+                          <ProfileAvatar name={rep.name} className="w-8 h-8 !text-[11px] shrink-0" />
                           <span className="font-bold text-dark-black/85 text-xs">
                             {rep.name}
                           </span>
@@ -309,7 +257,7 @@ export default function AdjustQuotaModal({ isOpen, onClose }) {
 
                       {/* Current Quota */}
                       <td className="py-3.5 px-4 font-secondary font-semibold text-dark-black/80 text-xs">
-                        ${rep.currentQuota.toLocaleString()}
+                        {rep.hasQuota ? `$${rep.currentQuota.toLocaleString()}` : "Not set"}
                       </td>
 
                       {/* New Quota Input */}
@@ -320,6 +268,8 @@ export default function AdjustQuotaModal({ isOpen, onClose }) {
                           </span>
                           <input
                             type="text"
+                            aria-label={`New quota for ${rep.name}`}
+                            inputMode="numeric"
                             value={rep.newQuota.toLocaleString()}
                             onChange={(e) =>
                               handleIndividualQuotaChange(rep.id, e.target.value)
@@ -383,7 +333,7 @@ export default function AdjustQuotaModal({ isOpen, onClose }) {
                 TEAM VARIANCE
               </span>
               <span className="text-base sm:text-lg font-bold text-primary font-secondary">
-                +${variance.toLocaleString()}{" "}
+                {variance < 0 ? "-" : "+"}${Math.abs(variance).toLocaleString()}{" "}
                 <span className="text-xs font-semibold">({variancePercent})</span>
               </span>
             </div>
@@ -394,7 +344,17 @@ export default function AdjustQuotaModal({ isOpen, onClose }) {
         <div className="px-6 sm:px-8 py-4 sm:py-5 border-t border-light-gray flex flex-col sm:flex-row items-center justify-between gap-4 bg-white">
           <div className="flex items-center gap-2 text-xs text-light-black">
             <Info className="w-4 h-4 text-light-black shrink-0" />
-            <span>Changes will take effect starting next billing cycle.</span>
+            <label htmlFor="quota-start" className="whitespace-nowrap">Applies from</label>
+            <select
+              id="quota-start"
+              value={starting}
+              onChange={(event) => setStarting(event.target.value)}
+              className="rounded-lg border border-light-gray bg-white px-2 py-1 text-xs text-dark-black cursor-pointer"
+            >
+              <option value="this">this month</option>
+              <option value="next">next month</option>
+            </select>
+            <span className="hidden sm:inline">and carries forward.</span>
           </div>
 
           <div className="flex items-center gap-3 w-full sm:w-auto justify-end">

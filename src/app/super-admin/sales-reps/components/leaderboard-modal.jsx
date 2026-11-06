@@ -1,6 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ProfileAvatar } from "@/components/shared/avatar-editor";
+import { dollars, downloadTeamCsv, loadLeaderboard, pct } from "../team-api";
 import {
   X,
   Trophy,
@@ -10,332 +13,80 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 
-const timeframeData = {
-  "This Month": {
-    topReps: [
-      {
-        rank: 2,
-        name: "Sarah Johnson",
-        role: "Closer",
-        avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=140",
-        revenue: "$114,230",
-        trend: "+4.2%",
-        podiumLabel: "RUNNER UP",
-        podiumBg: "bg-gradient-to-b from-slate-400 to-slate-500",
-        borderColor: "border-slate-300",
-        badgeBg: "bg-slate-400",
-      },
-      {
-        rank: 1,
-        name: "Ryan Anderson",
-        role: "Senior Closer",
-        avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160",
-        revenue: "$142,580",
-        trend: "+8.7%",
-        podiumLabel: "TOP PERFORMER",
-        podiumBg: "bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600",
-        borderColor: "border-primary",
-        badgeBg: "bg-amber-400",
-      },
-      {
-        rank: 3,
-        name: "Michael Carter",
-        role: "Closing Specialist",
-        avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=140",
-        revenue: "$98,450",
-        trend: "+2.1%",
-        podiumLabel: "ELITE TIER",
-        podiumBg: "bg-gradient-to-b from-amber-700 to-amber-900",
-        borderColor: "border-amber-700",
-        badgeBg: "bg-amber-700",
-      },
-    ],
-    roster: [
-      {
-        rank: "#04",
-        name: "Emily Davis",
-        role: "Closer",
-        avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100",
-        revenue: "$82,400",
-        revTrend: "▲ 1.6%",
-        revPositive: true,
-        conversion: "22.1%",
-        quotaPercent: "92%",
-        quotaCount: "$82k / $90k",
-        quotaFill: 92,
-      },
-      {
-        rank: "#05",
-        name: "David Martinez",
-        role: "Closer",
-        avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100",
-        revenue: "$76,150",
-        revTrend: "▼ 0.3%",
-        revPositive: false,
-        conversion: "18.9%",
-        quotaPercent: "84%",
-        quotaCount: "$76k / $90k",
-        quotaFill: 84,
-      },
-      {
-        rank: "#06",
-        name: "Jonathan White",
-        role: "Closing Specialist",
-        avatar: "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=100",
-        revenue: "$71,200",
-        revTrend: "▲ 3.4%",
-        revPositive: true,
-        conversion: "20.4%",
-        quotaPercent: "79%",
-        quotaCount: "$71k / $90k",
-        quotaFill: 79,
-      },
-      {
-        rank: "#07",
-        name: "Jessica Lee",
-        role: "Sales Rep",
-        avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=100",
-        revenue: "$64,800",
-        revTrend: "▲ 0.8%",
-        revPositive: true,
-        conversion: "16.5%",
-        quotaPercent: "72%",
-        quotaCount: "$65k / $90k",
-        quotaFill: 72,
-      },
-    ],
-    avgRevenue: "$54,230",
-    totalVolume: "$2,603,040",
-  },
-  "Quarterly": {
-    topReps: [
-      {
-        rank: 2,
-        name: "Sarah Johnson",
-        role: "Closer",
-        avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=140",
-        revenue: "$342,180",
-        trend: "+9.6%",
-        podiumLabel: "RUNNER UP",
-        podiumBg: "bg-gradient-to-b from-slate-400 to-slate-500",
-        borderColor: "border-slate-300",
-        badgeBg: "bg-slate-400",
-      },
-      {
-        rank: 1,
-        name: "Ryan Anderson",
-        role: "Senior Closer",
-        avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160",
-        revenue: "$418,920",
-        trend: "+12.4%",
-        podiumLabel: "TOP PERFORMER",
-        podiumBg: "bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600",
-        borderColor: "border-primary",
-        badgeBg: "bg-amber-400",
-      },
-      {
-        rank: 3,
-        name: "Michael Carter",
-        role: "Closing Specialist",
-        avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=140",
-        revenue: "$295,300",
-        trend: "+5.8%",
-        podiumLabel: "ELITE TIER",
-        podiumBg: "bg-gradient-to-b from-amber-700 to-amber-900",
-        borderColor: "border-amber-700",
-        badgeBg: "bg-amber-700",
-      },
-    ],
-    roster: [
-      {
-        rank: "#04",
-        name: "Emily Davis",
-        role: "Closer",
-        avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100",
-        revenue: "$248,500",
-        revTrend: "▲ 4.2%",
-        revPositive: true,
-        conversion: "23.5%",
-        quotaPercent: "95%",
-        quotaCount: "$248k / $260k",
-        quotaFill: 95,
-      },
-      {
-        rank: "#05",
-        name: "David Martinez",
-        role: "Closer",
-        avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100",
-        revenue: "$226,800",
-        revTrend: "▲ 1.8%",
-        revPositive: true,
-        conversion: "19.8%",
-        quotaPercent: "88%",
-        quotaCount: "$226k / $260k",
-        quotaFill: 88,
-      },
-      {
-        rank: "#06",
-        name: "Jonathan White",
-        role: "Closing Specialist",
-        avatar: "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=100",
-        revenue: "$214,900",
-        revTrend: "▲ 5.1%",
-        revPositive: true,
-        conversion: "21.2%",
-        quotaPercent: "83%",
-        quotaCount: "$214k / $260k",
-        quotaFill: 83,
-      },
-      {
-        rank: "#07",
-        name: "Jessica Lee",
-        role: "Sales Rep",
-        avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=100",
-        revenue: "$192,400",
-        revTrend: "▲ 2.3%",
-        revPositive: true,
-        conversion: "17.4%",
-        quotaPercent: "75%",
-        quotaCount: "$192k / $260k",
-        quotaFill: 75,
-      },
-    ],
-    avgRevenue: "$162,400",
-    totalVolume: "$7,795,200",
-  },
-  "YTD": {
-    topReps: [
-      {
-        rank: 2,
-        name: "Sarah Johnson",
-        role: "Closer",
-        avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=140",
-        revenue: "$1,048,600",
-        trend: "+14.5%",
-        podiumLabel: "RUNNER UP",
-        podiumBg: "bg-gradient-to-b from-slate-400 to-slate-500",
-        borderColor: "border-slate-300",
-        badgeBg: "bg-slate-400",
-      },
-      {
-        rank: 1,
-        name: "Ryan Anderson",
-        role: "Senior Closer",
-        avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160",
-        revenue: "$1,280,450",
-        trend: "+18.2%",
-        podiumLabel: "TOP PERFORMER",
-        podiumBg: "bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600",
-        borderColor: "border-primary",
-        badgeBg: "bg-amber-400",
-      },
-      {
-        rank: 3,
-        name: "Michael Carter",
-        role: "Closing Specialist",
-        avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=140",
-        revenue: "$892,100",
-        trend: "+11.3%",
-        podiumLabel: "ELITE TIER",
-        podiumBg: "bg-gradient-to-b from-amber-700 to-amber-900",
-        borderColor: "border-amber-700",
-        badgeBg: "bg-amber-700",
-      },
-    ],
-    roster: [
-      {
-        rank: "#04",
-        name: "Emily Davis",
-        role: "Closer",
-        avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100",
-        revenue: "$762,000",
-        revTrend: "▲ 7.8%",
-        revPositive: true,
-        conversion: "24.1%",
-        quotaPercent: "97%",
-        quotaCount: "$762k / $780k",
-        quotaFill: 97,
-      },
-      {
-        rank: "#05",
-        name: "David Martinez",
-        role: "Closer",
-        avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100",
-        revenue: "$694,500",
-        revTrend: "▲ 3.9%",
-        revPositive: true,
-        conversion: "20.7%",
-        quotaPercent: "89%",
-        quotaCount: "$694k / $780k",
-        quotaFill: 89,
-      },
-      {
-        rank: "#06",
-        name: "Jonathan White",
-        role: "Closing Specialist",
-        avatar: "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=100",
-        revenue: "$658,200",
-        revTrend: "▲ 6.4%",
-        revPositive: true,
-        conversion: "22.0%",
-        quotaPercent: "85%",
-        quotaCount: "$658k / $780k",
-        quotaFill: 85,
-      },
-      {
-        rank: "#07",
-        name: "Jessica Lee",
-        role: "Sales Rep",
-        avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=100",
-        revenue: "$589,100",
-        revTrend: "▲ 4.1%",
-        revPositive: true,
-        conversion: "18.1%",
-        quotaPercent: "77%",
-        quotaCount: "$589k / $780k",
-        quotaFill: 77,
-      },
-    ],
-    avgRevenue: "$488,500",
-    totalVolume: "$23,448,000",
-  },
+// Podium colours by position (1st in the centre)
+const PODIUM = {
+  1: { podiumBg: "bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600", borderColor: "border-primary", badgeBg: "bg-amber-400" },
+  2: { podiumBg: "bg-gradient-to-b from-slate-400 to-slate-500", borderColor: "border-slate-300", badgeBg: "bg-slate-400" },
+  3: { podiumBg: "bg-gradient-to-b from-amber-700 to-amber-900", borderColor: "border-amber-700", badgeBg: "bg-amber-700" },
 };
+const PERIODS = { "This Month": "month", Quarterly: "quarter", YTD: "year" };
+const METRICS = {
+  "Total Revenue": { value: (rep) => rep.revenueCents, show: (rep) => dollars(rep.revenueCents) },
+  "Lead Conversion": { value: (rep) => rep.leadToSubscription ?? -1, show: (rep) => pct(rep.leadToSubscription) },
+  "Accounts Closed": { value: (rep) => rep.closed, show: (rep) => String(rep.closed) },
+  "Quota Attainment": { value: (rep) => rep.attainment ?? -1, show: (rep) => (rep.attainment == null ? "No quota" : `${rep.attainment}%`) },
+};
+const ordinal = (n) => n + (n % 10 === 1 && n % 100 !== 11 ? "st" : n % 10 === 2 && n % 100 !== 12 ? "nd" : n % 10 === 3 && n % 100 !== 13 ? "rd" : "th");
+const revenueTrend = (rep) => {
+  const diff = rep.revenueCents - rep.revenuePrevCents;
+  if (!rep.revenuePrevCents) return { text: rep.revenueCents ? "New" : "—", positive: rep.revenueCents ? true : null };
+  return { text: `${diff >= 0 ? "▲" : "▼"} ${Math.abs((diff / rep.revenuePrevCents) * 100).toFixed(1)}%`, positive: diff >= 0 };
+};
+const EMPTY_SPOT = { id: null, name: "—", jobTitle: "", revenueCents: 0, revenuePrevCents: 0, closed: 0, leadToSubscription: null, attainment: null };
 
+// Mounted only while open; loads the ranking for the chosen period (lib/sales-team → leaderboard)
 export default function LeaderboardModal({ isOpen, onClose }) {
+  const router = useRouter();
   const [timeframe, setTimeframe] = useState("This Month");
   const [activeTab, setActiveTab] = useState("Total Revenue");
+  const [boards, setBoards] = useState({});
+
+  const period = PERIODS[timeframe];
+  useEffect(() => {
+    let cancelled = false;
+    loadLeaderboard(period)
+      .then((data) => !cancelled && setBoards((current) => ({ ...current, [period]: data })))
+      .catch((error) => !cancelled && toast.error(error.message));
+    return () => {
+      cancelled = true;
+    };
+  }, [period]);
 
   if (!isOpen) return null;
 
-  const baseData = timeframeData[timeframe] || timeframeData["This Month"];
-  // Rank everyone by the selected metric; the podium shows 1st, 2nd and 3rd for that metric
-  const number = (value) => Number(String(value ?? "0").replace(/[^0-9.]/g, "")) || 0;
-  const everyone = [...baseData.topReps, ...baseData.roster].map((rep) => {
-    const revenue = number(rep.revenue);
-    const conversion = rep.conversion ? number(rep.conversion) : Math.round((18 + ((revenue / 10000) % 14)) * 10) / 10;
-    const quota = rep.quotaFill ?? Math.min(130, Math.round(revenue / 1100));
-    const calls = Math.round(revenue / 260 + rep.name.length * 7);
-    return { ...rep, metrics: { "Total Revenue": revenue, "Lead Conversion": conversion, "Calls Made": calls, "Quota Attainment": quota } };
-  });
-  const display = (rep) =>
-    ({
-      "Total Revenue": "$" + rep.metrics["Total Revenue"].toLocaleString("en-US"),
-      "Lead Conversion": rep.metrics["Lead Conversion"] + "%",
-      "Calls Made": rep.metrics["Calls Made"].toLocaleString("en-US"),
-      "Quota Attainment": rep.metrics["Quota Attainment"] + "%",
-    })[activeTab];
-  const ranked = [...everyone].sort((a, b) => b.metrics[activeTab] - a.metrics[activeTab]);
-  const ordinal = (n) => n + (n % 10 === 1 && n % 100 !== 11 ? "st" : n % 10 === 2 && n % 100 !== 12 ? "nd" : n % 10 === 3 && n % 100 !== 13 ? "rd" : "th");
-  // Podium colours stay by position (centre = 1st)
-  const [firstStyle, secondStyle, thirdStyle] = [baseData.topReps[1], baseData.topReps[0], baseData.topReps[2]];
-  const podium = (rep, style, position) => ({ ...rep, revenue: display(rep), podiumLabel: ordinal(position), podiumBg: style.podiumBg, borderColor: style.borderColor, badgeBg: style.badgeBg, rank: position });
-  const topPerformer = podium(ranked[0], firstStyle, 1);
-  const runnerUp = podium(ranked[1], secondStyle, 2);
-  const eliteTier = podium(ranked[2], thirdStyle, 3);
-  const currentData = { ...baseData, roster: ranked.slice(3).map((rep, index) => ({ ...rep, rank: ordinal(index + 4), metricValue: display(rep) })) };
+  const board = boards[period];
+  const metric = METRICS[activeTab];
+  const ranked = [...(board?.reps ?? [])].sort((a, b) => metric.value(b) - metric.value(a) || b.revenueCents - a.revenueCents || a.name.localeCompare(b.name));
+  const podium = (position) => {
+    const entry = ranked[position - 1] ?? EMPTY_SPOT;
+    const change = revenueTrend(entry);
+    return { ...entry, ...PODIUM[position], rank: position, podiumLabel: ordinal(position), revenue: entry.id ? metric.show(entry) : "—", trend: entry.id ? change.text : "" };
+  };
+  const topPerformer = podium(1);
+  const runnerUp = podium(2);
+  const eliteTier = podium(3);
+  const currentData = {
+    roster: ranked.slice(3).map((entry, index) => {
+      const change = revenueTrend(entry);
+      return {
+        ...entry,
+        rank: ordinal(index + 4),
+        revenue: dollars(entry.revenueCents),
+        revTrend: change.text,
+        revPositive: change.positive,
+        conversion: pct(entry.leadToSubscription),
+        quotaPercent: entry.attainment == null ? "No quota" : `${entry.attainment}%`,
+        quotaCount: entry.quotaCents == null ? "" : `${dollars(entry.revenueCents)} / ${dollars(entry.quotaCents)}`,
+        quotaFill: Math.min(100, entry.attainment ?? 0),
+      };
+    }),
+    avgRevenue: dollars(board?.averageRevenueCents ?? 0),
+    totalVolume: dollars(board?.totalRevenueCents ?? 0),
+  };
 
   const handleDownloadReport = () => {
-    toast.success("Downloading Full Sales Leaderboard Report...");
+    if (!board) return;
+    downloadTeamCsv(ranked.map((entry) => ({ ...entry, email: "", managerName: "", statusLabel: "", leads: "", accounts: "", lastActiveAt: "" })), board.label);
   };
 
   return (
@@ -348,7 +99,7 @@ export default function LeaderboardModal({ isOpen, onClose }) {
               Sales Leaderboard
             </h2>
             <p className="text-xs sm:text-sm text-light-black font-normal mt-0.5">
-              Real-time performance rankings across the team
+              {board ? `Booked revenue rankings · ${board.label}` : "Loading rankings…"}
             </p>
           </div>
 
@@ -400,13 +151,7 @@ export default function LeaderboardModal({ isOpen, onClose }) {
             <div className="flex flex-col items-center text-center">
               {/* Avatar + Badge */}
               <div className="relative">
-                <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden border-2 ${runnerUp.borderColor} shadow-sm bg-slate-100`}>
-                  <img
-                    src={runnerUp.avatar}
-                    alt={runnerUp.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
+                <ProfileAvatar name={runnerUp.name} className={`w-16 h-16 sm:w-20 sm:h-20 ${runnerUp.borderColor}`} />
                 <div className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full ${runnerUp.badgeBg} border-2 border-white text-white font-bold text-xs flex items-center justify-center shadow-xs`}>
                   {runnerUp.rank}
                 </div>
@@ -445,13 +190,7 @@ export default function LeaderboardModal({ isOpen, onClose }) {
             <div className="flex flex-col items-center text-center -mt-4">
               {/* Avatar + Trophy + Badge */}
               <div className="relative">
-                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-3 border-primary shadow-md p-0.5 bg-white">
-                  <img
-                    src={topPerformer.avatar}
-                    alt={topPerformer.name}
-                    className="w-full h-full object-cover rounded-full"
-                  />
-                </div>
+                <ProfileAvatar name={topPerformer.name} className="w-20 h-20 sm:w-24 sm:h-24 !border-3 !border-primary shadow-md" />
                 {/* Floating Trophy Icon */}
                 <div className="absolute -top-2 -right-1 text-primary">
                   <Trophy className="w-5 h-5 fill-primary text-primary" />
@@ -495,13 +234,7 @@ export default function LeaderboardModal({ isOpen, onClose }) {
             <div className="flex flex-col items-center text-center">
               {/* Avatar + Badge */}
               <div className="relative">
-                <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden border-2 ${eliteTier.borderColor} shadow-sm bg-slate-100`}>
-                  <img
-                    src={eliteTier.avatar}
-                    alt={eliteTier.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
+                <ProfileAvatar name={eliteTier.name} className={`w-16 h-16 sm:w-20 sm:h-20 ${eliteTier.borderColor}`} />
                 <div className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full ${eliteTier.badgeBg} border-2 border-white text-white font-bold text-xs flex items-center justify-center shadow-xs`}>
                   {eliteTier.rank}
                 </div>
@@ -542,7 +275,7 @@ export default function LeaderboardModal({ isOpen, onClose }) {
             {[
               "Total Revenue",
               "Lead Conversion",
-              "Calls Made",
+              "Accounts Closed",
               "Quota Attainment",
             ].map((tab) => {
               const isActive = activeTab === tab;
@@ -584,9 +317,16 @@ export default function LeaderboardModal({ isOpen, onClose }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-light-gray/60 text-xs">
+                {!currentData.roster.length && (
+                  <tr>
+                    <td colSpan={6} className="py-6 text-center text-xs text-light-black">
+                      {board ? (ranked.length ? "Everyone is on the podium." : "No sales reps yet.") : "Loading…"}
+                    </td>
+                  </tr>
+                )}
                 {currentData.roster.map((rep) => (
                   <tr
-                    key={rep.rank}
+                    key={rep.id}
                     className="hover:bg-light-gray/30 transition-colors"
                   >
                     {/* Rank */}
@@ -597,19 +337,13 @@ export default function LeaderboardModal({ isOpen, onClose }) {
                     {/* Representative */}
                     <td className="py-3.5">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-light-gray bg-slate-100">
-                          <img
-                            src={rep.avatar}
-                            alt={rep.name}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
+                        <ProfileAvatar name={rep.name} className="w-8 h-8 !text-[11px] shrink-0" />
                         <div>
                           <p className="font-bold text-dark-black/85 text-xs leading-tight">
                             {rep.name}
                           </p>
                           <p className="text-[11px] text-light-black font-normal mt-0.5">
-                            {rep.role}
+                            {rep.jobTitle}
                           </p>
                         </div>
                       </div>
@@ -623,7 +357,9 @@ export default function LeaderboardModal({ isOpen, onClose }) {
                         </span>
                         <span
                           className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold border ${
-                            rep.revPositive
+                            rep.revPositive === null
+                              ? "bg-light-gray text-medium-black border-light-gray"
+                              : rep.revPositive
                               ? "bg-emerald-50 text-emerald-600 border-emerald-200/60"
                               : "bg-rose-50 text-rose-600 border-rose-200/60"
                           }`}
@@ -660,6 +396,7 @@ export default function LeaderboardModal({ isOpen, onClose }) {
                     <td className="py-3.5 text-right whitespace-nowrap">
                       <button
                         type="button"
+                        onClick={() => router.push(`/super-admin/sales-reps/${rep.id}`)}
                         className="text-xs font-bold text-primary hover:underline cursor-pointer"
                       >
                         View Profile
@@ -699,6 +436,7 @@ export default function LeaderboardModal({ isOpen, onClose }) {
           <button
             type="button"
             onClick={handleDownloadReport}
+            disabled={!board}
             className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
           >
             <Download className="w-4 h-4" />

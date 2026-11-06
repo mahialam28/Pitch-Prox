@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordUserEvent } from "@/lib/campaigns/events";
 import { requireRole } from "@/lib/auth";
 import { ApiError, readJson, withApi } from "@/lib/api";
 import { createId, query } from "@/lib/db";
@@ -26,6 +27,7 @@ export const POST = withApi(async (request) => {
   await query("INSERT INTO calibration_sessions (id, organization_id, user_id, rounds_completed, duration_seconds) VALUES (?, ?, ?, ?, ?)", [id, user.organizationId, user.id, roundsCompleted ?? null, durationSeconds]);
   const [session] = await query(`SELECT ${columns} FROM calibration_sessions WHERE id = ?`, [id]);
   const [{ total }] = await query("SELECT COUNT(*) AS total FROM calibration_sessions WHERE user_id = ?", [user.id]);
+  if (Number(total) === 1 && CUSTOMER_ROLES.includes(user.role)) await recordUserEvent(user.id, "calibration_completed");
   return NextResponse.json({ session, total: Number(total) }, { status: 201 });
 });
 

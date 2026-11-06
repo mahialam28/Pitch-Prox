@@ -6,26 +6,26 @@ import { motion, AnimatePresence } from "framer-motion";
 import CampaignsHeader from "./components/campaigns-header";
 import CampaignMetrics from "./components/campaign-metrics";
 import ActiveJourneysSection from "./components/active-journeys-section";
-import RecentActivitySection, {
-  OVERVIEW_ACTIVITIES,
-  LIFECYCLE_ACTIVITIES,
-} from "./components/recent-activity-section";
+import RecentActivitySection, { toActivities } from "./components/recent-activity-section";
 import FailedDeliveriesSection from "./components/failed-deliveries-section";
 import QuickActionsSection from "./components/quick-actions-section";
 import JourneyHealthSection from "./components/journey-health-section";
 import CampaignHistorySection from "./components/campaign-history-section";
 import CreateCampaignSection from "./components/create-campaign-section";
-import TemplatesStats from "./components/templates-stats";
-import TemplatesSection from "./components/templates-section";
+import TemplatesTab from "./components/templates-tab";
 import SegmentsSection from "./components/segments-section";
 import AnalyticsSection from "./components/analytics-section";
 import BroadcastCampaignsSection from "./components/broadcast-campaigns-section";
+import { useApi } from "./campaign-api";
 
+const fade = { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -8 }, transition: { duration: 0.2 } };
+
+// Campaigns & Journeys (live): broadcasts, lifecycle journeys, templates and segments
+// for PitchProX customers (lib/campaigns). Emails wait in the outbox until an email service is connected.
 function CampaignsJourneysContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialTab = searchParams.get("tab") || "overview";
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "overview");
 
   // Follow ?tab= when it changes (adjusted during render, not in an effect)
   const tabParam = searchParams.get("tab");
@@ -35,99 +35,68 @@ function CampaignsJourneysContent() {
     if (tabParam) setActiveTab(tabParam);
   }
 
+  const me = useApi("/api/v1/me");
+  const role = me.data?.user?.role;
+  const canManage = ["super_admin", "admin_manager"].includes(role);
+  const usesData = ["overview", "lifecycle-journeys", "analytics", "create-campaign"].includes(activeTab);
+  const overview = useApi(usesData ? "/api/v1/campaigns/overview" : null);
+  const journeys = useApi(["overview", "lifecycle-journeys", "analytics"].includes(activeTab) ? "/api/v1/campaigns/journeys" : null);
+  const segments = useApi(["overview", "lifecycle-journeys", "analytics"].includes(activeTab) ? "/api/v1/campaigns/segments" : null);
+  const templates = useApi(activeTab === "lifecycle-journeys" ? "/api/v1/campaigns/templates" : null);
+  const campaigns = useApi(activeTab === "create-campaign" ? "/api/v1/campaigns/broadcasts" : null);
+  const refresh = () => {
+    overview.reload();
+    journeys.reload();
+    campaigns.reload();
+  };
+
+  const journeyList = journeys.data?.results ?? [];
+  const segmentList = segments.data?.segments ?? [];
+
   return (
     <div className="w-full flex flex-col gap-6 pb-12">
-      {/* 1. Navigation Header */}
       <CampaignsHeader
-        // "create-campaign" is a sub-view of Broadcast Campaigns
         activeTab={activeTab === "create-campaign" ? "broadcast-campaigns" : activeTab}
-        onTabChange={(tabId) => {
-          setActiveTab(tabId);
-        }}
+        onTabChange={setActiveTab}
         onCreateJourney={() => router.push("/super-admin/campaigns-journeys/journeys/create")}
         onCreateCampaign={() => setActiveTab("create-campaign")}
-        onNewTemplate={() =>
-          router.push("/super-admin/campaigns-journeys/templates/new-template")
-        }
+        onNewTemplate={() => router.push("/super-admin/campaigns-journeys/templates/new-template")}
       />
 
-      {/* 2. Content Area */}
       <AnimatePresence mode="wait">
-        {/* ── TAB 1: Overview ── */}
         {activeTab === "overview" && (
-          <motion.div
-            key="overview"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2 }}
-            className="flex flex-col gap-6 w-full"
-          >
-            {/* Top 5 Metric KPI Cards */}
-            <CampaignMetrics />
-
-            {/* Main Grid: Left (Active Journeys Table) & Right (Recent Activity + Failed Deliveries + Quick Actions) */}
+          <motion.div key="overview" {...fade} className="flex flex-col gap-6 w-full">
+            <CampaignMetrics overview={overview.data} />
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start w-full">
-              {/* Left Column: Active Journeys Table */}
-              <div className="xl:col-span-7 2xl:col-span-7 w-full">
-                <ActiveJourneysSection />
+              <div className="xl:col-span-7 w-full">
+                <ActiveJourneysSection title="Journeys" journeys={journeyList} segments={segmentList} loading={!journeys.data} canManage={canManage} onChanged={refresh} />
               </div>
-
-              {/* Right Column: Recent Activity + Failed Deliveries + Quick Actions */}
-              <div className="xl:col-span-5 2xl:col-span-5 w-full flex flex-col gap-6">
-                <RecentActivitySection
-                  showIcons={true}
-                  activities={OVERVIEW_ACTIVITIES}
-                />
-                <FailedDeliveriesSection />
+              <div className="xl:col-span-5 w-full flex flex-col gap-6">
+                <RecentActivitySection showIcons activities={toActivities(overview.data?.activity)} />
+                <FailedDeliveriesSection overview={overview.data} canRun={role === "super_admin"} onRan={refresh} />
                 <QuickActionsSection />
               </div>
             </div>
           </motion.div>
         )}
 
-        {/* ── TAB 2: Lifecycle Journeys ── */}
         {activeTab === "lifecycle-journeys" && (
-          <motion.div
-            key="lifecycle-journeys"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2 }}
-            className="flex flex-col gap-6 w-full"
-          >
-            {/* Top 5 Metric KPI Cards */}
-            <CampaignMetrics />
-
-            {/* Main Grid: Left (Active Journeys Table) & Right (Journey Health + Recent Activity) */}
+          <motion.div key="lifecycle-journeys" {...fade} className="flex flex-col gap-6 w-full">
+            <CampaignMetrics overview={overview.data} />
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start w-full">
-              {/* Left Column: Active Journeys Table */}
-              <div className="xl:col-span-7 2xl:col-span-7 w-full">
-                <ActiveJourneysSection />
+              <div className="xl:col-span-7 w-full">
+                <ActiveJourneysSection title="Lifecycle Journeys" journeys={journeyList} segments={segmentList} loading={!journeys.data} canManage={canManage} onChanged={refresh} />
               </div>
-
-              {/* Right Column: Journey Health + Recent Activity */}
-              <div className="xl:col-span-5 2xl:col-span-5 w-full flex flex-col gap-6">
-                <JourneyHealthSection />
-                <RecentActivitySection
-                  showIcons={false}
-                  activities={LIFECYCLE_ACTIVITIES}
-                />
+              <div className="xl:col-span-5 w-full flex flex-col gap-6">
+                <JourneyHealthSection journeys={journeyList} templates={templates.data?.results ?? []} />
+                <RecentActivitySection showIcons={false} activities={toActivities((overview.data?.activity ?? []).filter((entry) => /journey/i.test(entry.summary)))} />
               </div>
             </div>
           </motion.div>
         )}
 
-        {/* ── TAB 3: Broadcast Campaigns ── */}
         {activeTab === "broadcast-campaigns" && (
-          <motion.div
-            key="broadcast-overview"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2 }}
-            className="w-full"
-          >
+          <motion.div key="broadcast-overview" {...fade} className="w-full">
             <BroadcastCampaignsSection
               onCreateCampaign={() => setActiveTab("create-campaign")}
               onCreateSegment={() => setActiveTab("segments")}
@@ -138,71 +107,33 @@ function CampaignsJourneysContent() {
         )}
 
         {activeTab === "create-campaign" && (
-          <motion.div
-            key="create-campaign"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2 }}
-            className="w-full"
-          >
+          <motion.div key="create-campaign" {...fade} className="w-full">
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start w-full">
-              {/* Left Column: Campaign History Table */}
-              <div className="xl:col-span-7 2xl:col-span-7 w-full">
-                <CampaignHistorySection />
+              <div className="xl:col-span-7 w-full">
+                <CampaignHistorySection campaigns={campaigns.data?.results ?? []} loading={!campaigns.data} canManage={canManage} onChanged={refresh} />
               </div>
-
-              {/* Right Column: Create Campaign Form Card */}
-              <div className="xl:col-span-5 2xl:col-span-5 w-full">
-                <CreateCampaignSection />
+              <div className="xl:col-span-5 w-full">
+                <CreateCampaignSection canManage={canManage} onCreated={refresh} />
               </div>
             </div>
           </motion.div>
         )}
 
-        {/* ── TAB 4: Templates ── */}
         {activeTab === "templates" && (
-          <motion.div
-            key="templates"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2 }}
-            className="flex flex-col gap-6 w-full"
-          >
-            {/* Top 4 KPI Metric Cards */}
-            <TemplatesStats />
-
-            {/* Email Templates Section (Search, Filters, 3-Col Cards Grid, Pagination) */}
-            <TemplatesSection />
+          <motion.div key="templates" {...fade} className="flex flex-col gap-6 w-full">
+            <TemplatesTab />
           </motion.div>
         )}
 
-        {/* ── TAB 5: Segments ── */}
         {activeTab === "segments" && (
-          <motion.div
-            key="segments"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2 }}
-            className="w-full"
-          >
+          <motion.div key="segments" {...fade} className="w-full">
             <SegmentsSection />
           </motion.div>
         )}
 
-        {/* ── TAB 6: Analytics ── */}
         {activeTab === "analytics" && (
-          <motion.div
-            key="analytics"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2 }}
-            className="w-full"
-          >
-            <AnalyticsSection />
+          <motion.div key="analytics" {...fade} className="w-full">
+            <AnalyticsSection overview={overview.data} journeys={journeyList} segments={segmentList} />
           </motion.div>
         )}
       </AnimatePresence>

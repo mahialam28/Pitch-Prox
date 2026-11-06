@@ -10,20 +10,23 @@ export default function AddManagerNoteModal({ isOpen, onClose, repName, onAdd })
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!noteText.trim()) {
       toast.error("Please enter a note before saving");
       return;
     }
     setSaving(true);
-    setTimeout(() => {
-      setSaving(false);
-      toast.success("Private manager note saved successfully!");
-      if (onAdd) onAdd(noteText);
+    try {
+      await onAdd?.(noteText.trim());
+      toast.success("Private manager note saved.");
       setNoteText("");
       onClose();
-    }, 450);
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -40,7 +43,7 @@ export default function AddManagerNoteModal({ isOpen, onClose, repName, onAdd })
                 Add Manager Note
               </h3>
               <p className="text-xs text-light-black">
-                Private feedback & coaching note for {repName || "Ryan Anderson"}
+                Private note for {repName}. Only managers can see it.
               </p>
             </div>
           </div>
@@ -62,6 +65,7 @@ export default function AddManagerNoteModal({ isOpen, onClose, repName, onAdd })
             <textarea
               rows={4}
               required
+              maxLength={5000}
               value={noteText}
               onChange={(e) => setNoteText(e.target.value)}
               placeholder="e.g. Excellent objection turnaround during morning calls. Continue to prioritize high-intent pre-expired leads."

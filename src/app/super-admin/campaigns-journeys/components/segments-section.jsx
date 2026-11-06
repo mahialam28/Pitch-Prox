@@ -7,16 +7,19 @@ import SavedSegments from "./saved-segments";
 import UsersTable from "./users-table";
 import SegmentFormModal from "./segment-form-modal";
 import AddToExistingModal from "./add-to-existing-modal";
-import { SAVED_SEGMENTS } from "../user-segments";
 import { showSavedToast } from "@/lib/toast";
+import { useApi, useCanManage } from "../campaign-api";
 
-// User Segments: groups of PitchProX users (customers) for broadcast campaigns and journeys
+// User Segments (live): groups of PitchProX customers for broadcast campaigns and journeys.
+// Membership is worked out on the server from the same rules shown here.
 export default function SegmentsSection() {
-  const [segmentsList, setSegmentsList] = useState(SAVED_SEGMENTS);
+  const { data, error, reload } = useApi("/api/v1/campaigns/segments");
+  const canManage = useCanManage();
   const [selectedUserIds, setSelectedUserIds] = useState([]);
-  const [formOpen, setFormOpen] = useState(false);
-  const [addToExistingOpen, setAddToExistingOpen] = useState(false);
+  const [dialog, setDialog] = useState(null); // "form" | "add"
 
+  const users = data?.users ?? [];
+  const segments = data?.segments ?? [];
   const toggleUser = (id) => setSelectedUserIds((ids) => (ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]));
 
   return (
@@ -28,34 +31,44 @@ export default function SegmentsSection() {
             Group PitchProX users for campaigns and lifecycle journeys. Dynamic segments update automatically as users match their rules.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setFormOpen(true)}
-          className="flex items-center gap-1.5 px-4 py-2 bg-primary hover:bg-medium-teal text-white rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-xs cursor-pointer ml-auto lg:ml-0"
-        >
-          <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-          <span>Create New Segment</span>
-        </button>
+        {canManage && (
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedUserIds([]);
+              setDialog("form");
+            }}
+            className="flex items-center gap-1.5 px-4 py-2 bg-primary hover:bg-medium-teal text-white rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-xs cursor-pointer ml-auto lg:ml-0"
+          >
+            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+            <span>Create New Segment</span>
+          </button>
+        )}
       </div>
 
-      <SegmentsStats segments={segmentsList} />
+      {error && !data && <p className="text-sm text-red-600">{error}</p>}
 
-      <SavedSegments segments={segmentsList} />
+      <SegmentsStats segments={segments} userCount={users.length} />
+
+      <SavedSegments segments={segments} />
 
       <UsersTable
         title="All Users"
-        subtitle="Select users to build a Static segment or add them to an existing Static segment."
-        selectable
+        subtitle={canManage ? "Select users to build a Static segment or add them to an existing Static segment." : "PitchProX customer users."}
+        users={users}
+        segments={segments}
+        loading={!data}
+        selectable={canManage}
         selectedIds={selectedUserIds}
         onToggle={toggleUser}
         actions={
           selectedUserIds.length > 0 && (
             <>
               <span className="text-xs font-semibold text-primary">{selectedUserIds.length} selected</span>
-              <button type="button" onClick={() => setAddToExistingOpen(true)} className="h-9 px-3 rounded-xl border border-primary text-primary text-xs font-semibold hover:bg-primary/5 cursor-pointer">
+              <button type="button" onClick={() => setDialog("add")} className="h-9 px-3 rounded-xl border border-primary text-primary text-xs font-semibold hover:bg-primary/5 cursor-pointer">
                 Add to Static Segment
               </button>
-              <button type="button" onClick={() => setFormOpen(true)} className="h-9 px-3 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-medium-teal cursor-pointer">
+              <button type="button" onClick={() => setDialog("form")} className="h-9 px-3 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-medium-teal cursor-pointer">
                 Create Static Segment
               </button>
             </>
@@ -63,30 +76,34 @@ export default function SegmentsSection() {
         }
       />
 
-      <SegmentFormModal
-        key={formOpen ? `form-${selectedUserIds.join(",")}` : "closed"}
-        isOpen={formOpen}
-        onClose={() => setFormOpen(false)}
-        initialUserIds={selectedUserIds}
-        segment={selectedUserIds.length ? { type: "Static", name: "", userIds: selectedUserIds, isNew: true } : null}
-        onSave={(saved) => {
-          const { isNew, ...segment } = saved;
-          setSegmentsList((list) => (isNew || !list.some((item) => item.id === segment.id) ? [segment, ...list] : list.map((item) => (item.id === segment.id ? segment : item))));
-          setSelectedUserIds([]);
-          showSavedToast("Segment created", `"${segment.name}" is ready to use in campaigns and journeys.`);
-        }}
-      />
+      {dialog === "form" && (
+        <SegmentFormModal
+          isOpen
+          users={users}
+          plans={data?.plans ?? []}
+          onClose={() => setDialog(null)}
+          initialUserIds={selectedUserIds}
+          segment={selectedUserIds.length ? { type: "Static", name: "", userIds: selectedUserIds, isNew: true } : null}
+          onSave={(segment) => {
+            setSelectedUserIds([]);
+            showSavedToast("Segment created", `"${segment.name}" is ready to use in campaigns and journeys.`);
+            reload();
+          }}
+        />
+      )}
 
-      <AddToExistingModal
-        isOpen={addToExistingOpen}
-        onClose={() => setAddToExistingOpen(false)}
-        segments={segmentsList}
-        selectedUserIds={selectedUserIds}
-        onAddSuccess={(target) => {
-          setSegmentsList((list) => list.map((item) => (item.id === target.id ? { ...item, userIds: [...new Set([...(item.userIds ?? []), ...selectedUserIds])], updatedAt: "Just now" } : item)));
-          setSelectedUserIds([]);
-        }}
-      />
+      {dialog === "add" && (
+        <AddToExistingModal
+          isOpen
+          onClose={() => setDialog(null)}
+          segments={segments}
+          selectedUserIds={selectedUserIds}
+          onAddSuccess={() => {
+            setSelectedUserIds([]);
+            reload();
+          }}
+        />
+      )}
     </div>
   );
 }

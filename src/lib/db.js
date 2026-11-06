@@ -9,6 +9,8 @@ import { ensureCustomerSchema } from "./schema/customers.js";
 import { ensureCalendarSchema } from "./schema/calendar.js";
 import { ensureAccountSchema } from "./schema/accounts.js";
 import { ensurePricingSchema } from "./schema/pricing.js";
+import { ensureTeamSchema } from "./schema/team.js";
+import { ensureCampaignSchema } from "./schema/campaigns.js";
 
 const database = mysql.createPool({
   host: process.env.MYSQL_HOST || "127.0.0.1",
@@ -75,6 +77,8 @@ async function ensureSchema() {
     await ensureCalendarSchema(database);
     await ensureAccountSchema(database, addColumnIfMissing);
     await ensurePricingSchema(database, addColumnIfMissing);
+    await ensureTeamSchema(database);
+    await ensureCampaignSchema(database);
   })();
   // A failed attempt (e.g. MySQL not running yet) must be retried on the next query
   schemaPromise.catch(() => { schemaPromise = undefined; });

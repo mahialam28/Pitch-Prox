@@ -3,48 +3,24 @@
 import React from "react";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
+import { TIER_STYLES } from "../team-api";
 
-export default function TeamPerformance() {
-  const categories = [
-    {
-      name: "Elite (100%+)",
-      count: 14,
-      color: "#10B981",
-      dotClass: "bg-emerald-500",
-    },
-    {
-      name: "Strong (75-99%)",
-      count: 16,
-      color: "#3B82F6",
-      dotClass: "bg-blue-500",
-    },
-    {
-      name: "Developing (40-74%)",
-      count: 10,
-      color: "#F59E0B",
-      dotClass: "bg-amber-500",
-    },
-    {
-      name: "At Risk (<40%)",
-      count: 8,
-      color: "#EF4444",
-      dotClass: "bg-rose-500",
-    },
-  ];
-
-  const total = 48;
+export default function TeamPerformance({ distribution = [], tracked = 0 }) {
+  // Reps with a quota, grouped by how much of it they've reached this month
+  const categories = distribution.map((tier) => ({ name: tier.label, count: tier.count, color: TIER_STYLES[tier.key].color, dotClass: TIER_STYLES[tier.key].dot }));
+  const total = tracked;
 
   // Compute SVG circle strokes for 4 segments
   // Circumference = 2 * PI * r = 2 * PI * 42 ~= 263.89
   const radius = 42;
   const circumference = 2 * Math.PI * radius;
 
-  let accumulatedPercent = 0;
-  const segments = categories.map((cat) => {
-    const percent = cat.count / total;
+  const shareOf = (cat) => (total ? cat.count / total : 0);
+  const segments = categories.map((cat, index) => {
+    const percent = shareOf(cat);
+    const before = categories.slice(0, index).reduce((sum, item) => sum + shareOf(item), 0);
     const strokeDasharray = `${percent * circumference} ${circumference}`;
-    const strokeDashoffset = -accumulatedPercent * circumference;
-    accumulatedPercent += percent;
+    const strokeDashoffset = -before * circumference;
     return {
       ...cat,
       strokeDasharray,
@@ -78,7 +54,7 @@ export default function TeamPerformance() {
               strokeWidth="10"
             />
             {/* Colored Segment Rings */}
-            {segments.map((seg, idx) => (
+            {segments.filter((seg) => seg.count).map((seg, idx) => (
               <circle
                 key={idx}
                 cx="50"
@@ -98,10 +74,10 @@ export default function TeamPerformance() {
           {/* Center text */}
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
             <span className="text-2xl font-bold text-dark-black/90 leading-tight font-secondary">
-              48
+              {total}
             </span>
             <span className="text-[9px] font-semibold text-light-black uppercase tracking-wider">
-              Total Reps
+              With Quota
             </span>
           </div>
         </div>

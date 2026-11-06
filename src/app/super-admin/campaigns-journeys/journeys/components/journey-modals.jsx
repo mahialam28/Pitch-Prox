@@ -1,30 +1,15 @@
 "use client";
 
 import React, { useState } from "react";
-import { Check, ChevronDown, Rocket, Trash2 } from "lucide-react";
+import { Rocket, Trash2 } from "lucide-react";
 import DialogModal, { DialogButton } from "@/components/modals/dialog-modal";
 import ConfirmDialog from "@/components/modals/confirm-dialog";
 import RadioCards from "@/components/shared/radio-cards";
-import { SAVED_SEGMENTS, PLATFORM_USERS, membersOf } from "../../user-segments";
 
-// Design-only dialogs for the journey builder: nothing is published or emailed.
+// Journey builder dialogs (live; the builder page does the saving)
 
 const labelClass = "block text-xs font-medium leading-4 text-medium-black mb-2";
-const fieldClass =
-  "w-full min-h-[44px] px-4 py-3 rounded-xl border border-gray-300 bg-white text-base text-dark-black placeholder:text-gray-500 outline-none focus:border-primary transition-colors";
-
-const SAMPLE_LEADS = PLATFORM_USERS.slice(0, 4).map((user) => `${user.name} (${user.plan})`);
-
-const Select = ({ id, value, onChange, options }) => (
-  <div className="relative">
-    <select id={id} value={value} onChange={(event) => onChange(event.target.value)} className={`${fieldClass} appearance-none pr-10 cursor-pointer`}>
-      {options.map((option) => (
-        <option key={option} value={option}>{option}</option>
-      ))}
-    </select>
-    <ChevronDown className="w-[18px] h-[18px] text-dark-black/70 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
-  </div>
-);
+const fieldClass = "w-full min-h-[44px] px-4 py-3 rounded-xl border border-gray-300 bg-white text-base text-dark-black placeholder:text-gray-500 outline-none focus:border-primary transition-colors";
 
 export const PublishJourneyModal = ({ isOpen, onClose, journeyName, stepCount, audienceName = "All Eligible Users", audienceSize, onConfirm }) => (
   <ConfirmDialog
@@ -33,8 +18,8 @@ export const PublishJourneyModal = ({ isOpen, onClose, journeyName, stepCount, a
     title="Publish this journey?"
     icon={Rocket}
     iconTone="primary"
-    message={`"${journeyName}" has ${stepCount} steps and will start sending to ${audienceName.toLowerCase()} (about ${audienceSize} users) immediately.`}
-    note="You can pause the journey at any time from Lifecycle Journeys."
+    message={`"${journeyName}" has ${stepCount} steps. Users in ${audienceName} (${audienceSize} now) who meet the trigger will enter automatically on the next run (every few minutes).`}
+    note="Emails are queued and delivered once an email service is connected. You can pause the journey at any time."
     confirmLabel="Publish Journey"
     confirmVariant="primary"
     onConfirm={onConfirm}
@@ -48,23 +33,27 @@ export const DeleteStepModal = ({ step, onClose, onConfirm }) => (
     title="Delete this step?"
     icon={Trash2}
     message={`"${step?.title ?? ""}${step?.subtitle && step?.type === "email" ? `: ${step.subtitle}` : ""}" will be removed. The steps before and after it are reconnected.`}
-    note="This can't be undone."
+    note={step?.type === "condition" ? "Its Yes and No branches are removed too." : "Save the journey to keep the change."}
     confirmLabel="Delete Step"
     onConfirm={() => onConfirm?.(step)}
   />
 );
 
-export const TestJourneyModal = ({ isOpen, onClose, steps, defaultEmail, onSend }) => {
-  const stepOptions = steps.map((step, index) => `Step ${index + 1}: ${step.title}`);
+// Queues each email step to a staff address (rendered for a chosen customer, or sample values)
+export const TestJourneyModal = ({ isOpen, onClose, users = [], defaultEmail = "", onSend }) => {
   const [email, setEmail] = useState(defaultEmail);
-  const [startStep, setStartStep] = useState(stepOptions[0] ?? "");
-  const [lead, setLead] = useState(SAMPLE_LEADS[0]);
-  const [skipWaits, setSkipWaits] = useState(true);
+  const [userId, setUserId] = useState("");
+  const [sending, setSending] = useState(false);
   const validEmail = /^\S+@\S+\.\S+$/.test(email);
 
-  const send = () => {
-    onClose();
-    onSend?.({ email, startStep, lead, skipWaits });
+  const send = async () => {
+    setSending(true);
+    try {
+      await onSend?.({ email, userId: userId || null });
+      onClose();
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -72,55 +61,50 @@ export const TestJourneyModal = ({ isOpen, onClose, steps, defaultEmail, onSend 
       isOpen={isOpen}
       onClose={onClose}
       title="Test Journey"
-      subtitle="Send test emails to check how the journey looks."
+      subtitle="Get every email in this journey at once, filled in for one user."
       size="md"
       footer={
         <>
           <DialogButton onClick={onClose}>Cancel</DialogButton>
-          <DialogButton variant="primary" onClick={send} disabled={!validEmail}>Send Test</DialogButton>
+          <DialogButton variant="primary" onClick={send} disabled={!validEmail || sending}>{sending ? "Queuing…" : "Send Test"}</DialogButton>
         </>
       }
     >
       <div className="space-y-5">
         <div>
-          <label htmlFor="test-email" className={labelClass}>Send test to</label>
+          <label htmlFor="test-email" className={labelClass}>Send test emails to</label>
           <input id="test-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} className={fieldClass} />
         </div>
         <div>
-          <label htmlFor="test-step" className={labelClass}>Start from step</label>
-          <Select id="test-step" value={startStep} onChange={setStartStep} options={stepOptions} />
+          <label htmlFor="test-user" className={labelClass}>Fill merge fields for</label>
+          <select id="test-user" value={userId} onChange={(event) => setUserId(event.target.value)} className={`${fieldClass} cursor-pointer`}>
+            <option value="">Sample user (Jordan Lee)</option>
+            {users.slice(0, 300).map((user) => (
+              <option key={user.id} value={user.id}>{user.name} · {user.company} ({user.plan})</option>
+            ))}
+          </select>
         </div>
-        <div>
-          <label htmlFor="test-lead" className={labelClass}>Use sample user</label>
-          <Select id="test-lead" value={lead} onChange={setLead} options={SAMPLE_LEADS} />
-        </div>
-        <label className="flex items-center gap-3 cursor-pointer select-none">
-          <input type="checkbox" checked={skipWaits} onChange={(event) => setSkipWaits(event.target.checked)} className="sr-only peer" />
-          <span className="w-5 h-5 rounded-md border border-gray-300 flex items-center justify-center peer-checked:bg-primary peer-checked:border-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary/30">
-            {skipWaits && <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
-          </span>
-          <span className="text-sm text-medium-black">Skip wait steps during the test</span>
-        </label>
+        <p className="text-xs text-medium-black">Wait steps are skipped and conditions aren&apos;t checked: you get every email step. Tests are marked [Test] and delivered once an email service is connected.</p>
       </div>
     </DialogModal>
   );
 };
 
-// Journey Audience: All Eligible Users, a Dynamic Segment or a Static Segment.
-// Users who meet the trigger and audience rules enter the journey automatically.
-export const AUDIENCES = [
-  { value: "all", label: "All Eligible Users", kind: "All Eligible Users", count: PLATFORM_USERS.length },
-  ...SAVED_SEGMENTS.map((segment) => ({ value: `segment-${segment.id}`, label: segment.name, kind: `${segment.type ?? "Dynamic"} Segment`, count: membersOf(segment).length })),
+// Journey Audience (item 265): All Eligible Users, a Dynamic Segment or a Static Segment.
+// audienceOptions: [{ value, label, kind, count, audience }]
+export const audienceOptionsFrom = (segments = [], userCount = 0) => [
+  { value: "all", label: "All Eligible Users", kind: "All Eligible Users", count: userCount, audience: { type: "All Eligible Users" } },
+  ...segments.map((segment) => ({ value: segment.id, label: segment.name, kind: `${segment.type} Segment`, count: segment.memberCount, audience: { type: `${segment.type} Segment`, segmentId: segment.id } })),
 ];
 
-export const ChooseAudienceModal = ({ isOpen, onClose, value, onSave }) => {
+export const ChooseAudienceModal = ({ isOpen, onClose, value, options = [], onSave }) => {
   const [selected, setSelected] = useState(value);
   return (
     <DialogModal
       isOpen={isOpen}
       onClose={onClose}
       title="Choose Audience"
-      subtitle="Who should enter this journey?"
+      subtitle="Who should enter this journey when the trigger happens?"
       size="sm"
       footer={
         <>
@@ -142,7 +126,7 @@ export const ChooseAudienceModal = ({ isOpen, onClose, value, onSave }) => {
           label="Audience"
           value={selected}
           onChange={setSelected}
-          options={AUDIENCES.map((audience) => ({ value: audience.value, label: audience.label, description: `${audience.kind} · ${audience.count.toLocaleString("en-US")} users` }))}
+          options={options.map((audience) => ({ value: audience.value, label: audience.label, description: `${audience.kind} · ${audience.count.toLocaleString("en-US")} users` }))}
         />
       </div>
     </DialogModal>

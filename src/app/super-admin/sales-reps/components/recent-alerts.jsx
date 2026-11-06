@@ -1,28 +1,16 @@
 "use client";
 
 import React from "react";
-import { AlertTriangle, Clock } from "lucide-react";
+import { AlertTriangle, Clock, Info } from "lucide-react";
 
-const alertsData = [
-  {
-    id: "alert-quota",
-    title: "3 reps are at risk of missing quota",
-    subtitle: "Needs immediate attention",
-    icon: AlertTriangle,
-    cardBg: "bg-rose-50/60 border-rose-100",
-    iconBg: "bg-rose-100 text-rose-500",
-  },
-  {
-    id: "alert-prompt",
-    title: "2 reps have low prompt adherence",
-    subtitle: "Coaching recommended",
-    icon: Clock,
-    cardBg: "bg-amber-50/60 border-amber-100",
-    iconBg: "bg-amber-100 text-amber-500",
-  },
-];
+const TONES = {
+  danger: { icon: AlertTriangle, cardBg: "bg-rose-50/60 border-rose-100", iconBg: "bg-rose-100 text-rose-500" },
+  warning: { icon: Clock, cardBg: "bg-amber-50/60 border-amber-100", iconBg: "bg-amber-100 text-amber-500" },
+  info: { icon: Info, cardBg: "bg-blue-50/60 border-blue-100", iconBg: "bg-blue-100 text-blue-500" },
+};
 
-export default function RecentAlerts() {
+export default function RecentAlerts({ alerts = [] }) {
+  const alertsData = alerts.map((alert) => ({ ...alert, ...(TONES[alert.tone] ?? TONES.info) }));
   return (
     <div className="bg-white rounded-2xl p-5 sm:p-6 border border-light-gray shadow-xs w-full flex flex-col justify-between">
       {/* Header */}
@@ -33,6 +21,7 @@ export default function RecentAlerts() {
       </div>
 
       {/* Alerts List */}
+      {!alertsData.length && <p className="text-xs text-light-black">No alerts. Everyone is on track.</p>}
       <div className="space-y-3">
         {alertsData.map((alert) => {
           const IconComponent = alert.icon;

@@ -3,46 +3,21 @@
 import React from "react";
 import { Play, Pause, Edit3, AlertCircle } from "lucide-react";
 
-const HEALTH_ITEMS = [
-  {
-    id: "running",
-    label: "Running",
-    count: 9,
-    percentage: 75,
-    barColor: "bg-[#0EADAB]",
-    icon: Play,
-    iconColor: "text-emerald-600 bg-emerald-50",
-  },
-  {
-    id: "paused",
-    label: "Paused",
-    count: 2,
-    percentage: 25,
-    barColor: "bg-orange-500",
-    icon: Pause,
-    iconColor: "text-orange-500 bg-orange-50",
-  },
-  {
-    id: "draft",
-    label: "Draft",
-    count: 1,
-    percentage: 12,
-    barColor: "bg-blue-600",
-    icon: Edit3,
-    iconColor: "text-blue-600 bg-blue-50",
-  },
-  {
-    id: "issues",
-    label: "Issues",
-    count: 3,
-    percentage: 30,
-    barColor: "bg-red",
-    icon: AlertCircle,
-    iconColor: "text-red bg-red/10",
-  },
+const HEALTH = [
+  { id: "active", label: "Live", icon: Play, iconColor: "bg-emerald-50 text-emerald-600", barColor: "bg-emerald-500" },
+  { id: "paused", label: "Paused", icon: Pause, iconColor: "bg-amber-50 text-amber-600", barColor: "bg-amber-500" },
+  { id: "draft", label: "Draft", icon: Edit3, iconColor: "bg-slate-100 text-slate-600", barColor: "bg-slate-400" },
 ];
 
-export default function JourneyHealthSection() {
+// Live: journeys by status, and journeys whose email steps point at templates that aren't Active
+export default function JourneyHealthSection({ journeys = [], templates = [] }) {
+  const total = journeys.length || 1;
+  const active = new Set(templates.filter((template) => template.status === "Active").map((template) => template.id));
+  const broken = journeys.filter((journey) => journey.status === "active" && JSON.stringify(journey.steps).match(/"templateId":"([^"]+)"/g)?.some((match) => !active.has(match.split('"')[3]))).length;
+  const HEALTH_ITEMS = [
+    ...HEALTH.map((item) => ({ ...item, count: journeys.filter((journey) => journey.status === item.id).length })),
+    { id: "issues", label: "Issues", icon: AlertCircle, iconColor: "bg-red/10 text-red", barColor: "bg-red", count: broken },
+  ].map((item) => ({ ...item, percentage: Math.round((item.count / total) * 100) }));
   return (
     <div className="bg-white rounded-2xl p-5 sm:p-6 border border-light-gray shadow-xs w-full flex flex-col justify-between">
       {/* Header */}
@@ -52,6 +27,7 @@ export default function JourneyHealthSection() {
         </h3>
       </div>
 
+      {broken > 0 && <p className="text-[11px] text-red mb-3">{broken} live journey{broken === 1 ? " sends" : "s send"} a template that isn&apos;t Active; those emails are skipped.</p>}
       {/* Status List */}
       <div className="space-y-4">
         {HEALTH_ITEMS.map((item) => {

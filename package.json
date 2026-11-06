@@ -13,7 +13,8 @@
     "db:seed": "node scripts/seed.mjs",
     "db:seed:demo": "node scripts/seed.mjs && node scripts/seed-demo.mjs",
     "test:db": "MYSQL_DATABASE=pitchprox_test node scripts/migrate.mjs && MYSQL_DATABASE=pitchprox_test node scripts/seed.mjs",
-    "test:server": "MYSQL_DATABASE=pitchprox_test next start -p 3001"
+    "test:server": "MYSQL_DATABASE=pitchprox_test next start -p 3001",
+    "jobs": "node scripts/campaign-jobs.mjs"
   },
   "dependencies": {
     "@react-oauth/google": "^0.13.5",

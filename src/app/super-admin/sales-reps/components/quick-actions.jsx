@@ -19,8 +19,8 @@ export default function QuickActions({
 
       {/* 3 Action Buttons */}
       <div className="flex flex-col gap-2.5">
-        {/* 1. Adjust Quotas */}
-        <button
+        {/* 1. Adjust Quotas (managers only) */}
+        {onAdjustQuotas && <button
           type="button"
           onClick={onAdjustQuotas}
           className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl border border-light-gray hover:border-primary/50 hover:bg-light-gray/40 text-xs font-semibold text-dark-black/80 hover:text-primary transition-all duration-200 cursor-pointer text-left group"
@@ -29,7 +29,7 @@ export default function QuickActions({
             <CircleDollarSign className="w-4 h-4" />
           </div>
           <span className="truncate">Adjust Quotas</span>
-        </button>
+        </button>}
 
         {/* 2. View Leaderboard */}
         <button

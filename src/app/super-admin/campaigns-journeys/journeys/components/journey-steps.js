@@ -1,6 +1,12 @@
 import { Clock, Mail, Tag, Target, Triangle, UserCheck, Workflow, CircleCheckBig, Tags } from "lucide-react";
+import {
+  CONDITION_TYPES as CATALOG_CONDITIONS, DATE_FIELDS, EXIT_CONDITIONS as CATALOG_EXITS, GOALS as CATALOG_GOALS, REENTRY_OPTIONS as CATALOG_REENTRY,
+  TRIGGER_TYPES as CATALOG_TRIGGERS, USER_EVENTS as CATALOG_EVENTS, USER_FIELDS as CATALOG_FIELDS, eventByKey,
+} from "@/lib/campaigns/catalog";
 
-// Step catalogue for the journey builder (design only, local state).
+// Step catalogue for the journey builder. The vocabulary comes from lib/campaigns/catalog,
+// which the server validates against; the trigger is shown as the first card and saved
+// separately as the journey's triggerConfig.
 export const STEP_TYPES = {
   trigger: { label: "Entry trigger", icon: Triangle, tone: "bg-emerald-50 text-emerald-600", badge: "bg-emerald-500" },
   email: { label: "Send email", icon: Mail, tone: "bg-blue-50 text-blue-600", badge: "bg-blue-500", chip: "bg-blue-50 text-blue-600" },
@@ -14,41 +20,36 @@ export const STEP_TYPES = {
 };
 
 // Types offered by "Add Step" (in menu order)
-export const ADDABLE_TYPES = ["email", "delay", "condition", "update", "tag", "untag", "end"];
+export const ADDABLE_TYPES = ["email", "delay", "condition", "update", "tag", "untag", "goal", "end"];
 
-export const EMAIL_TEMPLATES = ["Trial Welcome", "Getting Started Tips", "Trial Ending Soon", "Upgrade Offer"];
-// ── Journeys run on PitchProX users (customers) ──
-export const TRIGGER_TYPES = ["User Event", "Enters Segment", "Exits Segment", "Date / Relative Date"];
-export const USER_EVENTS = [
-  "User Signed Up", "Trial Started", "Trial Ending Soon", "Trial Expired", "Trial Converted to Paid",
-  "Calibration Completed", "Calibration Not Completed", "First Call Completed", "Call Usage Threshold Reached",
-  "Call Limit Reached", "Call Bundle Purchased", "Payment Succeeded", "Payment Failed", "Payment Method Update Required",
-  "Subscription Started", "Plan Upgraded", "Plan Downgraded", "Subscription Renewed", "Subscription Cancelled",
-  "User Became Inactive", "User Logged Back In",
-];
-// Events that need a time condition ("Trial ends in 3 days", "not completed within 24 hours", "no login for 7 days")
-export const TIMED_EVENTS = { "Trial Ending Soon": "Trial ends in", "Calibration Not Completed": "Not completed within", "User Became Inactive": "No login for" };
-export const USAGE_EVENT = "Call Usage Threshold Reached";
-export const TRIGGERS = USER_EVENTS; // older import name
-
-export const CONDITION_TYPES = [
-  "Event Occurred", "Event Did Not Occur", "User Is In Segment", "User Is Not In Segment", "Plan", "Subscription Status",
-  "Trial Status", "Call Usage %", "Calibration Status", "Payment Status", "Email Opened", "Email Clicked", "Last Login",
-];
-export const CONDITIONS = CONDITION_TYPES; // older import name
-export const GOALS = ["Trial Converted to Paid", "Plan Upgraded", "Calibration Completed", "Payment Succeeded"];
-export const USER_FIELDS = {
-  Plan: ["Free Trial", "Basic", "Pro", "Elite"],
-  "Subscription Status": ["Active", "Trialing", "Past Due", "Paused", "Canceled"],
-  "Lifecycle Stage": ["Trial", "Onboarding", "Active", "At Risk", "Churned"],
-  "Calibration Status": ["Completed", "In Progress", "Not Started"],
-};
-export const LEAD_STATUSES = USER_FIELDS["Lifecycle Stage"]; // older import name
-export const REENTRY_OPTIONS = ["Never", "Every Time Trigger Occurs", "After X Days"];
-export const EXIT_CONDITIONS = ["Goal Completed", "User Exits Segment", "Plan Changed", "Subscription Cancelled", "Subscription Upgraded", "Payment Succeeded", "Custom User Event"];
+export const TRIGGER_TYPES = CATALOG_TRIGGERS;
+export const USER_EVENTS = CATALOG_EVENTS;
+export const CONDITION_TYPES = CATALOG_CONDITIONS;
+export const GOALS = CATALOG_GOALS;
+export const USER_FIELDS = CATALOG_FIELDS;
+export const REENTRY_OPTIONS = CATALOG_REENTRY;
+export const EXIT_CONDITIONS = CATALOG_EXITS;
+export { DATE_FIELDS, eventByKey };
 export const DELAY_UNITS = ["minute", "hour", "day", "week"];
 
 export const delayTitle = (amount, unit) => `Wait ${amount} ${unit}${Number(amount) === 1 ? "" : "s"}`;
+
+// Title of the trigger card from its settings
+export function triggerTitle(trigger, segments = []) {
+  if (!trigger) return "Choose a trigger";
+  if (trigger.type === "Enters Segment" || trigger.type === "Exits Segment") return `${trigger.type}: ${segments.find((segment) => segment.id === trigger.segmentId)?.name ?? "choose a segment"}`;
+  if (trigger.type === "Date / Relative Date") {
+    if (trigger.mode === "fixed") return `On ${trigger.at ? new Date(trigger.at).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "a date"}`;
+    const field = DATE_FIELDS.find((item) => item.key === trigger.field)?.label ?? "a date";
+    const days = Number(trigger.offsetDays ?? 0);
+    return days === 0 ? `On the ${field}` : `${Math.abs(days)} days ${days < 0 ? "before" : "after"} ${field}`;
+  }
+  const event = eventByKey(trigger.event);
+  if (!event) return "Choose a user event";
+  if (event.timed) return `${event.label} (${event.timed.label.toLowerCase()} ${trigger.amount ?? event.timed.default} ${event.timed.unit})`;
+  if (event.usage) return `${event.label} (${trigger.usagePct ?? 80}%)`;
+  return event.label;
+}
 
 let counter = 0;
 const nextId = (type) => `${type}-${Date.now()}-${(counter += 1)}`;
@@ -57,42 +58,39 @@ export const createStep = (type) => {
   const base = { id: nextId(type), type };
   switch (type) {
     case "email":
-      return { ...base, title: "Send email", subtitle: EMAIL_TEMPLATES[0], template: EMAIL_TEMPLATES[0], timing: "immediately", track: true };
+      return { ...base, title: "Send email", subtitle: "Choose a template", templateId: null };
     case "delay":
       return { ...base, title: delayTitle(1, "day"), amount: 1, unit: "day" };
     case "condition":
-      return { ...base, title: "Email Opened: Trial Welcome?", condition: "Email Opened", conditionValue: "Trial Welcome", branches: { yes: [], no: [] } };
+      return { ...base, title: "Trial Status: Active Trial?", condition: "Trial Status", conditionValue: "Active Trial", branches: { yes: [], no: [] } };
     case "update":
       return { ...base, title: "Update user field", subtitle: "Lifecycle Stage: Onboarding", field: "Lifecycle Stage", status: "Onboarding" };
     case "tag":
       return { ...base, title: "Add user tag", subtitle: "Trial user", tag: "Trial user" };
     case "untag":
       return { ...base, title: "Remove user tag", subtitle: "Trial user", tag: "Trial user" };
+    case "goal":
+      return { ...base, title: "Trial Converted to Paid?", goal: "Trial Converted to Paid" };
     default:
       return { ...base, title: "End journey", subtitle: "Users leave the journey here" };
   }
 };
 
-export const INITIAL_STEPS = [
-  { id: "trigger-1", type: "trigger", title: "Trial Started", subtitle: "User Event", triggerType: "User Event", trigger: "Trial Started" },
-  { id: "email-1", type: "email", title: "Send email", subtitle: "Trial Welcome", template: "Trial Welcome", timing: "immediately", track: true },
-  { id: "delay-1", type: "delay", title: "Wait 1 day", amount: 1, unit: "day" },
-  {
-    id: "condition-1",
-    type: "condition",
-    title: "Email Opened: Trial Welcome?",
-    condition: "Email Opened",
-    conditionValue: "Trial Welcome",
-    branches: {
-      yes: [{ id: "email-2", type: "email", title: "Send email", subtitle: "Trial Welcome", template: "Trial Welcome", timing: "immediately", track: true }],
-      no: [
-        { id: "delay-2", type: "delay", title: "Wait 1 day", amount: 1, unit: "day" },
-        { id: "email-3", type: "email", title: "Send email", subtitle: "Trial Welcome", template: "Trial Welcome", timing: "immediately", track: true },
-      ],
-    },
-  },
-  { id: "goal-1", type: "goal", title: "Trial Converted to Paid?", goal: "Trial Converted to Paid" },
-];
+// A new journey: trial onboarding outline (the admin picks the templates)
+export const NEW_JOURNEY = {
+  name: "New Journey",
+  description: "",
+  triggerConfig: { type: "User Event", event: "trial_started" },
+  audience: { type: "All Eligible Users" },
+  reentry: { mode: "Never" },
+  exitConditions: [{ type: "Goal Completed" }, { type: "Subscription Cancelled" }],
+  goal: "Trial Converted to Paid",
+  steps: [
+    { id: "email-1", type: "email", title: "Send email", subtitle: "Choose a template", templateId: null },
+    { id: "delay-1", type: "delay", title: "Wait 1 day", amount: 1, unit: "day" },
+    { id: "goal-1", type: "goal", title: "Trial Converted to Paid?", goal: "Trial Converted to Paid" },
+  ],
+};
 
 // ── Pure tree helpers (main path + one level of Yes/No branches) ──
 
@@ -132,3 +130,6 @@ export const moveStep = (steps, id, direction) => {
   [next[index], next[target]] = [next[target], next[index]];
   return next;
 };
+
+// A condition can't sit inside another condition's branch
+export const nestedTypes = ADDABLE_TYPES.filter((type) => type !== "condition");

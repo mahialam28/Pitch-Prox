@@ -3,65 +3,25 @@
 import React from "react";
 import {
   AlertTriangle,
-  Coins,
   TrendingDown,
   Sparkles,
-  BookOpen,
-  Target,
 } from "lucide-react";
 
-export const operationalAlertsData = [
-  {
-    id: "alert-1",
-    title: "AI Latency Elevated",
-    description: "Average response time up 18%",
-    timestamp: "Today, 9:41 AM",
-    icon: AlertTriangle,
-    iconBg: "bg-amber-50 text-amber-600",
-  },
-  {
-    id: "alert-2",
-    title: "Twilio Costs Increased",
-    description: "Spend up 12% this week",
-    timestamp: "Today, 8:15 AM",
-    icon: Coins,
-    iconBg: "bg-orange-50 text-orange-600",
-  },
-  {
-    id: "alert-3",
-    title: "Churn Spike Detected",
-    description: "0.6 pts increase in last 7 days",
-    timestamp: "Today, 7:32 AM",
-    icon: TrendingDown,
-    iconBg: "bg-rose-50 text-rose-600",
-  },
-  {
-    id: "alert-4",
-    title: "Enterprise Update Closed",
-    description: "Horizon Realty upgraded to Enterprise plan",
-    timestamp: "Yesterday, 4:05 PM",
-    icon: Sparkles,
-    iconBg: "bg-emerald-50 text-emerald-600",
-  },
-  {
-    id: "alert-5",
-    title: "Playbook Sales Up",
-    description: "Revenue up 24% this month",
-    timestamp: "Yesterday, 3:11 PM",
-    icon: BookOpen,
-    iconBg: "bg-purple-50 text-purple-600",
-  },
-  {
-    id: "alert-6",
-    title: "Trial Conversion Improved",
-    description: "Up 2.3 pts vs last month",
-    timestamp: "Yesterday, 2:02 PM",
-    icon: Target,
-    iconBg: "bg-sky-50 text-sky-600",
-  },
-];
+const TONES = {
+  danger: { icon: TrendingDown, iconBg: "bg-red-50 text-red" },
+  warning: { icon: AlertTriangle, iconBg: "bg-amber-50 text-amber-600" },
+  positive: { icon: Sparkles, iconBg: "bg-emerald-50 text-emerald-600" },
+};
 
-export const Alerts = () => {
+// Live alerts worked out from the same numbers as the rest of the page (lib/business-analytics).
+// AI latency and telephony cost alerts come once calling and the AI provider are connected.
+export const Alerts = ({ alerts = [], generatedAt }) => {
+  const operationalAlertsData = alerts.map((alert) => ({
+    ...alert,
+    description: alert.detail,
+    timestamp: generatedAt ? `Checked ${new Date(generatedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : "",
+    ...(TONES[alert.tone] ?? TONES.warning),
+  }));
   return (
     <div className="w-full flex flex-col gap-3 sm:gap-4">
       {/* Section Header */}
@@ -71,7 +31,8 @@ export const Alerts = () => {
         </h3>
       </div>
 
-      {/* 6 Alert Cards Grid */}
+      {!operationalAlertsData.length && <p className="text-xs text-light-black">No alerts right now.</p>}
+      {/* Alert Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
         {operationalAlertsData.map((item) => {
           const Icon = item.icon;

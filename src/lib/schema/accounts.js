@@ -15,6 +15,9 @@ export async function ensureAccountSchema(database, addColumnIfMissing) {
   // Subscription changes that wait for a date
   await addColumnIfMissing("subscriptions", "paused_until", "DATE NULL");
   await addColumnIfMissing("subscriptions", "cancel_at_period_end", "TINYINT(1) NOT NULL DEFAULT 0");
+  // Why and when a cancellation was requested (Performance Analytics → Top Cancellation Reasons)
+  await addColumnIfMissing("subscriptions", "cancel_reason", "VARCHAR(200) NULL");
+  await addColumnIfMissing("subscriptions", "cancel_requested_at", "DATETIME NULL");
   await addColumnIfMissing("subscriptions", "scheduled_plan_id", "VARCHAR(64) NULL");
   await addColumnIfMissing("subscriptions", "scheduled_cycle", "VARCHAR(20) NULL");
 

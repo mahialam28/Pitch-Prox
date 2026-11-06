@@ -4,100 +4,98 @@ import React, { useState } from "react";
 import { Plus, Send } from "lucide-react";
 import toast from "react-hot-toast";
 import Dropdown from "@/components/shared/dropdown/dropdown";
-import { SAVED_SEGMENTS, membersOf } from "../user-segments";
-import { CAMPAIGN_TEMPLATES } from "../templates-data";
+import { campaignApi, useApi } from "../campaign-api";
 
-// Broadcast Campaign = a one-time or scheduled send to a segment of PitchProX users
-const segmentOptions = SAVED_SEGMENTS.map((segment) => ({ value: segment.name, label: `${segment.name} (${membersOf(segment).length} users)` }));
-const templateOptions = CAMPAIGN_TEMPLATES.filter((template) => template.status !== "ARCHIVED").map((template) => ({ value: template.title, label: `${template.title} · ${template.emailType}` }));
+// Broadcast Campaign = a one-time or scheduled send to a segment of PitchProX users (items 295–298).
+// Only Active Marketing / Lifecycle templates can be broadcast; Transactional ones go out on system events.
+export default function CreateCampaignSection({ onCreated, canManage = true }) {
+  const segments = useApi("/api/v1/campaigns/segments");
+  const templates = useApi("/api/v1/campaigns/templates");
+  const segmentOptions = (segments.data?.segments ?? []).map((segment) => ({ value: segment.id, label: `${segment.name} (${segment.memberCount} users)` }));
+  const templateOptions = (templates.data?.results ?? [])
+    .filter((template) => template.status === "Active" && template.emailType !== "Transactional")
+    .map((template) => ({ value: template.id, label: `${template.name} · ${template.emailType}` }));
 
-export default function CreateCampaignSection() {
   const [campaignName, setCampaignName] = useState("");
-  const [targetSegment, setTargetSegment] = useState(segmentOptions[1]?.value ?? "");
-  const [emailTemplate, setEmailTemplate] = useState(templateOptions[0]?.value ?? "");
+  const [targetSegment, setTargetSegment] = useState("");
+  const [emailTemplate, setEmailTemplate] = useState("");
   const [sendOption, setSendOption] = useState("Send Now");
   const [scheduleDateTime, setScheduleDateTime] = useState("");
-  // Optional; never applied automatically
-  const [optimizeSendTime, setOptimizeSendTime] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const handleLaunch = (e) => {
+  const handleLaunch = async (e) => {
     e.preventDefault();
-    if (!campaignName.trim()) {
-      toast.error("Please enter a campaign name");
-      return;
+    if (!campaignName.trim()) return toast.error("Please enter a campaign name");
+    if (!targetSegment) return toast.error("Choose a target segment");
+    if (!emailTemplate) return toast.error("Choose an email template");
+    if (sendOption === "Schedule" && !scheduleDateTime) return toast.error("Choose the date and time to send");
+    setSaving(true);
+    try {
+      const { campaign } = await campaignApi.createCampaign({
+        name: campaignName.trim(),
+        segmentId: targetSegment,
+        templateId: emailTemplate,
+        sendOption: sendOption === "Schedule" ? "schedule" : "now",
+        ...(sendOption === "Schedule" && { scheduledAt: new Date(scheduleDateTime).toISOString() }),
+      });
+      toast.success(
+        campaign.status === "scheduled"
+          ? `Campaign "${campaign.name}" is scheduled.`
+          : `"${campaign.name}" went to ${campaign.recipients} user${campaign.recipients === 1 ? "" : "s"}. Emails are delivered once an email service is connected.`,
+        { duration: 6000 }
+      );
+      setCampaignName("");
+      setScheduleDateTime("");
+      onCreated?.(campaign);
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setSaving(false);
     }
-    if (sendOption === "Schedule" && !scheduleDateTime) {
-      toast.error("Choose the date and time to send");
-      return;
-    }
-    toast.success(sendOption === "Schedule" ? `Campaign "${campaignName}" scheduled.` : `Campaign "${campaignName}" is sending now.`);
-    setCampaignName("");
   };
 
-  const handleSaveDraft = () => {
-    toast.success("Campaign draft saved!");
-  };
+  if (!canManage) {
+    return (
+      <div className="bg-white rounded-2xl p-5 sm:p-6 border border-light-gray shadow-xs w-full text-sm text-medium-black">
+        Only a Super Admin or Admin Manager can send campaigns.
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white rounded-2xl p-5 sm:p-6 border border-light-gray shadow-xs w-full flex flex-col justify-between">
-      {/* Header */}
       <div className="flex items-center gap-2.5 mb-5">
         <div className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center shrink-0 shadow-2xs">
           <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
         </div>
-        <h3 className="text-base sm:text-lg font-bold text-dark-black/80 tracking-tight">
-          Create Campaign
-        </h3>
+        <h3 className="text-base sm:text-lg font-bold text-dark-black/80 tracking-tight">Create Campaign</h3>
       </div>
 
-      {/* Form */}
       <form onSubmit={handleLaunch} className="flex flex-col gap-4">
-        {/* Row 1: Campaign Name & Target Segment */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold text-dark-black/80">
-              Campaign Name
-            </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold text-dark-black/80">Campaign Name</span>
             <input
               type="text"
               placeholder="e.g. Q4 Growth Sprint"
               value={campaignName}
+              maxLength={160}
               onChange={(e) => setCampaignName(e.target.value)}
               className="px-3.5 py-2 rounded-xl border border-light-gray text-xs text-dark-black/80 placeholder:text-light-black bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200"
             />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold text-dark-black/80">
-              Target Segment
-            </label>
-            <Dropdown
-              items={segmentOptions}
-              selected={targetSegment}
-              onSelect={setTargetSegment}
-              variant="small"
-              className="w-full"
-              buttonClassName="w-full justify-between"
-            />
-          </div>
-        </div>
-
-        {/* Row 2: Email Template */}
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-semibold text-dark-black/80">
-            Email Template
           </label>
-          <Dropdown
-            items={templateOptions}
-            selected={emailTemplate}
-            onSelect={setEmailTemplate}
-            variant="small"
-            className="w-full"
-            buttonClassName="w-full justify-between"
-          />
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold text-dark-black/80">Target Segment</span>
+            <Dropdown label={segments.data ? "Choose a segment" : "Loading…"} items={segmentOptions} selected={targetSegment} onSelect={setTargetSegment} variant="small" className="w-full" buttonClassName="w-full justify-between" />
+          </div>
         </div>
 
-        {/* Row 3: Send Option & Date / Time */}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-semibold text-dark-black/80">Email Template</span>
+          <Dropdown label={templates.data ? (templateOptions.length ? "Choose a template" : "No Active templates yet") : "Loading…"} items={templateOptions} selected={emailTemplate} onSelect={setEmailTemplate} variant="small" className="w-full" buttonClassName="w-full justify-between" />
+          <span className="text-[11px] text-light-black">Only Active Marketing and Lifecycle templates are listed.</span>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
           <div className="flex flex-col gap-1.5">
             <span className="text-xs font-semibold text-dark-black/80">Send Option</span>
@@ -128,32 +126,18 @@ export default function CreateCampaignSection() {
           </label>
         </div>
 
-        {/* Optional send-time optimization (off unless turned on for this campaign) */}
-        <label className="bg-[#F8FAFC] p-3.5 rounded-xl border border-light-gray/80 flex items-start gap-3 my-1 cursor-pointer">
-          <input type="checkbox" checked={optimizeSendTime} onChange={(e) => setOptimizeSendTime(e.target.checked)} className="mt-0.5 accent-primary w-4 h-4" />
+        {/* Send-time optimization: optional and never applied automatically (items 297–298); not built yet */}
+        <label className="bg-[#F8FAFC] p-3.5 rounded-xl border border-light-gray/80 flex items-start gap-3 my-1 opacity-60 cursor-not-allowed">
+          <input type="checkbox" disabled checked={false} readOnly className="mt-0.5 accent-primary w-4 h-4" />
           <span className="flex flex-col">
             <span className="text-xs font-bold text-dark-black/80">Optimize Send Time</span>
-            <span className="text-[11px] text-light-black leading-relaxed mt-0.5">
-              Deliver to each user at the hour they usually open emails. Off by default.
-            </span>
+            <span className="text-[11px] text-light-black leading-relaxed mt-0.5">Coming later. It will be an opt-in per campaign once open data is available.</span>
           </span>
         </label>
 
-        {/* Action Buttons */}
         <div className="flex items-center justify-end gap-3 pt-2">
-          <button
-            type="button"
-            onClick={handleSaveDraft}
-            className="px-4 py-2 rounded-xl border border-light-gray hover:bg-light-gray text-xs font-semibold text-dark-black/80 transition-colors shadow-2xs cursor-pointer"
-          >
-            Save Draft
-          </button>
-
-          <button
-            type="submit"
-            className="px-4 py-2 rounded-xl bg-primary hover:bg-medium-teal text-white text-xs font-semibold transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
-          >
-            <span>{sendOption === "Schedule" ? "Schedule Campaign" : "Send Now"}</span>
+          <button type="submit" disabled={saving} className="px-4 py-2 rounded-xl bg-primary hover:bg-medium-teal text-white text-xs font-semibold transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-60">
+            <span>{saving ? "Working…" : sendOption === "Schedule" ? "Schedule Campaign" : "Send Now"}</span>
             <Send className="w-3.5 h-3.5 stroke-[2.2]" />
           </button>
         </div>

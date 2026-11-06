@@ -32,5 +32,21 @@ module.exports = {
       time: true,
       merge_logs: true,
     },
+    {
+      // Campaigns & Journeys scheduler: calls /api/v1/jobs/run every 5 minutes.
+      // Needs CRON_SECRET and APP_URL in .env.local (see DEPLOYMENT.md).
+      name: "pitchprox-jobs",
+      cwd: __dirname,
+      script: "scripts/campaign-jobs.mjs",
+      exec_mode: "fork",
+      instances: 1,
+      env: {
+        NODE_ENV: "production",
+        APP_URL: `http://127.0.0.1:${PORT}`,
+      },
+      autorestart: true,
+      restart_delay: 10000,
+      time: true,
+    },
   ],
 };

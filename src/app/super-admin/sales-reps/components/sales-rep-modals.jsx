@@ -1,20 +1,15 @@
 "use client";
 
 import React, { useState } from "react";
-import { Ban, Check, ChevronDown } from "lucide-react";
+import { Ban, Check } from "lucide-react";
 import DialogModal, { DialogButton } from "@/components/modals/dialog-modal";
 import ConfirmDialog from "@/components/modals/confirm-dialog";
-import { showExportStartedToast } from "@/lib/toast";
+import { showSavedToast } from "@/lib/toast";
+import { downloadTeamCsv } from "../team-api";
 import RadioCards from "@/components/shared/radio-cards";
 
-// Design-only dialogs for the Sales Reps screen: nothing is exported or deactivated on the server.
-
-const DATE_RANGES = ["May 1, 2025 - May 31, 2025", "Apr 1, 2025 - Apr 30, 2025", "Last 90 days", "This year"];
-
-const FORMATS = [
-  { value: "pdf", label: "PDF", description: "Formatted report" },
-  { value: "csv", label: "CSV", description: "Raw data for spreadsheets" },
-];
+// Export downloads the roster as a CSV; deactivation is confirmed here and saved by the caller.
+const FORMATS = [{ value: "csv", label: "CSV", description: "Opens in Excel, Numbers or Google Sheets" }];
 
 const Checkbox = ({ checked, onChange, children }) => (
   <label className="flex items-center gap-3 cursor-pointer select-none">
@@ -26,15 +21,16 @@ const Checkbox = ({ checked, onChange, children }) => (
   </label>
 );
 
-export const ExportTeamReportModal = ({ isOpen, onClose }) => {
-  const [range, setRange] = useState(DATE_RANGES[0]);
-  const [format, setFormat] = useState("pdf");
+export const ExportTeamReportModal = ({ isOpen, onClose, reps = [], monthLabel = "" }) => {
+  const [format, setFormat] = useState("csv");
   const [includeQuota, setIncludeQuota] = useState(true);
-  const [includeCoaching, setIncludeCoaching] = useState(false);
+  const [includeInactive, setIncludeInactive] = useState(false);
 
   const exportReport = () => {
+    const rows = includeInactive ? reps : reps.filter((rep) => rep.status !== "deactivated");
+    downloadTeamCsv(rows, monthLabel, { includeQuota });
     onClose();
-    showExportStartedToast();
+    showSavedToast("Report downloaded", `${rows.length} rep${rows.length === 1 ? "" : "s"} for ${monthLabel}.`);
   };
 
   return (
@@ -52,28 +48,13 @@ export const ExportTeamReportModal = ({ isOpen, onClose }) => {
       }
     >
       <div className="space-y-5">
-        <div>
-          <label htmlFor="export-range" className="block text-xs font-medium leading-4 text-medium-black mb-2">Date range</label>
-          <div className="relative">
-            <select
-              id="export-range"
-              value={range}
-              onChange={(event) => setRange(event.target.value)}
-              className="w-full min-h-[44px] px-4 py-3 pr-10 rounded-xl border border-gray-300 bg-white text-base text-dark-black outline-none focus:border-primary appearance-none cursor-pointer transition-colors"
-            >
-              {DATE_RANGES.map((option) => (
-                <option key={option} value={option}>{option}</option>
-              ))}
-            </select>
-            <ChevronDown className="w-[18px] h-[18px] text-dark-black/70 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
-          </div>
-        </div>
+        <p className="text-sm text-medium-black">Period: <span className="font-semibold text-dark-black">{monthLabel}</span></p>
 
         <RadioCards label="File format" value={format} onChange={setFormat} options={FORMATS} />
 
         <div className="space-y-3">
           <Checkbox checked={includeQuota} onChange={setIncludeQuota}>Include quota progress</Checkbox>
-          <Checkbox checked={includeCoaching} onChange={setIncludeCoaching}>Include coaching notes</Checkbox>
+          <Checkbox checked={includeInactive} onChange={setIncludeInactive}>Include deactivated reps</Checkbox>
         </div>
       </div>
     </DialogModal>
@@ -87,8 +68,8 @@ export const DeactivateRepModal = ({ rep, onClose, onConfirm }) => (
     title="Deactivate this rep?"
     icon={Ban}
     iconTone="warning"
-    message={`${rep?.name ?? "This rep"} will be signed out and removed from leaderboards and quota tracking.`}
-    note="Open leads can be reassigned after deactivation."
+    message={`${rep?.name ?? "This rep"} will be signed out and removed from leaderboards and quota tracking. You can reactivate them later.`}
+    note="Their leads and customer accounts stay assigned to them; reassign them from the CRM or the customer page, or run Offboarding instead."
     confirmLabel="Deactivate Rep"
     onConfirm={() => onConfirm?.(rep)}
   />

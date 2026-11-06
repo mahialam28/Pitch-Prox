@@ -3,12 +3,14 @@
 import React from "react";
 import { FileText, Eye, FileEdit, TrendingUp } from "lucide-react";
 
-export default function TemplatesStats({
-  totalTemplates = 24,
-  activeTemplates = 12,
-  drafts = 7,
-  avgOpenRate = "46.8%",
-}) {
+// Live: counts from the template list; open rate once an email service reports opens
+export default function TemplatesStats({ templates = [] }) {
+  const totalTemplates = templates.length;
+  const activeTemplates = templates.filter((template) => template.status === "Active").length;
+  const drafts = templates.filter((template) => template.status === "Draft").length;
+  const sent = templates.reduce((sum, template) => sum + (template.stats?.sent ?? 0), 0);
+  const opened = templates.reduce((sum, template) => sum + (template.stats?.opened ?? 0), 0);
+  const avgOpenRate = sent ? `${Math.round((opened / sent) * 1000) / 10}%` : "—";
   const stats = [
     {
       id: "total-templates",

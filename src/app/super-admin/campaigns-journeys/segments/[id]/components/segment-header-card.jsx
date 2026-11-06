@@ -108,14 +108,14 @@ export default function SegmentHeaderCard({
 
       {/* Right: 3 Action Buttons */}
       <div className="flex items-center flex-wrap gap-2.5 shrink-0 self-start lg:self-center">
-        <button
+        {onDuplicate && <button
           type="button"
           onClick={onDuplicate}
           className="flex items-center gap-1.5 px-3.5 py-2 bg-white border border-light-gray hover:bg-light-gray text-xs sm:text-sm font-semibold text-dark-black/85 rounded-xl transition-colors shadow-2xs cursor-pointer"
         >
           <Copy className="w-3.5 h-3.5 text-light-black" />
           <span>Duplicate</span>
-        </button>
+        </button>}
 
         <button
           type="button"
@@ -126,14 +126,14 @@ export default function SegmentHeaderCard({
           <span>Export</span>
         </button>
 
-        <button
+        {onEdit && <button
           type="button"
           onClick={onEdit}
           className="flex items-center gap-1.5 px-4 py-2 bg-primary hover:bg-medium-teal text-white rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-xs cursor-pointer"
         >
           <Edit3 className="w-3.5 h-3.5 stroke-[2.2]" />
           <span>Edit Segment</span>
-        </button>
+        </button>}
       </div>
     </div>
   );

@@ -3,52 +3,19 @@
 import React from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 
-export const cancellationReasonsData = [
-  {
-    id: "expensive",
-    name: "Too Expensive",
-    percentage: "32%",
-    value: 32,
-    color: "#991B1B", // Dark Red
-  },
-  {
-    id: "low-usage",
-    name: "Low Usage",
-    percentage: "24%",
-    value: 24,
-    color: "#EF4444", // Red
-  },
-  {
-    id: "not-enough-value",
-    name: "Not Enough Value",
-    percentage: "16%",
-    value: 16,
-    color: "#F87171", // Light Red
-  },
-  {
-    id: "found-alternative",
-    name: "Found Alternative",
-    percentage: "12%",
-    value: 12,
-    color: "#C2410C", // Dark Orange
-  },
-  {
-    id: "confusing-to-use",
-    name: "Confusing to Use",
-    percentage: "10%",
-    value: 10,
-    color: "#F97316", // Orange
-  },
-  {
-    id: "other",
-    name: "Other",
-    percentage: "6%",
-    value: 6,
-    color: "#FDBA74", // Light Orange
-  },
-];
+const COLORS = ["#FF4842", "#F59E0B", "#6366F1", "#0EADAB", "#3B82F6", "#94A3B8"];
 
-export const TopCancellations = () => {
+// Live: the reasons picked when a subscription is cancelled (customer detail → Cancel Subscription)
+export const TopCancellations = ({ cancellations, churnRate }) => {
+  const total = cancellations?.total ?? 0;
+  const cancellationReasonsData = (cancellations?.reasons ?? []).map((row, index) => ({
+    id: row.reason,
+    name: row.reason,
+    value: row.count,
+    color: COLORS[index % COLORS.length],
+    percentage: `${row.count} (${total ? Math.round((row.count / total) * 100) : 0}%)`,
+  }));
+  const chartData = cancellationReasonsData.length ? cancellationReasonsData : [{ id: "none", value: 1, color: "#EEF0F2" }];
   return (
     <div className="bg-white rounded-2xl border border-light-gray shadow-xs hover:shadow-sm transition-all duration-200 p-5 sm:p-6 flex flex-col justify-between h-full">
       {/* Top Header */}
@@ -65,17 +32,17 @@ export const TopCancellations = () => {
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
-                data={cancellationReasonsData}
+                data={chartData}
                 cx="50%"
                 cy="50%"
                 innerRadius={72}
                 outerRadius={108}
-                paddingAngle={2.5}
+                paddingAngle={chartData.length > 1 ? 2.5 : 0}
                 dataKey="value"
                 strokeWidth={0}
                 isAnimationActive={false}
               >
-                {cancellationReasonsData.map((entry, index) => (
+                {chartData.map((entry, index) => (
                   <Cell
                     key={`cell-${index}`}
                     fill={entry.color}
@@ -88,16 +55,17 @@ export const TopCancellations = () => {
           {/* Centered Overlay */}
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
             <span className="text-3xl sm:text-4xl font-extrabold text-dark-black/80 leading-none tracking-tight">
-              156
+              {churnRate == null ? "—" : `${churnRate}%`}
             </span>
             <span className="text-[10px] font-bold text-medium-black uppercase tracking-wider mt-1.5">
-              OVERALL CHURN RATE
+              CHURN (30 DAYS)
             </span>
           </div>
         </div>
 
         {/* Legend List */}
         <div className="flex flex-col gap-3 w-full min-w-[190px] max-w-[260px]">
+          {!cancellationReasonsData.length && <p className="text-xs text-light-black">No cancellations yet.</p>}
           {cancellationReasonsData.map((item) => (
             <div
               key={item.id}

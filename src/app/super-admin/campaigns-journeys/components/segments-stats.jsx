@@ -2,15 +2,14 @@
 
 import React from "react";
 import { GitBranch, Users, Megaphone, BarChart3 } from "lucide-react";
-import { SAVED_SEGMENTS, PLATFORM_USERS, membersOf } from "../user-segments";
 
-export default function SegmentsStats({ segments = SAVED_SEGMENTS }) {
-  const segmentedUsers = new Set(segments.flatMap((segment) => membersOf(segment).map((member) => member.id))).size;
+export default function SegmentsStats({ segments = [], userCount = 0 }) {
+  const segmentedUsers = new Set(segments.flatMap((segment) => segment.memberIds ?? [])).size;
   const stats = {
     totalSegments: segments.length,
-    totalSegmentedUsers: `${segmentedUsers} of ${PLATFORM_USERS.length}`,
+    totalSegmentedUsers: `${segmentedUsers} of ${userCount}`,
     activeCampaigns: segments.filter((segment) => segment.usedInCampaign).length,
-    avgSegmentSize: segments.length ? Math.round(segments.reduce((sum, segment) => sum + membersOf(segment).length, 0) / segments.length) : 0,
+    avgSegmentSize: segments.length ? Math.round(segments.reduce((sum, segment) => sum + (segment.memberCount ?? 0), 0) / segments.length) : 0,
   };
   const items = [
     {

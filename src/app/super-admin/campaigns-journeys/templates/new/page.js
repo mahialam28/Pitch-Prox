@@ -1,8 +1,4 @@
 "use client";
 
-import React from "react";
-import NewTemplateForm from "../components/new-template-form";
-
-export default function NewTemplateAliasPage() {
-  return <NewTemplateForm backUrl="/super-admin/campaigns-journeys?tab=templates" />;
-}
+// Older link: same live form as /templates/new-template
+export { default } from "../new-template/page";

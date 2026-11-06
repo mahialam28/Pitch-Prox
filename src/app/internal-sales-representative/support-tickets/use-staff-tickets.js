@@ -72,7 +72,8 @@ const toDrawerTicket = (ticket) => ({
 });
 
 // openedByMe: only tickets this staff member opened for customers (Mail → Support Tickets)
-export function useStaffTickets({ openedByMe = false } = {}) {
+// initialTicketId: open this ticket's drawer once on load (links like ?ticket=…)
+export function useStaffTickets({ openedByMe = false, initialTicketId = null } = {}) {
   const [data, setData] = useState(null);
   const [agents, setAgents] = useState([]);
   const [selected, setSelected] = useState(null); // drawer ticket
@@ -110,6 +111,12 @@ export function useStaffTickets({ openedByMe = false } = {}) {
       showError("Ticket not loaded", error.message);
     }
   };
+
+  useEffect(() => {
+    if (!initialTicketId) return undefined;
+    const timer = setTimeout(() => open({ ticketId: initialTicketId }), 0);
+    return () => clearTimeout(timer);
+  }, [initialTicketId]);
 
   const rows = (data?.results ?? []).map(toListTicket);
   const navigate = (direction) => {

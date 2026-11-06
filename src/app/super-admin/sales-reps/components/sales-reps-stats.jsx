@@ -8,67 +8,27 @@ import {
   Heart,
   RotateCcw,
   DollarSign,
-  ArrowUpRight,
 } from "lucide-react";
 
-const statsData = [
-  {
-    id: "active-reps",
-    title: "Active Sales Reps",
-    value: "48",
-    trend: "^ 4 vs last 30 days",
-    trendPositive: true,
-    icon: UserCheck,
-    iconBg: "bg-emerald-50 text-emerald-600",
-  },
-  {
-    id: "lead-to-sub",
-    title: "Lead to Subscription",
-    value: "28.6%",
-    trend: "^ 3.8% vs last 30 days",
-    trendPositive: true,
-    icon: Filter,
-    iconBg: "bg-purple-50 text-purple-600",
-  },
-  {
-    id: "prompt-adherence",
-    title: "Avg. Prompt Adherence",
-    value: "87.4%",
-    trend: "^ 5.6% vs last 30 days",
-    trendPositive: true,
-    icon: Star,
-    iconBg: "bg-blue-50 text-blue-600",
-  },
-  {
-    id: "trust-gain",
-    title: "Avg. Trust Gain",
-    value: "+21.3",
-    trend: "^ 2.7 vs last 30 days",
-    trendPositive: true,
-    icon: Heart,
-    iconBg: "bg-orange-50 text-orange-500",
-  },
-  {
-    id: "subs-closed",
-    title: "Subscriptions Closed",
-    value: "142",
-    trend: "^ 18 vs last 30 days",
-    trendPositive: true,
-    icon: RotateCcw,
-    iconBg: "bg-rose-50 text-rose-500",
-  },
-  {
-    id: "revenue",
-    title: "Revenue This Month",
-    value: "$358,420",
-    trend: "^ $52,630 vs last 30 days",
-    trendPositive: true,
-    icon: DollarSign,
-    iconBg: "bg-emerald-50 text-emerald-600",
-  },
-];
+import { dollars, pct, trend } from "../team-api";
 
-export default function SalesRepsStats() {
+// Prompt adherence and trust gain come from call analysis (waits for calling)
+const buildStats = (stats) => {
+  const closed = trend(stats.subscriptionsClosed, stats.subscriptionsClosedPrev);
+  const revenue = trend(stats.revenueCents, stats.revenuePrevCents, (cents) => dollars(cents));
+  const reps = stats.activeRepsChange ? { text: `${stats.activeRepsChange > 0 ? "↑" : "↓"} ${Math.abs(stats.activeRepsChange)} vs 30 days ago`, positive: stats.activeRepsChange > 0 } : { text: "No change vs 30 days ago", positive: null };
+  return [
+    { id: "active-reps", title: "Active Sales Reps", value: String(stats.activeReps), trend: reps, icon: UserCheck, iconBg: "bg-emerald-50 text-emerald-600" },
+    { id: "lead-to-sub", title: "Lead to Subscription", value: pct(stats.leadToSubscription), trend: { text: "All-time, accounts per lead", positive: null }, icon: Filter, iconBg: "bg-purple-50 text-purple-600" },
+    { id: "prompt-adherence", title: "Avg. Prompt Adherence", value: "—", trend: { text: "Needs call data", positive: null }, icon: Star, iconBg: "bg-blue-50 text-blue-600" },
+    { id: "trust-gain", title: "Avg. Trust Gain", value: "—", trend: { text: "Needs call data", positive: null }, icon: Heart, iconBg: "bg-orange-50 text-orange-500" },
+    { id: "subs-closed", title: "Subscriptions Closed", value: String(stats.subscriptionsClosed), trend: closed, icon: RotateCcw, iconBg: "bg-rose-50 text-rose-500" },
+    { id: "revenue", title: "Booked Revenue This Month", value: dollars(stats.revenueCents), trend: revenue, icon: DollarSign, iconBg: "bg-emerald-50 text-emerald-600" },
+  ];
+};
+
+export default function SalesRepsStats({ stats }) {
+  const statsData = stats ? buildStats(stats) : [];
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5 sm:gap-4 w-full">
       {statsData.map((stat) => {
@@ -98,8 +58,8 @@ export default function SalesRepsStats() {
             </div>
 
             {/* Bottom: Trend */}
-            <div className="flex items-center gap-1 text-[11px] font-medium text-emerald-600 pt-0.5">
-              <span>{stat.trend}</span>
+            <div className={`flex items-center gap-1 text-[11px] font-medium pt-0.5 ${stat.trend.positive === true ? "text-emerald-600" : stat.trend.positive === false ? "text-rose-500" : "text-light-black"}`}>
+              <span>{stat.trend.text}</span>
             </div>
           </div>
         );

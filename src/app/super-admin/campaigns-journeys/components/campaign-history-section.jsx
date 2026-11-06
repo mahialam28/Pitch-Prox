@@ -1,157 +1,98 @@
 "use client";
 
 import React, { useState } from "react";
-import { SlidersHorizontal, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, XCircle } from "lucide-react";
+import toast from "react-hot-toast";
+import { campaignApi, formatWhen } from "../campaign-api";
 
-export const BROADCAST_HISTORY = [
-  {
-    id: 1,
-    name: "Executive Q3 Follow-up",
-    segment: "HIGH TIER",
-    status: "SENT",
-    dateSent: "Oct 14, 2023",
-    totalRecipients: "1,240",
-  },
-  {
-    id: 2,
-    name: "Holiday Re-engagement",
-    segment: "DORMANT USERS",
-    status: "SCHEDULED",
-    dateSent: "Nov 24, 2023",
-    totalRecipients: "4,500",
-  },
-  {
-    id: 3,
-    name: "Holiday Re-engagement",
-    segment: "DORMANT USERS",
-    status: "SCHEDULED",
-    dateSent: "Nov 24, 2023",
-    totalRecipients: "4,500",
-  },
-  {
-    id: 4,
-    name: "Win-Back: Recently Cancelled",
-    segment: "RECENTLY CANCELLED",
-    status: "DRAFT",
-    dateSent: "Not sent",
-    totalRecipients: "850",
-  },
-  {
-    id: 5,
-    name: "Q4 Feature Announcement",
-    segment: "ALL USERS",
-    status: "SENT",
-    dateSent: "Dec 02, 2023",
-    totalRecipients: "12,480",
-  },
-  {
-    id: 6,
-    name: "Annual Plan Promotion",
-    segment: "TRIAL USERS",
-    status: "SCHEDULED",
-    dateSent: "Dec 15, 2023",
-    totalRecipients: "3,120",
-  },
-];
+const STATUS = {
+  sent: "bg-emerald-50 text-emerald-600 border-emerald-200",
+  scheduled: "bg-sky-50 text-sky-600 border-sky-200",
+  sending: "bg-sky-50 text-sky-600 border-sky-200",
+  canceled: "bg-slate-100 text-slate-600 border-slate-200",
+  failed: "bg-red-50 text-red-600 border-red-200",
+};
+const PAGE_SIZE = 6;
 
-export default function CampaignHistorySection() {
-  const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 4;
-  const totalCampaigns = 128;
+// Live broadcast history; scheduled campaigns can be cancelled
+export default function CampaignHistorySection({ campaigns = [], loading = false, canManage = false, onChanged }) {
+  const [status, setStatus] = useState("all");
+  const [page, setPage] = useState(1);
+  const filtered = campaigns.filter((campaign) => status === "all" || campaign.status === status);
+  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const current = Math.min(page, pages);
+  const rows = filtered.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
 
-  const currentItems = BROADCAST_HISTORY.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize
-  );
+  const cancel = async (campaign) => {
+    if (!window.confirm(`Cancel the scheduled campaign "${campaign.name}"?`)) return;
+    try {
+      await campaignApi.cancelCampaign(campaign.id);
+      toast.success("Campaign cancelled");
+      onChanged?.();
+    } catch (error) {
+      toast.error(error.message);
+    }
+  };
 
   return (
     <div className="bg-white rounded-2xl p-5 sm:p-6 border border-light-gray shadow-xs w-full flex flex-col justify-between overflow-hidden">
       <div>
-        {/* Top Header with Filters */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-          <h3 className="text-base sm:text-lg font-bold text-dark-black/80 tracking-tight">
-            Campaign History
-          </h3>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-light-gray rounded-xl text-xs font-semibold text-dark-black/80 hover:bg-light-gray transition-colors cursor-pointer shadow-2xs"
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5 text-light-black" />
-              <span>Filter Status</span>
-            </button>
-
-            <button
-              type="button"
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-light-gray rounded-xl text-xs font-semibold text-dark-black/80 hover:bg-light-gray transition-colors cursor-pointer shadow-2xs"
-            >
-              <Calendar className="w-3.5 h-3.5 text-light-black" />
-              <span>Date Range</span>
-            </button>
-          </div>
+          <h3 className="text-base sm:text-lg font-bold text-dark-black/80 tracking-tight">Campaign History</h3>
+          <select
+            aria-label="Filter status"
+            value={status}
+            onChange={(event) => {
+              setStatus(event.target.value);
+              setPage(1);
+            }}
+            className="px-3 py-1.5 bg-white border border-light-gray rounded-xl text-xs font-semibold text-dark-black/80 cursor-pointer"
+          >
+            <option value="all">All statuses</option>
+            <option value="scheduled">Scheduled</option>
+            <option value="sent">Sent</option>
+            <option value="canceled">Cancelled</option>
+            <option value="failed">Failed</option>
+          </select>
         </div>
 
-        {/* Table Container */}
-        <div className="overflow-x-auto w-full [-ms-overflow-style:none] [scrollbar-width:thin]">
-          <table className="w-full text-left border-collapse min-w-[580px]">
+        <div className="overflow-x-auto w-full">
+          <table className="w-full text-left border-collapse min-w-[640px]">
             <thead>
               <tr className="border-b border-light-gray text-[10px] sm:text-[11px] font-semibold text-light-black uppercase tracking-wider whitespace-nowrap">
-                <th className="pb-3 text-left">CAMPAIGN NAME</th>
-                <th className="pb-3 text-left px-3">STATUS</th>
-                <th className="pb-3 text-left px-3">DATE SENT</th>
-                <th className="pb-3 text-right">TOTAL RECIPIENTS</th>
+                <th className="pb-3">Campaign Name</th>
+                <th className="pb-3 px-3">Status</th>
+                <th className="pb-3 px-3">Date</th>
+                <th className="pb-3 px-3 text-right">Recipients</th>
+                <th className="pb-3 text-right"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-light-gray/60 text-xs">
-              {currentItems.map((campaign) => (
-                <tr
-                  key={campaign.id}
-                  className="hover:bg-light-gray/30 transition-colors"
-                >
-                  {/* Campaign Name & Segment Subtitle */}
-                  <td className="py-3.5 text-left">
-                    <div className="flex flex-col">
-                      <span className="font-semibold text-dark-black/80 text-xs leading-tight whitespace-nowrap">
-                        {campaign.name}
-                      </span>
-                      <span className="text-[10px] text-light-black font-semibold uppercase tracking-wider mt-0.5 whitespace-nowrap">
-                        SEGMENT: {campaign.segment}
-                      </span>
-                    </div>
+              {!rows.length && (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-light-black">{loading ? "Loading…" : "No campaigns yet."}</td>
+                </tr>
+              )}
+              {rows.map((campaign) => (
+                <tr key={campaign.id} className="hover:bg-light-gray/30 transition-colors">
+                  <td className="py-3.5">
+                    <span className="block font-semibold text-dark-black/80">{campaign.name}</span>
+                    <span className="block text-[10px] text-light-black font-semibold uppercase tracking-wider mt-0.5">Segment: {campaign.segmentName ?? "deleted"} · {campaign.templateName ?? "template deleted"}</span>
                   </td>
-
-                  {/* Status Badge */}
-                  <td className="py-3.5 px-3 text-left">
-                    {campaign.status === "SENT" && (
-                      <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wide bg-emerald-50 text-emerald-600 border border-emerald-200 whitespace-nowrap">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                        SENT
-                      </span>
-                    )}
-                    {campaign.status === "SCHEDULED" && (
-                      <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wide bg-sky-50 text-sky-600 border border-sky-200 whitespace-nowrap">
-                        <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
-                        SCHEDULED
-                      </span>
-                    )}
-                    {campaign.status === "DRAFT" && (
-                      <span className="inline-flex items-center text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wide bg-slate-100 text-slate-600 border border-slate-200 whitespace-nowrap">
-                        DRAFT
-                      </span>
-                    )}
+                  <td className="py-3.5 px-3">
+                    <span className={`inline-flex text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wide border whitespace-nowrap ${STATUS[campaign.status] ?? STATUS.canceled}`}>{campaign.status}</span>
                   </td>
-
-                  {/* Date Sent */}
-                  <td className="py-3.5 px-3 text-left whitespace-nowrap">
-                    <span className="text-xs text-medium-black font-normal">
-                      {campaign.dateSent}
-                    </span>
+                  <td className="py-3.5 px-3 text-medium-black whitespace-nowrap">{formatWhen(campaign.sentAt ?? campaign.scheduledAt)}</td>
+                  <td className="py-3.5 px-3 text-right font-bold text-dark-black/80 whitespace-nowrap">
+                    {campaign.status === "scheduled" ? "—" : campaign.recipients}
+                    {campaign.stats.queued ? <span className="block text-[10px] font-normal text-amber-600">{campaign.stats.queued} waiting to deliver</span> : null}
                   </td>
-
-                  {/* Total Recipients */}
-                  <td className="py-3.5 text-right font-bold text-dark-black/80 font-secondary text-xs whitespace-nowrap">
-                    {campaign.totalRecipients}
+                  <td className="py-3.5 text-right">
+                    {canManage && campaign.status === "scheduled" && (
+                      <button type="button" onClick={() => cancel(campaign)} aria-label={`Cancel ${campaign.name}`} className="text-light-black hover:text-red-600 cursor-pointer">
+                        <XCircle className="w-4 h-4" />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -160,69 +101,16 @@ export default function CampaignHistorySection() {
         </div>
       </div>
 
-      {/* Pagination Footer */}
-      <div className="pt-4 mt-2 border-t border-light-gray flex flex-col sm:flex-row items-center justify-between gap-3">
-        <span className="text-[10px] sm:text-[11px] font-semibold text-light-black uppercase tracking-wider">
-          SHOWING {currentItems.length} OF {totalCampaigns} CAMPAIGNS
+      <div className="pt-4 mt-2 border-t border-light-gray flex items-center justify-between gap-3">
+        <span className="text-[11px] font-semibold text-light-black uppercase tracking-wider">
+          Showing {rows.length} of {filtered.length} campaigns
         </span>
-
         <div className="flex items-center gap-1.5">
-          {/* Previous Page */}
-          <button
-            type="button"
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-            className="w-7 h-7 rounded-lg border border-light-gray flex items-center justify-center text-medium-black hover:text-dark-black hover:border-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-2xs"
-          >
+          <button type="button" aria-label="Previous page" disabled={current === 1} onClick={() => setPage(current - 1)} className="w-7 h-7 rounded-lg border border-light-gray flex items-center justify-center text-medium-black disabled:opacity-40 cursor-pointer">
             <ChevronLeft className="w-3.5 h-3.5" />
           </button>
-
-          {/* Page 1 */}
-          <button
-            type="button"
-            onClick={() => setCurrentPage(1)}
-            className={`w-7 h-7 rounded-lg text-xs font-semibold flex items-center justify-center transition-all cursor-pointer ${
-              currentPage === 1
-                ? "bg-primary text-white shadow-2xs"
-                : "border border-light-gray text-medium-black hover:text-dark-black hover:border-slate-300"
-            }`}
-          >
-            1
-          </button>
-
-          {/* Page 2 */}
-          <button
-            type="button"
-            onClick={() => setCurrentPage(2)}
-            className={`w-7 h-7 rounded-lg text-xs font-semibold flex items-center justify-center transition-all cursor-pointer ${
-              currentPage === 2
-                ? "bg-primary text-white shadow-2xs"
-                : "border border-light-gray text-medium-black hover:text-dark-black hover:border-slate-300"
-            }`}
-          >
-            2
-          </button>
-
-          {/* Page 3 */}
-          <button
-            type="button"
-            onClick={() => setCurrentPage(3)}
-            className={`w-7 h-7 rounded-lg text-xs font-semibold flex items-center justify-center transition-all cursor-pointer ${
-              currentPage === 3
-                ? "bg-primary text-white shadow-2xs"
-                : "border border-light-gray text-medium-black hover:text-dark-black hover:border-slate-300"
-            }`}
-          >
-            3
-          </button>
-
-          {/* Next Page */}
-          <button
-            type="button"
-            disabled={currentPage === 3}
-            onClick={() => setCurrentPage((prev) => Math.min(prev + 1, 3))}
-            className="w-7 h-7 rounded-lg border border-light-gray flex items-center justify-center text-medium-black hover:text-dark-black hover:border-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-2xs"
-          >
+          <span className="text-xs text-light-black px-1">{current} / {pages}</span>
+          <button type="button" aria-label="Next page" disabled={current === pages} onClick={() => setPage(current + 1)} className="w-7 h-7 rounded-lg border border-light-gray flex items-center justify-center text-medium-black disabled:opacity-40 cursor-pointer">
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>

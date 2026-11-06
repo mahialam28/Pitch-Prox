@@ -3,7 +3,9 @@
 import React, { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import DialogModal, { DialogButton } from "@/components/modals/dialog-modal";
-import { DAY_OPERATORS, OPERATORS, PLATFORM_USERS, RULE_FIELDS, fieldOf, membersOf } from "../user-segments";
+import { DAY_OPERATORS, OPERATORS, RULE_FIELDS, fieldOf, membersOf } from "../user-segments";
+import { showError } from "@/lib/alerts";
+import { campaignApi } from "../campaign-api";
 
 // Create / Edit Segment. Segment Type comes first:
 //  - Dynamic (default): Entry Rules (Match ALL / ANY). Members update automatically.
@@ -13,13 +15,15 @@ const fieldClass = "w-full h-10 px-3 rounded-xl border border-light-gray bg-whit
 
 const defaultValue = (field, operator) => {
   const definition = fieldOf(field);
-  if (definition.type === "date") return DAY_OPERATORS.includes(operator) ? 7 : "2026-11-01";
+  if (definition.type === "date") return DAY_OPERATORS.includes(operator) ? 7 : new Date().toISOString().slice(0, 10);
   if (definition.type === "number") return definition.key === "callUsagePct" ? 80 : 0;
   return definition.options?.[0] ?? "";
 };
 
-function RuleRow({ condition, onChange, onRemove, canRemove }) {
-  const definition = fieldOf(condition.field);
+function RuleRow({ condition, onChange, onRemove, canRemove, plans }) {
+  const known = fieldOf(condition.field);
+  // Plan values are the real plan names
+  const definition = known.key === "plan" && plans?.length ? { ...known, options: plans } : known;
   const operators = OPERATORS[definition.type];
   const usesDays = definition.type === "date" && DAY_OPERATORS.includes(condition.operator);
   return (
@@ -76,7 +80,8 @@ function RuleRow({ condition, onChange, onRemove, canRemove }) {
   );
 }
 
-export default function SegmentFormModal({ isOpen, onClose, segment = null, initialUserIds = [], onSave }) {
+// Saves through the API; users / plans come from the Segments page (live preview uses the same rules as the server)
+export default function SegmentFormModal({ isOpen, onClose, segment = null, initialUserIds = [], onSave, users = [], plans = [] }) {
   const editing = Boolean(segment && !segment.isNew);
   const [type, setType] = useState(segment?.type ?? "Dynamic");
   const [name, setName] = useState(segment?.name ?? "");
@@ -84,27 +89,25 @@ export default function SegmentFormModal({ isOpen, onClose, segment = null, init
   const [match, setMatch] = useState(segment?.rules?.match ?? "all");
   const [conditions, setConditions] = useState(segment?.rules?.conditions?.length ? segment.rules.conditions : [{ field: "trialStatus", operator: "Is", value: "Active Trial" }]);
   const [userIds, setUserIds] = useState(segment?.userIds ?? initialUserIds);
+  const [saving, setSaving] = useState(false);
+  const [userQuery, setUserQuery] = useState("");
 
   const draft = { type, rules: { match, conditions }, userIds };
-  const preview = membersOf(draft);
+  const preview = membersOf(draft, users);
   const valid = name.trim() && (type === "Static" ? userIds.length > 0 : conditions.length > 0);
 
-  const save = () => {
-    onSave?.({
-      ...(segment ?? {}),
-      id: segment?.id ?? `seg-${Date.now()}`,
-      name: name.trim(),
-      description: description.trim(),
-      type,
-      rules: type === "Dynamic" ? { match, conditions } : null,
-      userIds: type === "Static" ? userIds : [],
-      creator: segment?.creator ?? "Daniel Miller",
-      createdAt: segment?.createdAt ?? new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-      updatedAt: type === "Dynamic" ? "Auto-updated" : "Just now",
-      campaigns: segment?.campaigns ?? [],
-      usedInCampaign: segment?.usedInCampaign ?? false,
-    });
-    onClose();
+  const save = async () => {
+    setSaving(true);
+    try {
+      const body = { name: name.trim(), description: description.trim(), type, ...(type === "Dynamic" ? { rules: { match, conditions } } : { userIds }) };
+      const result = editing ? await campaignApi.updateSegment(segment.id, body) : await campaignApi.createSegment(body);
+      onSave?.(result.segment, { created: !editing });
+      onClose();
+    } catch (error) {
+      showError("Segment not saved", error.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -120,7 +123,7 @@ export default function SegmentFormModal({ isOpen, onClose, segment = null, init
             {preview.length} {preview.length === 1 ? "user" : "users"} {type === "Dynamic" ? "match right now" : "selected"}
           </span>
           <DialogButton onClick={onClose}>Cancel</DialogButton>
-          <DialogButton variant="primary" disabled={!valid} onClick={save}>
+          <DialogButton variant="primary" disabled={!valid || saving} onClick={save}>
             {editing ? "Save Segment" : "Create Segment"}
           </DialogButton>
         </>
@@ -130,7 +133,7 @@ export default function SegmentFormModal({ isOpen, onClose, segment = null, init
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <label className="flex flex-col gap-1.5 text-xs font-semibold text-medium-black">
             Segment Type
-            <select value={type} onChange={(event) => setType(event.target.value)} className={fieldClass} disabled={segment?.system}>
+            <select value={type} onChange={(event) => setType(event.target.value)} className={fieldClass} disabled={editing}>
               <option value="Dynamic">Dynamic</option>
               <option value="Static">Static</option>
             </select>
@@ -140,7 +143,7 @@ export default function SegmentFormModal({ isOpen, onClose, segment = null, init
           </label>
           <label className="flex flex-col gap-1.5 text-xs font-semibold text-medium-black">
             Segment Name
-            <input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Trial users with low usage" className={fieldClass} />
+            <input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Trial users with low usage" className={fieldClass} maxLength={120} disabled={segment?.system} />
           </label>
         </div>
         <label className="flex flex-col gap-1.5 text-xs font-semibold text-medium-black">
@@ -168,6 +171,7 @@ export default function SegmentFormModal({ isOpen, onClose, segment = null, init
                 key={index}
                 condition={condition}
                 canRemove={conditions.length > 1}
+                plans={plans}
                 onChange={(next) => setConditions((list) => list.map((item, position) => (position === index ? next : item)))}
                 onRemove={() => setConditions((list) => list.filter((_, position) => position !== index))}
               />
@@ -185,9 +189,12 @@ export default function SegmentFormModal({ isOpen, onClose, segment = null, init
           </div>
         ) : (
           <div className="space-y-2">
-            <p className="text-sm font-bold text-dark-black">Add Users</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-bold text-dark-black">Add Users</p>
+              <input type="search" value={userQuery} onChange={(event) => setUserQuery(event.target.value)} placeholder="Search users…" aria-label="Search users" className="h-8 px-3 rounded-lg border border-light-gray text-xs outline-none focus:border-primary w-48" />
+            </div>
             <div className="max-h-56 overflow-y-auto rounded-xl border border-light-gray divide-y divide-light-gray">
-              {PLATFORM_USERS.map((item) => (
+              {users.filter((item) => `${item.name} ${item.email} ${item.company}`.toLowerCase().includes(userQuery.trim().toLowerCase())).slice(0, 200).map((item) => (
                 <label key={item.id} className="flex items-center gap-3 px-3 py-2 text-xs cursor-pointer hover:bg-light-gray/40">
                   <input type="checkbox" checked={userIds.includes(item.id)} onChange={() => setUserIds((ids) => (ids.includes(item.id) ? ids.filter((id) => id !== item.id) : [...ids, item.id]))} className="accent-primary w-4 h-4" />
                   <span className="font-semibold text-dark-black/85 flex-1">{item.name}</span>

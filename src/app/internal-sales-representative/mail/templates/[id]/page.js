@@ -1,12 +1,12 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import Text from "@/components/texts/text";
 import Wrapper from "@/components/wrappers/wrapper";
-import { allTemplates } from "../templates-data";
+import { apiRequest } from "@/lib/client-api";
 import TemplateEditor from "../components/template-editor";
 import { usePortal } from "@/components/shared/use-portal";
 
@@ -14,7 +14,22 @@ export default function TemplatePreviewPage() {
   const params = useParams();
   const portal = usePortal();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
-  const template = allTemplates.find((t) => t.id === id);
+  const [state, setState] = useState({ id: null, template: null, error: null });
+
+  useEffect(() => {
+    let cancelled = false;
+    apiRequest(`/api/v1/mail/templates/${encodeURIComponent(id)}`)
+      .then((result) => !cancelled && setState({ id, template: result.template, error: null }))
+      .catch((failure) => !cancelled && setState({ id, template: null, error: failure.message }));
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+  const template = state.id === id ? state.template : null;
+
+  if (state.id !== id) {
+    return <div className="w-full py-20 text-center text-sm text-light-black">Loading template…</div>;
+  }
 
   if (!template) {
     return (

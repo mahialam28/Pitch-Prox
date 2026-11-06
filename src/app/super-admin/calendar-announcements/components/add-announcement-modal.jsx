@@ -35,20 +35,29 @@ const EXPIRY_OPTIONS = [
   { value: "Custom date", label: "Custom date" },
 ];
 
-export default function AddAnnouncementModal({
-  isOpen,
-  onClose,
-  onAddAnnouncement,
-}) {
-  const [title, setTitle] = useState("");
-  const [priority, setPriority] = useState("Normal");
-  const [audience, setAudience] = useState("All Employees");
-  const [message, setMessage] = useState("");
-  const [publishTiming, setPublishTiming] = useState("now"); // 'now' | 'later'
-  const [scheduleDate, setScheduleDate] = useState("2024-05-25");
-  const [scheduleTime, setScheduleTime] = useState("09:00 AM");
-  const [expiryDate, setExpiryDate] = useState("No expiry");
-  const [sendNotification, setSendNotification] = useState(true);
+const pad = (value) => String(value).padStart(2, "0");
+const localDate = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+const localTime = (date) => `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+const EXPIRY_DAYS = { "24 hours": 1, "3 days": 3, "7 days": 7, "14 days": 14, "30 days": 30 };
+const cap = (value) => value.charAt(0).toUpperCase() + value.slice(1);
+
+// Mounted only while open. `announcement` edits an existing one; onSave(body) may throw to keep it open.
+export default function AddAnnouncementModal({ isOpen, onClose, onSave, announcement = null }) {
+  const editing = Boolean(announcement);
+  // Dates are read once when the dialog opens
+  const [today] = useState(() => localDate(new Date()));
+  const startAt = announcement ? new Date(announcement.publishAt) : null;
+  const [title, setTitle] = useState(announcement?.title ?? "");
+  const [priority, setPriority] = useState(announcement ? cap(announcement.priority) : "Normal");
+  const [audience, setAudience] = useState(announcement?.audience ?? "All Employees");
+  const [message, setMessage] = useState(announcement?.body ?? "");
+  const [publishTiming, setPublishTiming] = useState(announcement?.status === "scheduled" ? "later" : "now");
+  const [scheduleDate, setScheduleDate] = useState(() => localDate(startAt && announcement.status === "scheduled" ? startAt : new Date(Date.now() + 86400000)));
+  const [scheduleTime, setScheduleTime] = useState(startAt && announcement.status === "scheduled" ? localTime(startAt) : "09:00");
+  const [expiryDate, setExpiryDate] = useState(announcement?.expiresAt ? "Custom date" : "No expiry");
+  const [customExpiry, setCustomExpiry] = useState(() => localDate(announcement?.expiresAt ? new Date(announcement.expiresAt) : new Date(Date.now() + 7 * 86400000)));
+  const [sendNotification, setSendNotification] = useState(announcement?.notify ?? true);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -58,7 +67,6 @@ export default function AddAnnouncementModal({
     document.addEventListener("keydown", handleKeyDown);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = prevOverflow;
@@ -67,81 +75,35 @@ export default function AddAnnouncementModal({
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!title.trim() || !message.trim()) {
       toast.error("Please fill in both title and message");
       return;
     }
-
-    const priorityConfig = {
-      Urgent: {
-        level: "URGENT",
-        levelBg: "bg-red/10 text-red border border-red/20",
-        iconBg: "bg-red/10 text-red",
-        liveBg: "bg-red/10 text-red",
-      },
-      Important: {
-        level: "IMPORTANT",
-        levelBg: "bg-amber-50 text-amber-600 border border-amber-100",
-        iconBg: "bg-amber-50 text-amber-600",
-        liveBg: "bg-amber-50 text-amber-600",
-      },
-      Normal: {
-        level: "NORMAL",
-        levelBg: "bg-blue-50 text-blue-600 border border-blue-100",
-        iconBg: "bg-blue-50 text-blue-600",
-        liveBg: "bg-emerald-50 text-emerald-600",
-        hasDot: true,
-      },
-      Low: {
-        level: "NORMAL",
-        levelBg: "bg-light-gray text-medium-black border border-light-gray",
-        iconBg: "bg-light-gray text-medium-black",
-        liveBg: "bg-light-gray text-medium-black",
-      },
-    };
-
-    const isScheduled = publishTiming === "later";
-    const cfg = priorityConfig[priority] || priorityConfig["Normal"];
-
-    const newAnnouncement = {
-      id: Date.now().toString(),
-      title: title.trim(),
-      body: message.trim(),
-      level: isScheduled ? "SCHEDULED" : cfg.level,
-      levelBg: isScheduled
-        ? "bg-purple-50 text-purple-600 border border-purple-100"
-        : cfg.levelBg,
-      iconBg: isScheduled ? "bg-purple-50 text-purple-600" : cfg.iconBg,
-      liveBg: isScheduled ? "bg-purple-50 text-purple-600" : cfg.liveBg,
-      hasDot: !isScheduled && cfg.hasDot,
-      audience,
-      author: "Super Admin",
-      date: isScheduled
-        ? new Date(scheduleDate).toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-            year: "numeric",
-          })
-        : "May 20, 2024",
-      expiryDate,
-      sendNotification,
-    };
-
-    onAddAnnouncement?.(newAnnouncement);
-    toast.success(
-      isScheduled
-        ? "Announcement scheduled successfully!"
-        : "Announcement published successfully!"
-    );
-    onClose();
-    setTitle("");
-    setMessage("");
-    setPriority("Normal");
-    setAudience("All Employees");
-    setPublishTiming("now");
-    setExpiryDate("No expiry");
+    // Times are entered in the browser's time zone and sent as ISO (UTC)
+    const later = publishTiming === "later";
+    const publishAt = later ? new Date(`${scheduleDate}T${scheduleTime || "09:00"}`) : editing && announcement.status !== "scheduled" ? new Date(announcement.publishAt) : new Date();
+    const expiresAt =
+      expiryDate === "No expiry" ? null : expiryDate === "Custom date" ? new Date(`${customExpiry}T23:59`) : new Date(publishAt.getTime() + EXPIRY_DAYS[expiryDate] * 86400000);
+    setSaving(true);
+    try {
+      await onSave?.({
+        title: title.trim(),
+        body: message.trim(),
+        priority: priority.toLowerCase(),
+        audience,
+        ...((later || !editing || announcement.status === "scheduled") && { publishAt: publishAt.toISOString() }),
+        expiresAt: expiresAt ? expiresAt.toISOString() : null,
+        notify: sendNotification,
+      });
+      toast.success(editing ? "Announcement updated" : later ? "Announcement scheduled" : "Announcement published");
+      onClose();
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -162,10 +124,10 @@ export default function AddAnnouncementModal({
           <div className="flex items-center justify-between p-5 sm:p-6 border-b border-light-gray shrink-0 bg-white">
             <div>
               <h3 className="text-base sm:text-lg font-bold text-dark-black font-secondary">
-                Add Announcement
+                {editing ? "Edit Announcement" : "Add Announcement"}
               </h3>
               <p className="text-xs text-medium-black mt-0.5 font-normal">
-                Create and share an update with your team.
+                {editing ? "Changes show for everyone in the audience." : "Create and share an update with your team."}
               </p>
             </div>
             <button
@@ -184,14 +146,16 @@ export default function AddAnnouncementModal({
           >
             {/* 1. Announcement Title */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-dark-black/80">
+              <label htmlFor="announcement-title" className="text-xs font-semibold text-dark-black/80">
                 Announcement title
               </label>
               <input
+                id="announcement-title"
                 type="text"
                 placeholder="Enter announcement title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
+                maxLength={160}
                 required
                 className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white border border-light-gray rounded-xl focus:outline-none focus:border-primary text-dark-black/90 placeholder:text-light-black transition-colors"
               />
@@ -234,11 +198,12 @@ export default function AddAnnouncementModal({
 
             {/* 3. Message Textarea with Character Counter */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-dark-black/80">
+              <label htmlFor="announcement-message" className="text-xs font-semibold text-dark-black/80">
                 Message
               </label>
               <div className="relative">
                 <textarea
+                  id="announcement-message"
                   rows={4}
                   maxLength={1000}
                   placeholder="Write your announcement..."
@@ -328,6 +293,7 @@ export default function AddAnnouncementModal({
                     </span>
                     <input
                       type="date"
+                      min={today}
                       value={scheduleDate}
                       onChange={(e) => setScheduleDate(e.target.value)}
                       className="w-full px-3 py-2 text-xs bg-white border border-light-gray rounded-xl focus:outline-none focus:border-primary text-dark-black/90"
@@ -338,10 +304,9 @@ export default function AddAnnouncementModal({
                       Broadcast Time
                     </span>
                     <input
-                      type="text"
+                      type="time"
                       value={scheduleTime}
                       onChange={(e) => setScheduleTime(e.target.value)}
-                      placeholder="09:00 AM"
                       className="w-full px-3 py-2 text-xs bg-white border border-light-gray rounded-xl focus:outline-none focus:border-primary text-dark-black/90"
                     />
                   </div>
@@ -366,6 +331,16 @@ export default function AddAnnouncementModal({
                   className="w-full"
                 />
               </div>
+              {expiryDate === "Custom date" && (
+                <input
+                  type="date"
+                  aria-label="Expiry date"
+                  min={today}
+                  value={customExpiry}
+                  onChange={(e) => setCustomExpiry(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-white border border-light-gray rounded-xl focus:outline-none focus:border-primary text-dark-black/90"
+                />
+              )}
             </div>
 
             {/* 6. Checkbox: Send email and in-app notification */}
@@ -387,6 +362,7 @@ export default function AddAnnouncementModal({
                   Send email and in-app notification
                 </span>
               </label>
+              <p className="text-[11px] text-light-black mt-1 ml-6">It appears on everyone&apos;s Calendar page now; emails go out once an email service is connected.</p>
             </div>
 
             {/* ── Footer Action Buttons ── */}
@@ -400,11 +376,10 @@ export default function AddAnnouncementModal({
               </button>
               <button
                 type="submit"
-                className="px-5 py-2.5 rounded-xl bg-primary hover:bg-medium-teal text-white text-xs sm:text-sm font-bold shadow-sm transition-colors cursor-pointer"
+                disabled={saving}
+                className="disabled:opacity-60 px-5 py-2.5 rounded-xl bg-primary hover:bg-medium-teal text-white text-xs sm:text-sm font-bold shadow-sm transition-colors cursor-pointer"
               >
-                {publishTiming === "later"
-                  ? "Schedule Announcement"
-                  : "Publish Announcement"}
+                {saving ? "Saving…" : editing ? "Save Changes" : publishTiming === "later" ? "Schedule Announcement" : "Publish Announcement"}
               </button>
             </div>
           </form>

@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { allTemplates } from "../templates/templates-data";
+import { apiRequest } from "@/lib/client-api";
 import SendEmailForm from "./send-mail-form";
 import QuickTemplates from "./quick-templates";
 import RecentMails from "./recent-mails";
@@ -12,7 +12,18 @@ import NeedHelpCard from "./need-help-card";
 export const SendEmailTab = ({ onSwitchToSupportTab }) => {
   // A template picked here (or via ?template= from the Templates page) refills the form
   const searchParams = useSearchParams();
-  const [template, setTemplate] = useState(() => allTemplates.find((item) => item.id === searchParams?.get("template")) ?? null);
+  const templateId = searchParams?.get("template");
+  const [template, setTemplate] = useState(null);
+  useEffect(() => {
+    if (!templateId) return undefined;
+    let cancelled = false;
+    apiRequest(`/api/v1/mail/templates/${encodeURIComponent(templateId)}`)
+      .then((result) => !cancelled && setTemplate(result.template))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [templateId]);
 
   return (
     <div className="flex flex-col gap-6 w-full">

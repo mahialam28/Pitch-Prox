@@ -10,7 +10,7 @@ import {
   UserX,
   Eye,
   Pencil,
-  User,
+  RotateCcw,
   Target,
   Mail,
   Ban,
@@ -18,228 +18,11 @@ import {
 import Dropdown from "@/components/shared/dropdown/dropdown";
 import ActionMenu from "@/components/shared/dropdown/action-menu";
 import EditRepModal from "../[id]/components/edit-rep-modal";
-import ImpersonateRepModal from "../[id]/components/impersonate-rep-modal";
-import AdjustQuotaModal from "./adjust-quota-modal";
 import { DeactivateRepModal } from "./sales-rep-modals";
 import { showSavedToast } from "@/lib/toast";
-
-const DEACTIVATED_STATUS = {
-  status: "Deactivated",
-  statusBadge: "bg-slate-100 text-slate-500 border-slate-200",
-  statusDot: "bg-slate-400",
-};
-
-// Fills the fields the profile modals expect; the roster only carries table columns.
-const toProfile = (rep) => ({
-  ...rep,
-  email: `${rep.name.toLowerCase().replace(/[^a-z]+/g, ".")}@pitchprox.com`,
-  phone: "(512) 555-0198",
-  hireDate: "Jan 10, 2024",
-  timeZone: "(GMT-05:00) Eastern Time",
-});
-
-const repsData = [
-  {
-    id: "EMP-1001",
-    name: "Ryan Anderson",
-    role: "Senior Closer",
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120",
-    employeeId: "EMP-1001",
-    leadToSub: "34.2%",
-    leadTrend: "^ 6.1%",
-    leadPositive: true,
-    promptAdh: "92.1%",
-    promptTrend: "^ 4.3%",
-    promptPositive: true,
-    trustGain: "+28.7",
-    trustTrend: "^ 3.2",
-    trustPositive: true,
-    quotaPercent: "112%",
-    quotaFill: 100,
-    quotaCount: "56 / 50",
-    quotaColor: "bg-emerald-500",
-    lastActive: "Today, 10:32 AM",
-    manager: "Alex Johnson",
-    status: "Active",
-    statusBadge: "bg-emerald-50 text-emerald-600 border-emerald-200/80",
-    statusDot: "bg-emerald-500",
-  },
-  {
-    id: "EMP-1002",
-    name: "David Martinez",
-    role: "Closer",
-    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120",
-    employeeId: "EMP-1002",
-    leadToSub: "29.8%",
-    leadTrend: "^ 3.2%",
-    leadPositive: true,
-    promptAdh: "89.4%",
-    promptTrend: "^ 2.1%",
-    promptPositive: true,
-    trustGain: "+22.4",
-    trustTrend: "^ 1.8",
-    trustPositive: true,
-    quotaPercent: "94%",
-    quotaFill: 94,
-    quotaCount: "47 / 50",
-    quotaColor: "bg-emerald-500",
-    lastActive: "Today, 9:15 AM",
-    manager: "Emily Smith",
-    status: "Active",
-    statusBadge: "bg-emerald-50 text-emerald-600 border-emerald-200/80",
-    statusDot: "bg-emerald-500",
-  },
-  {
-    id: "EMP-1003",
-    name: "Michael Carter",
-    role: "Closing Specialist",
-    avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=120",
-    employeeId: "EMP-1003",
-    leadToSub: "25.7%",
-    leadTrend: "^ 2.4%",
-    leadPositive: true,
-    promptAdh: "84.7%",
-    promptTrend: "^ 4.7%",
-    promptPositive: true,
-    trustGain: "+19.3",
-    trustTrend: "^ 1.1",
-    trustPositive: true,
-    quotaPercent: "78%",
-    quotaFill: 78,
-    quotaCount: "39 / 50",
-    quotaColor: "bg-amber-500",
-    lastActive: "Today, 8:47 AM",
-    manager: "Michael Brown",
-    status: "Active",
-    statusBadge: "bg-emerald-50 text-emerald-600 border-emerald-200/80",
-    statusDot: "bg-emerald-500",
-  },
-  {
-    id: "EMP-1004",
-    name: "Emily Davis",
-    role: "Closer",
-    avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120",
-    employeeId: "EMP-1004",
-    leadToSub: "22.1%",
-    leadTrend: "^ 1.6%",
-    leadPositive: true,
-    promptAdh: "78.2%",
-    promptTrend: "v 1.3%",
-    promptPositive: false,
-    trustGain: "+16.8",
-    trustTrend: "v 0.6",
-    trustPositive: false,
-    quotaPercent: "62%",
-    quotaFill: 62,
-    quotaCount: "31 / 50",
-    quotaColor: "bg-amber-400",
-    lastActive: "Yesterday, 4:32 PM",
-    manager: "Sarah Davis",
-    status: "Offline",
-    statusBadge: "bg-slate-100 text-slate-600 border-slate-200",
-    statusDot: "bg-slate-400",
-  },
-  {
-    id: "EMP-1005",
-    name: "David Martinez",
-    role: "Closer",
-    avatar: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=120",
-    employeeId: "EMP-1005",
-    leadToSub: "18.9%",
-    leadTrend: "v 0.3%",
-    leadPositive: false,
-    promptAdh: "72.6%",
-    promptTrend: "v 3.2%",
-    promptPositive: false,
-    trustGain: "+14.2",
-    trustTrend: "v 1.4",
-    trustPositive: false,
-    quotaPercent: "48%",
-    quotaFill: 48,
-    quotaCount: "24 / 50",
-    quotaColor: "bg-rose-400",
-    lastActive: "Yesterday, 2:18 PM",
-    manager: "David Wilson",
-    status: "At Risk",
-    statusBadge: "bg-rose-50 text-rose-600 border-rose-200",
-    statusDot: "bg-rose-500",
-  },
-  {
-    id: "EMP-1006",
-    name: "David Martinez",
-    role: "Closer",
-    avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120",
-    employeeId: "EMP-1006",
-    leadToSub: "15.4%",
-    leadTrend: "v 2.1%",
-    leadPositive: false,
-    promptAdh: "65.3%",
-    promptTrend: "v 5.4%",
-    promptPositive: false,
-    trustGain: "+11.7",
-    trustTrend: "v 1.2",
-    trustPositive: false,
-    quotaPercent: "36%",
-    quotaFill: 36,
-    quotaCount: "18 / 50",
-    quotaColor: "bg-rose-500",
-    lastActive: "May 15, 6:05 PM",
-    manager: "Jessica Taylor",
-    status: "At Risk",
-    statusBadge: "bg-rose-50 text-rose-600 border-rose-200",
-    statusDot: "bg-rose-500",
-  },
-  {
-    id: "EMP-1007",
-    name: "Jonathan White",
-    role: "Closing Specialist",
-    avatar: "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=120",
-    employeeId: "EMP-1007",
-    leadToSub: "31.6%",
-    leadTrend: "^ 4.8%",
-    leadPositive: true,
-    promptAdh: "90.2%",
-    promptTrend: "^ 6.3%",
-    promptPositive: true,
-    trustGain: "+25.1",
-    trustTrend: "^ 2.9",
-    trustPositive: true,
-    quotaPercent: "107%",
-    quotaFill: 100,
-    quotaCount: "53 / 50",
-    quotaColor: "bg-emerald-500",
-    lastActive: "Today, 11:02 AM",
-    manager: "Daniel Martine",
-    status: "In Meeting",
-    statusBadge: "bg-blue-50 text-blue-600 border-blue-200",
-    statusDot: "bg-blue-500",
-  },
-  {
-    id: "EMP-1008",
-    name: "Jessica Lee",
-    role: "Sales Rep",
-    avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=120",
-    employeeId: "EMP-1008",
-    leadToSub: "0.0%",
-    leadTrend: null,
-    leadPositive: null,
-    promptAdh: "0.0%",
-    promptTrend: null,
-    promptPositive: null,
-    trustGain: "0.0",
-    trustTrend: null,
-    trustPositive: null,
-    quotaPercent: "0%",
-    quotaFill: 0,
-    quotaCount: "0 / 50",
-    quotaColor: "bg-slate-300",
-    lastActive: "May 10, 2025",
-    manager: "Sophia Anderson",
-    status: "On Leave",
-    statusBadge: "bg-purple-50 text-purple-600 border-purple-200",
-    statusDot: "bg-purple-500",
-  },
-];
+import { showError } from "@/lib/alerts";
+import { ProfileAvatar } from "@/components/shared/avatar-editor";
+import { TIER_STYLES, dollars, lastActive, pct, rosterStatus, trend, updateRep } from "../team-api";
 
 const pageSizeOptions = [
   { value: "10 / page", label: "10 / page" },
@@ -247,47 +30,55 @@ const pageSizeOptions = [
   { value: "50 / page", label: "50 / page" },
 ];
 
-export default function SalesRepsTable() {
+// Live roster: one row per sales rep with this month's numbers (lib/sales-team)
+export default function SalesRepsTable({ reps = [], managers = [], canManage = false, onChanged, onAdjustQuota }) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState("10 / page");
   const [sortAsc, setSortAsc] = useState(true);
-  // Design only: edits and deactivations live in local state
-  const [overrides, setOverrides] = useState({});
   const [editing, setEditing] = useState(null);
-  const [impersonating, setImpersonating] = useState(null);
-  const [quotaOpen, setQuotaOpen] = useState(false);
   const [deactivating, setDeactivating] = useState(null);
 
-  const updateRep = (id, changes) => setOverrides((prev) => ({ ...prev, [id]: { ...prev[id], ...changes } }));
+  const setStatus = async (rep, status) => {
+    try {
+      await updateRep(rep.id, { status });
+      showSavedToast(status === "deactivated" ? "Rep deactivated" : "Rep reactivated", status === "deactivated" ? `${rep.name} was signed out and removed from quota tracking.` : `${rep.name} can sign in again.`);
+      onChanged?.();
+    } catch (error) {
+      showError("Couldn't update the rep", error.message);
+    }
+  };
 
   const repMenuItems = (rep) => [
     { label: "View Profile", icon: Eye, onClick: () => router.push(`/super-admin/sales-reps/${rep.id}`) },
-    { label: "Edit Profile", icon: Pencil, onClick: () => setEditing(toProfile(rep)) },
-    { label: "Impersonate Rep", icon: User, onClick: () => setImpersonating(toProfile(rep)) },
-    { label: "Adjust Quota", icon: Target, onClick: () => setQuotaOpen(true) },
-    { label: "Send Message", icon: Mail, onClick: () => router.push("/super-admin/mail") },
-    { divider: true },
-    { label: "Deactivate Rep", icon: Ban, danger: true, disabled: rep.status === "Deactivated", onClick: () => setDeactivating(rep) },
+    ...(canManage
+      ? [
+          { label: "Edit Profile", icon: Pencil, onClick: () => setEditing(rep) },
+          { label: "Adjust Quota", icon: Target, disabled: rep.status === "deactivated", onClick: () => onAdjustQuota?.(rep) },
+        ]
+      : []),
+    { label: "Send Message", icon: Mail, onClick: () => router.push(`/super-admin/mail?to=${encodeURIComponent(rep.email)}`) },
+    ...(canManage
+      ? [
+          { divider: true },
+          rep.status === "deactivated"
+            ? { label: "Reactivate Rep", icon: RotateCcw, onClick: () => setStatus(rep, "active") }
+            : { label: "Deactivate Rep", icon: Ban, danger: true, onClick: () => setDeactivating(rep) },
+        ]
+      : []),
   ];
 
-  const filteredReps = repsData
-    .map((rep) => ({ ...rep, ...overrides[rep.id] }))
-    .filter((rep) => {
-      const query = searchTerm.toLowerCase();
-      return (
-        rep.name.toLowerCase().includes(query) ||
-        rep.employeeId.toLowerCase().includes(query) ||
-        rep.role.toLowerCase().includes(query) ||
-        rep.manager.toLowerCase().includes(query)
-      );
-    })
-    .sort((a, b) => {
-      return sortAsc
-        ? a.name.localeCompare(b.name)
-        : b.name.localeCompare(a.name);
-    });
+  const size = Number.parseInt(pageSize, 10);
+  const query = searchTerm.toLowerCase();
+  const filteredReps = reps
+    .filter((rep) =>
+      [rep.name, rep.email, rep.employeeId ?? "", rep.jobTitle, rep.managerName ?? ""].some((value) => value.toLowerCase().includes(query))
+    )
+    .sort((a, b) => (sortAsc ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name)));
+  const pages = Math.max(1, Math.ceil(filteredReps.length / size));
+  const page = Math.min(currentPage, pages);
+  const visible = filteredReps.slice((page - 1) * size, page * size);
 
   return (
     <div className="bg-white rounded-2xl p-5 sm:p-6 border border-light-gray shadow-xs w-full flex flex-col justify-between overflow-hidden">
@@ -308,7 +99,7 @@ export default function SalesRepsTable() {
       {/* Table Section */}
       {filteredReps.length > 0 ? (
         <div className="overflow-x-auto w-full [-ms-overflow-style:none] [scrollbar-width:thin]">
-          <table className="w-full text-left border-collapse min-w-[1240px]">
+          <table className="w-full text-left border-collapse min-w-[1360px]">
             <thead>
               <tr className="border-b border-light-gray text-[10px] sm:text-[11px] font-semibold text-light-black uppercase tracking-wider select-none">
                 {/* Rep Name with Sort Toggle */}
@@ -322,180 +113,150 @@ export default function SalesRepsTable() {
                   </div>
                 </th>
 
-                <th className="pb-3 px-3 text-left">EMPLOYEE ID</th>
+                <th className="pb-3 px-4 text-left">EMPLOYEE ID</th>
 
-                <th className="pb-3 px-3 text-left">
+                <th className="pb-3 px-4 text-left">
                   <div className="flex items-center gap-1">
                     <span>LEAD TO SUBSCRIPTION</span>
                   </div>
                 </th>
 
-                <th className="pb-3 px-3 text-left">
+                <th className="pb-3 px-4 text-left">
                   <div className="flex items-center gap-1">
                     <span>PROMPT ADHERENCE</span>
                   </div>
                 </th>
 
-                <th className="pb-3 px-3 text-left">
+                <th className="pb-3 px-4 text-left">
                   <div className="flex items-center gap-1">
                     <span>TRUST GAIN</span>
                   </div>
                 </th>
 
-                <th className="pb-3 px-3 text-left">
+                <th className="pb-3 px-4 text-left">
                   <div className="flex items-center gap-1">
                     <span>QUOTA PROGRESS</span>
                   </div>
                 </th>
 
-                <th className="pb-3 px-3 text-left">LAST ACTIVE</th>
-                <th className="pb-3 px-3 text-left">MANAGER</th>
-                <th className="pb-3 px-3 text-right">STATUS</th>
-                <th className="pb-3 px-3 w-10"><span className="sr-only">Actions</span></th>
+                <th className="pb-3 px-4 text-left">LAST ACTIVE</th>
+                <th className="pb-3 px-4 text-left">MANAGER</th>
+                <th className="pb-3 px-4 text-right">STATUS</th>
+                <th className="pb-3 px-4 w-10"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
 
             <tbody className="divide-y divide-light-gray/60 text-xs">
-              {filteredReps.map((rep) => (
+              {visible.map((rep) => {
+                const status = rosterStatus(rep);
+                const leadTrend = trend(rep.closed, rep.closedPrev);
+                return (
                 <tr
                   key={rep.id}
                   onClick={() => router.push(`/super-admin/sales-reps/${rep.id}`)}
                   className="hover:bg-light-gray/40 transition-colors group cursor-pointer"
                 >
                   {/* Sales Rep (Avatar + Name & Subtitle) */}
-                  <td className="py-3 px-3 text-left">
+                  <td className="py-4 px-4 text-left">
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full overflow-hidden shrink-0 border border-light-gray bg-slate-100 relative">
-                        <img
-                          src={rep.avatar}
-                          alt={rep.name}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
+                      <ProfileAvatar name={rep.name} className="w-9 h-9 !text-xs shrink-0" />
                       <div>
                         <p className="font-semibold text-dark-black/85 text-xs leading-tight whitespace-nowrap group-hover:text-primary transition-colors">
                           {rep.name}
                         </p>
                         <p className="text-[11px] text-light-black font-normal mt-0.5 whitespace-nowrap">
-                          {rep.role}
+                          {rep.jobTitle}
                         </p>
                       </div>
                     </div>
                   </td>
 
                   {/* Employee ID */}
-                  <td className="py-3 px-3 text-left text-xs font-normal text-light-black whitespace-nowrap">
-                    {rep.employeeId}
+                  <td className="py-4 px-4 text-left text-xs font-normal text-light-black whitespace-nowrap">
+                    {rep.employeeId ?? "—"}
                   </td>
 
                   {/* Lead to Subscription */}
-                  <td className="py-3 px-3 text-left whitespace-nowrap">
+                  <td className="py-4 px-4 text-left whitespace-nowrap">
                     <div>
                       <p className="font-semibold text-dark-black/85 text-xs">
-                        {rep.leadToSub}
+                        {pct(rep.leadToSubscription)}
                       </p>
-                      {rep.leadTrend && (
-                        <p
-                          className={`text-[10px] font-medium mt-0.5 ${
-                            rep.leadPositive
-                              ? "text-emerald-600"
-                              : "text-rose-500"
-                          }`}
-                        >
-                          {rep.leadTrend}
-                        </p>
-                      )}
+                      <p className={`text-[10px] font-medium mt-0.5 ${leadTrend.positive === true ? "text-emerald-600" : leadTrend.positive === false ? "text-rose-500" : "text-light-black"}`}>
+                        {rep.closed} closed this month
+                      </p>
                     </div>
                   </td>
 
                   {/* Prompt Adherence */}
-                  <td className="py-3 px-3 text-left whitespace-nowrap">
+                  <td className="py-4 px-4 text-left whitespace-nowrap">
                     <div>
                       <p className="font-semibold text-dark-black/85 text-xs">
-                        {rep.promptAdh}
+                        —
                       </p>
-                      {rep.promptTrend && (
-                        <p
-                          className={`text-[10px] font-medium mt-0.5 ${
-                            rep.promptPositive
-                              ? "text-emerald-600"
-                              : "text-rose-500"
-                          }`}
-                        >
-                          {rep.promptTrend}
-                        </p>
-                      )}
+                      <p className="text-[10px] font-medium mt-0.5 text-light-black">Needs call data</p>
                     </div>
                   </td>
 
                   {/* Trust Gain */}
-                  <td className="py-3 px-3 text-left whitespace-nowrap">
+                  <td className="py-4 px-4 text-left whitespace-nowrap">
                     <div>
                       <p className="font-semibold text-dark-black/85 text-xs">
-                        {rep.trustGain}
+                        —
                       </p>
-                      {rep.trustTrend && (
-                        <p
-                          className={`text-[10px] font-medium mt-0.5 ${
-                            rep.trustPositive
-                              ? "text-emerald-600"
-                              : "text-rose-500"
-                          }`}
-                        >
-                          {rep.trustTrend}
-                        </p>
-                      )}
+                      <p className="text-[10px] font-medium mt-0.5 text-light-black">Needs call data</p>
                     </div>
                   </td>
 
                   {/* Quota Progress (Bar + Count) */}
-                  <td className="py-3 px-3 text-left whitespace-nowrap">
+                  <td className="py-4 px-4 text-left whitespace-nowrap">
                     <div className="w-28 flex flex-col gap-1">
                       <span className="text-xs font-semibold text-dark-black/85">
-                        {rep.quotaPercent}
+                        {rep.quotaCents == null ? "No quota" : `${rep.attainment}%`}
                       </span>
                       <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                         <div
-                          className={`h-full rounded-full transition-all duration-500 ${rep.quotaColor}`}
+                          className={`h-full rounded-full transition-all duration-500 ${TIER_STYLES[rep.tier]?.bar ?? "bg-slate-300"}`}
                           style={{
-                            width: `${Math.min(100, rep.quotaFill)}%`,
+                            width: `${Math.min(100, rep.attainment ?? 0)}%`,
                           }}
                         />
                       </div>
                       <span className="text-[10px] text-light-black font-normal">
-                        {rep.quotaCount}
+                        {dollars(rep.revenueCents)} / {dollars(rep.quotaCents)}
                       </span>
                     </div>
                   </td>
 
                   {/* Last Active */}
-                  <td className="py-3 px-3 text-left whitespace-nowrap text-xs text-light-black font-normal">
-                    {rep.lastActive}
+                  <td className="py-4 px-4 text-left whitespace-nowrap text-xs text-light-black font-normal">
+                    {lastActive(rep.lastActiveAt)}
                   </td>
 
                   {/* Manager */}
-                  <td className="py-3 px-3 text-left whitespace-nowrap text-xs text-dark-black/75 font-normal">
-                    {rep.manager}
+                  <td className="py-4 px-4 text-left whitespace-nowrap text-xs text-dark-black/75 font-normal">
+                    {rep.managerName ?? "—"}
                   </td>
 
                   {/* Status */}
-                  <td className="py-3 px-3 text-right whitespace-nowrap">
+                  <td className="py-4 px-4 text-right whitespace-nowrap">
                     <span
-                      className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-0.5 rounded-full border ${rep.statusBadge}`}
+                      className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-0.5 rounded-full border ${status.badge}`}
                     >
                       <span
-                        className={`w-1.5 h-1.5 rounded-full ${rep.statusDot}`}
+                        className={`w-1.5 h-1.5 rounded-full ${status.dot}`}
                       />
-                      <span>{rep.status}</span>
+                      <span>{status.label}</span>
                     </span>
                   </td>
 
                   {/* Row actions */}
-                  <td className="py-3 px-3 pl-2 text-right" onClick={(event) => event.stopPropagation()}>
+                  <td className="py-4 px-4 pl-2 text-right" onClick={(event) => event.stopPropagation()}>
                     <ActionMenu label={`Actions for ${rep.name}`} items={repMenuItems(rep)} />
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -508,7 +269,7 @@ export default function SalesRepsTable() {
             No sales rep found
           </h4>
           <p className="text-xs text-light-black mt-1 max-w-xs leading-relaxed">
-            No representative matches &quot;{searchTerm}&quot;. Try adjusting your search query.
+            {searchTerm ? <>No representative matches &quot;{searchTerm}&quot;. Try adjusting your search query.</> : "Sales reps appear here once they're added in Access Records."}
           </p>
           <button
             type="button"
@@ -523,28 +284,28 @@ export default function SalesRepsTable() {
       {/* Pagination Footer using shared Dropdown and theme styling */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-5 mt-2 border-t border-light-gray select-none">
         <span className="text-xs text-light-black font-normal">
-          Showing 1 to {filteredReps.length} of 48 sales reps
+          {filteredReps.length ? `Showing ${(page - 1) * size + 1} to ${Math.min(page * size, filteredReps.length)} of ${filteredReps.length} sales reps` : "No sales reps"}
         </span>
 
         <div className="flex items-center gap-3">
-          {/* Page Number Buttons */}
           <div className="flex items-center gap-1">
             <button
               type="button"
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              aria-label="Previous page"
+              disabled={page === 1}
+              onClick={() => setCurrentPage(page - 1)}
               className="w-8 h-8 rounded-xl border border-light-gray flex items-center justify-center text-light-black hover:bg-light-gray disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
 
-            {[1, 2, 3, 4, 5].map((pageNum) => (
+            {Array.from({ length: pages }, (_, index) => index + 1).map((pageNum) => (
               <button
                 key={pageNum}
                 type="button"
                 onClick={() => setCurrentPage(pageNum)}
                 className={`w-8 h-8 rounded-xl text-xs font-bold flex items-center justify-center transition-all cursor-pointer ${
-                  currentPage === pageNum
+                  page === pageNum
                     ? "bg-primary text-white shadow-xs"
                     : "text-dark-black/75 hover:bg-light-gray"
                 }`}
@@ -553,24 +314,11 @@ export default function SalesRepsTable() {
               </button>
             ))}
 
-            <span className="text-xs text-light-black px-1 font-semibold">...</span>
-
             <button
               type="button"
-              onClick={() => setCurrentPage(6)}
-              className={`w-8 h-8 rounded-xl text-xs font-bold flex items-center justify-center transition-all cursor-pointer ${
-                currentPage === 6
-                  ? "bg-primary text-white shadow-xs"
-                  : "text-dark-black/75 hover:bg-light-gray"
-              }`}
-            >
-              6
-            </button>
-
-            <button
-              type="button"
-              disabled={currentPage === 6}
-              onClick={() => setCurrentPage((p) => Math.min(6, p + 1))}
+              aria-label="Next page"
+              disabled={page === pages}
+              onClick={() => setCurrentPage(page + 1)}
               className="w-8 h-8 rounded-xl border border-light-gray flex items-center justify-center text-light-black hover:bg-light-gray disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
             >
               <ChevronRight className="w-4 h-4" />
@@ -582,7 +330,7 @@ export default function SalesRepsTable() {
             <Dropdown
               items={pageSizeOptions}
               selected={pageSize}
-              onSelect={(val) => setPageSize(val)}
+              onSelect={(val) => { setPageSize(val); setCurrentPage(1); }}
               variant="small"
               placement="top"
               className="w-full"
@@ -596,19 +344,18 @@ export default function SalesRepsTable() {
           key={editing.id}
           isOpen
           rep={editing}
+          managers={managers}
           onClose={() => setEditing(null)}
-          onSave={(data) => updateRep(editing.id, { name: data.name, role: data.role, avatar: data.avatar, manager: data.manager })}
+          onSave={async (changes) => {
+            await updateRep(editing.id, changes);
+            onChanged?.();
+          }}
         />
       )}
-      <ImpersonateRepModal isOpen={Boolean(impersonating)} rep={impersonating} onClose={() => setImpersonating(null)} />
-      <AdjustQuotaModal isOpen={quotaOpen} onClose={() => setQuotaOpen(false)} />
       <DeactivateRepModal
         rep={deactivating}
         onClose={() => setDeactivating(null)}
-        onConfirm={(rep) => {
-          updateRep(rep.id, DEACTIVATED_STATUS);
-          showSavedToast("Rep deactivated", `${rep.name} was removed from leaderboards and quota tracking.`);
-        }}
+        onConfirm={(rep) => setStatus(rep, "deactivated")}
       />
     </div>
   );

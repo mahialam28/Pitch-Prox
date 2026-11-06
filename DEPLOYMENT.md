@@ -82,6 +82,21 @@ chmod 600 .env.local
 
 Before starting the site, rotate any old server, database, or repository credentials that might have been present while the earlier malicious code was in the project.
 
+### Campaigns & Journeys settings
+
+Add these to the same `.env.local`:
+
+```dotenv
+# Public address of the site, used for links and images inside emails
+APP_URL=https://app.pitchprox.com
+# Lets the scheduler (pitchprox-jobs) run campaign jobs; any long random string
+CRON_SECRET=<long-random-string>
+# Optional: signs unsubscribe links (otherwise a secret is generated and kept in the database)
+APP_SECRET=<long-random-string>
+```
+
+`ecosystem.config.cjs` starts a second PM2 app, `pitchprox-jobs`, that runs the Campaigns & Journeys jobs every 5 minutes (scheduled broadcasts, journeys, transactional emails). Without it, scheduled campaigns and journeys don't move. Until an email service is connected, emails wait in the outbox (Campaigns & Journeys → Overview → Delivery).
+
 ## 5. Run Next.js with PM2
 
 CloudPanel recommends PM2 for Node.js processes. As the site user:

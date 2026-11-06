@@ -3,6 +3,8 @@
 import React, { useRef } from "react";
 import { Upload, Trash2, ArrowUp, ArrowDown, FileCode, Image as ImageIcon, Wrench } from "lucide-react";
 import toast from "react-hot-toast";
+import { TRANSACTIONAL_EVENTS, eventByKey } from "@/lib/campaigns/catalog";
+import { campaignApi } from "../../campaign-api";
 
 // Template options (client spec, Nov 2026)
 export const CREATION_METHODS = [
@@ -28,7 +30,8 @@ const Field = ({ label, children, hint }) => (
 );
 
 // Creation Method (first) + the fields every template has
-export function TemplateDetails({ method, onMethod, details, onDetails, subject, onSubject }) {
+// methodLocked: an existing template keeps its creation method
+export function TemplateDetails({ method, onMethod, details, onDetails, subject, onSubject, methodLocked = false }) {
   const set = (key) => (event) => onDetails({ ...details, [key]: event.target.value });
   const emailTypeHint = EMAIL_TYPES.find((type) => type.value === details.emailType)?.hint;
   return (
@@ -45,8 +48,9 @@ export function TemplateDetails({ method, onMethod, details, onDetails, subject,
                 type="button"
                 role="radio"
                 aria-checked={active}
+                disabled={methodLocked && !active}
                 onClick={() => onMethod(option.value)}
-                className={`text-left p-3 rounded-xl border transition-colors cursor-pointer ${active ? "border-primary bg-primary/5" : "border-light-gray hover:border-primary/40"}`}
+                className={`text-left p-3 rounded-xl border transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${active ? "border-primary bg-primary/5" : "border-light-gray hover:border-primary/40"}`}
               >
                 <span className={`flex items-center gap-1.5 text-xs font-bold ${active ? "text-primary" : "text-dark-black/85"}`}>
                   <Icon className="w-3.5 h-3.5" /> {option.label}
@@ -60,7 +64,7 @@ export function TemplateDetails({ method, onMethod, details, onDetails, subject,
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Field label="Template Name">
-          <input value={details.name} onChange={set("name")} placeholder="e.g. Trial Welcome" className={inputClass} />
+          <input value={details.name} onChange={set("name")} placeholder="e.g. Trial Welcome" maxLength={120} className={inputClass} />
         </Field>
         <Field label="Email Type" hint={emailTypeHint}>
           <select value={details.emailType} onChange={set("emailType")} className={inputClass}>
@@ -84,10 +88,10 @@ export function TemplateDetails({ method, onMethod, details, onDetails, subject,
           </select>
         </Field>
         <Field label="Subject Line">
-          <input value={subject} onChange={(event) => onSubject(event.target.value)} placeholder="Welcome to PitchProX! Let's get you started" className={inputClass} />
+          <input value={subject} onChange={(event) => onSubject(event.target.value)} placeholder="Welcome to PitchProX, {First Name}" maxLength={255} className={inputClass} />
         </Field>
         <Field label="Preheader">
-          <input value={details.preheader} onChange={set("preheader")} placeholder="Short preview text shown after the subject" className={inputClass} />
+          <input value={details.preheader} onChange={set("preheader")} placeholder="Short preview text shown after the subject" maxLength={255} className={inputClass} />
         </Field>
         <Field label="From Name">
           <input value={details.fromName} onChange={set("fromName")} placeholder="PitchProX" className={inputClass} />
@@ -95,7 +99,18 @@ export function TemplateDetails({ method, onMethod, details, onDetails, subject,
         <Field label="Reply-To Email">
           <input type="email" value={details.replyTo} onChange={set("replyTo")} placeholder="support@pitchprox.com" className={inputClass} />
         </Field>
+        {details.emailType === "Transactional" && (
+          <Field label="Send Automatically On" hint="Transactional emails go out when this event happens, without a campaign. Only one Active template per event.">
+            <select value={details.triggerEvent ?? ""} onChange={set("triggerEvent")} className={inputClass}>
+              <option value="">Not automatic</option>
+              {TRANSACTIONAL_EVENTS.map((key) => (
+                <option key={key} value={key}>{eventByKey(key)?.label}{eventByKey(key)?.source === "pending" ? " (once payments/calling are connected)" : ""}</option>
+              ))}
+            </select>
+          </Field>
+        )}
       </div>
+      <p className="text-[11px] text-light-black">Merge fields: {"{First Name}"}, {"{Name}"}, {"{Company}"}, {"{Plan}"}, {"{Trial End Date}"}, {"{Calls Remaining}"}, {"{App Link}"}.</p>
     </div>
   );
 }
@@ -103,14 +118,27 @@ export function TemplateDetails({ method, onMethod, details, onDetails, subject,
 // Upload Design: images stacked top to bottom, each with alt text and an optional link; optional CTA below
 export function DesignEditor({ images, onImages, cta, onCta }) {
   const inputRef = useRef(null);
-  const add = (event) => {
+  const [uploading, setUploading] = React.useState(false);
+  // Each image is uploaded straight away so it has a public link that works inside emails
+  const add = async (event) => {
     const files = Array.from(event.target.files ?? []).filter((file) => /image\/(png|jpe?g)/.test(file.type));
     event.target.value = "";
     if (!files.length) {
       toast.error("Choose PNG or JPG images.");
       return;
     }
-    onImages([...images, ...files.map((file) => ({ id: `${file.name}-${file.size}-${Math.random().toString(36).slice(2, 6)}`, name: file.name, url: URL.createObjectURL(file), alt: "", link: "" }))]);
+    setUploading(true);
+    const added = [];
+    for (const file of files) {
+      try {
+        const asset = await campaignApi.uploadAsset(file);
+        added.push({ id: asset.assetId, assetId: asset.assetId, name: asset.name, url: asset.url, alt: "", link: "" });
+      } catch (error) {
+        toast.error(`${file.name}: ${error.message}`);
+      }
+    }
+    setUploading(false);
+    if (added.length) onImages([...images, ...added]);
   };
   const update = (id, changes) => onImages(images.map((image) => (image.id === id ? { ...image, ...changes } : image)));
   const move = (index, direction) => {
@@ -126,7 +154,7 @@ export function DesignEditor({ images, onImages, cta, onCta }) {
         <input ref={inputRef} type="file" accept="image/png,image/jpeg" multiple className="hidden" onChange={add} />
         <button type="button" onClick={() => inputRef.current?.click()} className="w-full py-5 rounded-xl border-2 border-dashed border-light-gray hover:border-primary/50 text-xs font-semibold text-medium-black flex flex-col items-center gap-1.5 cursor-pointer">
           <Upload className="w-5 h-5 text-primary" />
-          Upload PNG or JPG (you can add several; they stack top to bottom)
+          {uploading ? "Uploading…" : "Upload PNG or JPG, up to 5 MB each (you can add several; they stack top to bottom)"}
         </button>
         <span className="text-[11px] text-light-black">PDFs can&apos;t be used as an email body. Export your Canva design as PNG or JPG.</span>
       </div>
@@ -136,7 +164,7 @@ export function DesignEditor({ images, onImages, cta, onCta }) {
           <img src={image.url} alt="" className="w-16 h-16 rounded-lg object-cover bg-light-gray shrink-0" />
           <div className="flex-1 min-w-0 grid grid-cols-1 gap-2">
             <input value={image.alt} onChange={(event) => update(image.id, { alt: event.target.value })} placeholder="Alt Text (describe the image)" aria-label={`Alt text for ${image.name}`} className={inputClass} />
-            <input value={image.link} onChange={(event) => update(image.id, { link: event.target.value })} placeholder="Destination Link (optional)" aria-label={`Destination link for ${image.name}`} className={inputClass} />
+            <input value={image.link ?? ""} onChange={(event) => update(image.id, { link: event.target.value })} placeholder="Destination Link (optional, https://…)" aria-label={`Destination link for ${image.name}`} className={inputClass} />
           </div>
           <div className="flex flex-col gap-1">
             <button type="button" disabled={index === 0} onClick={() => move(index, -1)} aria-label="Move up" className="p-1.5 rounded-lg border border-light-gray disabled:opacity-40 cursor-pointer"><ArrowUp className="w-3.5 h-3.5" /></button>
@@ -200,8 +228,9 @@ export function HtmlEditor({ html, onHtml }) {
       <input ref={inputRef} type="file" accept=".html,.htm,text/html" className="hidden" onChange={pick} />
       <button type="button" onClick={() => inputRef.current?.click()} className="w-full py-5 rounded-xl border-2 border-dashed border-light-gray hover:border-primary/50 text-xs font-semibold text-medium-black flex flex-col items-center gap-1.5 cursor-pointer">
         <FileCode className="w-5 h-5 text-primary" />
-        {html?.name ? `Replace ${html.name}` : "Upload a complete HTML email file"}
+        {html?.name ? `Replace ${html.name}` : "Upload a complete HTML email file (up to 500 KB)"}
       </button>
+      <span className="text-[11px] text-light-black">Scripts and form elements are removed when it&apos;s saved. An unsubscribe link is added to Marketing and Lifecycle emails if yours doesn&apos;t have one.</span>
     </div>
   );
 }

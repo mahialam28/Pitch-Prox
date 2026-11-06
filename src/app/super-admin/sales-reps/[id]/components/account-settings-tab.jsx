@@ -4,13 +4,8 @@ import React, { useState } from "react";
 import { UserX, Lock, Check } from "lucide-react";
 import Dropdown from "@/components/shared/dropdown/dropdown";
 import toast from "react-hot-toast";
-
-const managerOptions = [
-  { value: "Daniel Martine", label: "Daniel Martine" },
-  { value: "Sarah Johnson", label: "Sarah Johnson" },
-  { value: "Emily Smith", label: "Emily Smith" },
-  { value: "Michael Brown", label: "Michael Brown" },
-];
+import { formatDate } from "@/lib/client-api";
+import { saveRepSettings, updateRep } from "../../team-api";
 
 const timeZoneOptions = [
   { value: "(GMT-05:00) Eastern Time", label: "(GMT-05:00) Eastern Time" },
@@ -69,47 +64,56 @@ const coachingAccessOptions = [
   { value: "Full Access", label: "Full Access" },
 ];
 
-export default function AccountSettingsTab({ rep }) {
-  const repName = rep?.name || "Ryan Anderson";
+// Profile fields save to the employee record; workspace and access options save to the rep's settings
+// (the call-screen options take effect once calling is connected).
+export default function AccountSettingsTab({ rep, settings, managers = [], canManage = false, onSaved, onDeactivate }) {
+  const [fullName, setFullName] = useState(rep.name);
+  const [manager, setManager] = useState(rep.managerId ?? "");
+  const employeeId = rep.employeeId ?? "—";
+  const workEmail = rep.email;
+  const [phoneNumber, setPhoneNumber] = useState(rep.phone ?? "");
+  const [timeZone, setTimeZone] = useState(rep.timezone || timeZoneOptions[0].value);
+  const [language, setLanguage] = useState(rep.language || "English (US)");
+  const [dateFormat, setDateFormat] = useState(settings.dateFormat);
 
-  // Account Information State
-  const [fullName, setFullName] = useState(repName);
-  const [manager, setManager] = useState("Daniel Martine");
-  const [employeeId, setEmployeeId] = useState(rep?.employeeId || "EMP-1001");
-  const [workEmail, setWorkEmail] = useState(
-    rep?.email || "ryan.anderson@pitchprox.com"
-  );
-  const [phoneNumber, setPhoneNumber] = useState(
-    rep?.phone || "(512) 555-0198"
-  );
-  const [timeZone, setTimeZone] = useState("(GMT-05:00) Eastern Time");
-  const [language, setLanguage] = useState("English (US)");
-  const [dateFormat, setDateFormat] = useState("MM/DD/YYYY");
+  const [landingPage, setLandingPage] = useState(settings.landingPage);
+  const [scriptView, setScriptView] = useState(settings.scriptView);
+  const [aiRealtimeGuidance, setAiRealtimeGuidance] = useState(settings.aiRealtimeGuidance);
+  const [postCallAnalysis, setPostCallAnalysis] = useState(settings.postCallAnalysis);
+  const [lowTrustThreshold, setLowTrustThreshold] = useState(String(settings.lowTrustThreshold));
+  const [promptAdherenceAlert, setPromptAdherenceAlert] = useState(String(settings.promptAdherenceAlert));
+  const [sessionTimeout, setSessionTimeout] = useState(settings.sessionTimeout);
 
-  // Preferences & System Settings State
-  const [landingPage, setLandingPage] = useState("Dashboard");
-  const [scriptView, setScriptView] = useState("AI Prompts");
-  const [aiRealtimeGuidance, setAiRealtimeGuidance] = useState(true);
-  const [postCallAnalysis, setPostCallAnalysis] = useState(true);
-  const [lowTrustThreshold, setLowTrustThreshold] = useState("-10");
-  const [promptAdherenceAlert, setPromptAdherenceAlert] = useState("75");
-  const [sessionTimeout, setSessionTimeout] = useState("30 minutes");
-
-  // Access & Permissions State
-  const [platformAccess, setPlatformAccess] = useState("Full Access");
-  const [reportsAccess, setReportsAccess] = useState("All Reports");
-  const [coachingAccess, setCoachingAccess] = useState("Own Notes Only");
-  const [exportData, setExportData] = useState(true);
-  const [managePlaybooks, setManagePlaybooks] = useState(false);
+  const [platformAccess, setPlatformAccess] = useState(settings.platformAccess);
+  const [reportsAccess, setReportsAccess] = useState(settings.reportsAccess);
+  const [coachingAccess, setCoachingAccess] = useState(settings.coachingAccess);
+  const [exportData, setExportData] = useState(settings.exportData);
+  const [managePlaybooks, setManagePlaybooks] = useState(settings.managePlaybooks);
 
   const [saving, setSaving] = useState(false);
+  const managerOptions = [{ value: "", label: "No manager" }, ...managers.filter((item) => item.id !== rep.id).map((item) => ({ value: item.id, label: item.name }))];
+  const zones = timeZoneOptions.some((option) => option.value === timeZone) ? timeZoneOptions : [{ value: timeZone, label: timeZone }, ...timeZoneOptions];
 
-  const handleSaveAll = () => {
+  const handleSaveAll = async () => {
+    if (!fullName.trim()) {
+      toast.error("Full name is required.");
+      return;
+    }
     setSaving(true);
-    setTimeout(() => {
+    try {
+      await updateRep(rep.id, { name: fullName.trim(), managerId: manager || null, phone: phoneNumber, timezone: timeZone, language });
+      await saveRepSettings(rep.id, {
+        dateFormat, landingPage, scriptView, aiRealtimeGuidance, postCallAnalysis, sessionTimeout,
+        lowTrustThreshold: Number(lowTrustThreshold), promptAdherenceAlert: Number(promptAdherenceAlert),
+        platformAccess, reportsAccess, coachingAccess, exportData, managePlaybooks,
+      });
+      toast.success("Account settings saved.");
+      onSaved?.();
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
       setSaving(false);
-      toast.success("Account settings updated successfully!");
-    }, 450);
+    }
   };
 
   return (
@@ -120,7 +124,7 @@ export default function AccountSettingsTab({ rep }) {
           Account Settings
         </h2>
         <p className="text-xs sm:text-sm text-light-black mt-0.5">
-          Manage {repName}&apos;s account preferences, access, and system configurations.
+          Manage {rep.name}&apos;s account preferences, access, and system configurations.
         </p>
       </div>
 
@@ -139,6 +143,7 @@ export default function AccountSettingsTab({ rep }) {
             </label>
             <input
               type="text"
+              maxLength={255}
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               className="w-full px-4 py-2.5 rounded-xl border border-light-gray text-xs text-dark-black/90 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
@@ -180,9 +185,10 @@ export default function AccountSettingsTab({ rep }) {
             </label>
             <input
               type="email"
+              disabled
+              title="The work email is the rep's sign-in; change it in Access Records"
               value={workEmail}
-              onChange={(e) => setWorkEmail(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl border border-light-gray text-xs text-dark-black/90 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+              className="w-full px-4 py-2.5 rounded-xl border border-light-gray text-xs text-dark-black/70 bg-slate-50/80 cursor-not-allowed"
             />
           </div>
 
@@ -193,6 +199,7 @@ export default function AccountSettingsTab({ rep }) {
             </label>
             <input
               type="text"
+              maxLength={64}
               value={phoneNumber}
               onChange={(e) => setPhoneNumber(e.target.value)}
               className="w-full px-4 py-2.5 rounded-xl border border-light-gray text-xs text-dark-black/90 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
@@ -205,7 +212,7 @@ export default function AccountSettingsTab({ rep }) {
               TIME ZONE
             </label>
             <Dropdown
-              items={timeZoneOptions}
+              items={zones}
               selected={timeZone}
               onSelect={(val) => setTimeZone(val)}
               variant="default"
@@ -259,12 +266,14 @@ export default function AccountSettingsTab({ rep }) {
               />
               <button
                 type="button"
-                onClick={() => toast.success("Password reset email sent to " + workEmail)}
-                className="px-3 py-2.5 rounded-xl border border-teal-600 text-teal-600 hover:bg-teal-50 text-xs font-bold transition-colors cursor-pointer shrink-0"
+                disabled
+                title="Reps change their own password in Settings. Reset emails come once an email service is connected."
+                className="px-3 py-2.5 rounded-xl border border-teal-600 text-teal-600 text-xs font-bold shrink-0 opacity-50 cursor-not-allowed"
               >
                 Change Password
               </button>
             </div>
+            <p className="text-[11px] text-light-black">Reps change their own password in Settings → Profile.</p>
           </div>
         </div>
 
@@ -510,37 +519,39 @@ export default function AccountSettingsTab({ rep }) {
             </button>
           </div>
 
+          <p className="text-[11px] text-light-black leading-relaxed">
+            Call-screen options and report/coaching access apply once calling is connected.
+          </p>
+
           {/* Save Changes CTA Button */}
-          <div className="pt-4">
+          {canManage && <div className="pt-4">
             <button
               type="button"
               onClick={handleSaveAll}
               disabled={saving}
               className="w-full py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
             >
-              {saving ? "Saving Preferences..." : "Save Preferences"}
+              {saving ? "Saving..." : "Save Changes"}
             </button>
-          </div>
+          </div>}
         </div>
       </div>
 
       {/* Footer info & Suspend Rep button */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-6 border-t border-light-gray">
         <p className="text-xs text-light-black">
-          Joined: <strong>Jan 12, 2024</strong> • Time Zone:{" "}
-          <strong>(GMT-05:00) Eastern Time (US & Canada)</strong>
+          Joined: <strong>{rep.startDate ? formatDate(rep.startDate) : "—"}</strong> • Time Zone:{" "}
+          <strong>{rep.timezone || "Not set"}</strong>
         </p>
 
-        <button
+        {canManage && rep.status !== "deactivated" && <button
           type="button"
-          onClick={() =>
-            toast.error("Confirming rep suspension status...", { icon: "⚠️" })
-          }
+          onClick={onDeactivate}
           className="px-3.5 py-1.5 rounded-xl border border-rose-300 text-rose-600 hover:bg-rose-50 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 w-fit"
         >
           <UserX className="w-3.5 h-3.5" />
           <span>Suspend Rep</span>
-        </button>
+        </button>}
       </div>
     </div>
   );

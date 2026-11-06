@@ -45,9 +45,9 @@ const metricCards = [
 ];
 
 export const CalendarHeader = () => {
-  // Event counts are live; the announcement cards fill in with the Announcements module
+  // All four cards are live (events and announcements)
   const counts = useCalendarCounts();
-  const valueOf = (card) => (card.id === "today" ? counts?.today ?? "—" : card.id === "upcoming" ? counts?.upcoming ?? "—" : card.value);
+  const valueOf = (card) => counts?.[{ today: "today", upcoming: "upcoming", announcements: "announcements", broadcasts: "scheduled" }[card.id]] ?? "—";
   return (
     <div className="w-full flex flex-col gap-5 sm:gap-6 min-w-0">
       {/* ── Title & Subtitle ── */}
