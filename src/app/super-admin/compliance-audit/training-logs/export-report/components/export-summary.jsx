@@ -3,17 +3,12 @@
 import React from "react";
 import { FileText, Calendar, Filter, List } from "lucide-react";
 
-export default function ExportSummary({
-  totalAssignments = 256,
-  dateRange = "Apr 1, 2024 - May 31, 2024",
-  appliedFilters = "All statuses, All departments, All training types",
-  fieldsCount = 8,
-}) {
+export default function ExportSummary({ totalAssignments, dateRange, appliedFilters, fieldsCount = 0 }) {
   const summaryCards = [
     {
       id: "assignments",
-      title: `${totalAssignments} assignments`,
-      subtext: "Total assignments in selected range",
+      title: totalAssignments == null ? "Counting..." : `${totalAssignments} assignment${totalAssignments === 1 ? "" : "s"}`,
+      subtext: "Matching the filters",
       icon: FileText,
       iconBg: "bg-[#E6F7F7]",
       iconColor: "text-[#0EADAB]",
@@ -21,7 +16,7 @@ export default function ExportSummary({
     {
       id: "daterange",
       title: dateRange,
-      subtext: "Date range",
+      subtext: "Assigned between",
       icon: Calendar,
       iconBg: "bg-[#EFF8FF]",
       iconColor: "text-[#175CD3]",

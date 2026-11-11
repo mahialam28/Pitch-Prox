@@ -22,6 +22,9 @@ import toast from "react-hot-toast";
 import PaymentActivityModal from "./payment-activity-modal";
 import InvoicePreviewModal from "./invoice-preview-modal";
 
+// Kept outside the component: random values aren't allowed during render
+const newTicketId = () => `#TKT-${Math.floor(1000 + Math.random() * 9000)}`;
+
 export const initialBillingQueueData = [
   {
     id: "bq-1",
@@ -409,7 +412,7 @@ export const BillingQueue = ({
       setSelectedCustomerForModal(item);
       setIsModalOpen(true);
     } else if (actionName === "Escalate Support Ticket") {
-      const ticketId = `#TKT-${Math.floor(1000 + Math.random() * 9000)}`;
+      const ticketId = newTicketId();
       toast.success(
         `Support ticket ${ticketId} created & escalated for ${item.name}!`
       );

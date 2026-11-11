@@ -13,3 +13,12 @@ export async function GET(request) {
   await suppress(email);
   return page("You're unsubscribed", "You won't receive PitchProX marketing or product emails any more. Account and billing emails will still be sent.");
 }
+
+// One-click unsubscribe from the mail app's own button (List-Unsubscribe-Post header, RFC 8058)
+export async function POST(request) {
+  const { searchParams } = new URL(request.url);
+  const email = await verifyUnsubscribe(searchParams.get("e"), searchParams.get("s"));
+  if (!email) return new Response("Link not valid", { status: 400 });
+  await suppress(email);
+  return new Response("Unsubscribed", { status: 200 });
+}

@@ -2,16 +2,10 @@
 
 import React from "react";
 import Checkbox from "@/components/shared/checkbox";
+import { TRAINING_REPORT_FIELDS } from "@/lib/compliance/training-catalog";
 
-const allFieldList = [
-  "Employee Name",
-  "Category",
-  "Status",
-  "Assigned On",
-  "Completed On",
-  "Training",
-  "Due Date",
-];
+// Same columns the server can export (lib/compliance/training-catalog)
+const allFieldList = TRAINING_REPORT_FIELDS;
 
 export default function ReportFields({ selectedFields, setSelectedFields }) {
   const isAllSelected = selectedFields.length === allFieldList.length;

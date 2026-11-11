@@ -116,12 +116,12 @@ const Sidebar = ({
       {/* Brand Logo */}
       <div className="flex h-16 shrink-0 items-center justify-between px-6 border-b border-white/10">
         <Link href="/" className="flex items-center">
-          <div className="w-[140px] h-12 overflow-hidden">
+          <div className="w-[180px] h-12 overflow-hidden">
             <Image
-              className="w-full h-full object-contain"
+              className="w-full h-full object-contain object-left"
               src={whiteLogo}
               alt="PitchProX"
-              width={140}
+              width={180}
               height={48}
             />
           </div>

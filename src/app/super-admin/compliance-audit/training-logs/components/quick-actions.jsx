@@ -37,7 +37,7 @@ export default function QuickActions({ onActionClick }) {
       id: "manage_categories",
       title: "Manage Categories",
       description: "Add or edit training categories",
-      isModal: true,
+      href: "/super-admin/compliance-audit/training-logs/manage-categories",
       icon: Layers,
       iconBg: "bg-[#FAF5FF]",
       iconColor: "text-[#A855F7]",

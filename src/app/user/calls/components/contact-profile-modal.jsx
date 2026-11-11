@@ -31,7 +31,7 @@ const ContactProfileModal = ({ isOpen = false, onClose, call = null }) => {
           leadName: call?.name || "",
           phoneNumber: call?.phoneNumber || "",
           leadType: call?.leadType || "",
-          address: call?.propertyAddress || "",
+          ...(call?.contactId ? { contactKind: call.contactKind, contactId: call.contactId } : {}),
           playbook: "PitchProx Standard",
         })
       );
@@ -43,11 +43,11 @@ const ContactProfileModal = ({ isOpen = false, onClose, call = null }) => {
 
   if (!isOpen) return null;
 
-  const callName = call?.name || "Devon Lane";
-  const leadType = call?.leadType || "Expired Listings";
-  const outcome = call?.outcome || "Appointment Set";
+  const callName = call?.name || "—";
+  const leadType = call?.leadType || "—";
+  const outcome = call?.outcome || "";
   const propertyAddress =
-    call?.propertyAddress || "443 N Camden Drive, Dallas, TX 75201";
+    call?.propertyAddress || "—";
 
   return (
     <div
@@ -119,7 +119,7 @@ const ContactProfileModal = ({ isOpen = false, onClose, call = null }) => {
                     Last Call
                   </span>
                   <span className="font-semibold text-dark-black">
-                    {call?.date || "May 19, 2025"} · {call?.time || "10:32 AM"}
+                    {call?.date || "—"} · {call?.time || ""}
                   </span>
                 </div>
               </div>
@@ -133,7 +133,7 @@ const ContactProfileModal = ({ isOpen = false, onClose, call = null }) => {
                     Duration
                   </span>
                   <span className="font-semibold text-dark-black">
-                    {call?.duration || "2m 40s"}
+                    {call?.duration || "—"}
                   </span>
                 </div>
               </div>
@@ -145,7 +145,7 @@ const ContactProfileModal = ({ isOpen = false, onClose, call = null }) => {
                     Trust Gain
                   </span>
                   <span className="font-semibold text-emerald-600">
-                    +{call?.trustGain ?? 28}
+                    {call?.trustGain === null || call?.trustGain === undefined ? "—" : `${call.trustGain > 0 ? "+" : ""}${call.trustGain}`}
                   </span>
                 </div>
               </div>
@@ -161,7 +161,7 @@ const ContactProfileModal = ({ isOpen = false, onClose, call = null }) => {
                       call?.aiAdherence === 0 ? "text-red" : "text-emerald-600"
                     }`}
                   >
-                    {call?.aiAdherence ?? 84}%
+                    {call?.aiAdherence === null || call?.aiAdherence === undefined ? "—" : `${call.aiAdherence}%`}
                   </span>
                 </div>
               </div>
@@ -195,20 +195,20 @@ const ContactProfileModal = ({ isOpen = false, onClose, call = null }) => {
         {/* ── Modal Footer ── */}
         <div className="p-4 sm:px-8 border-t border-light-gray bg-white flex flex-wrap items-center justify-end gap-3">
           <Link
-            href="/user/calls/report"
+            href={call?.id ? `/user/calls/report?id=${encodeURIComponent(call.id)}` : "/user/calls"}
             className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-primary border border-primary/30 rounded-xl hover:bg-primary/5 transition-colors cursor-pointer"
           >
             <Timer className="h-3.5 w-3.5" />
             <span>View Full Report</span>
           </Link>
 
-          <button
+          {call?.mode !== "practice" && <button
             onClick={handleCallNow}
             className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-primary rounded-xl hover:bg-medium-teal transition-colors shadow-sm cursor-pointer"
           >
             <Phone className="h-3.5 w-3.5" />
             <span>Call Now</span>
-          </button>
+          </button>}
         </div>
       </div>
     </div>

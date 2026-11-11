@@ -65,9 +65,9 @@ export function dashboardPathFor(role) {
 
 // Roles offered in the Add Employee wizard (label in the design → role)
 export const EMPLOYEE_ROLE_OPTIONS = [
-  { label: "Admin", role: ROLES.SUPER_ADMIN },
-  { label: "Manager", role: ROLES.ADMIN_MANAGER },
-  { label: "Sales Rep", role: ROLES.SALES_REP },
+  { label: "Super Admin", role: ROLES.SUPER_ADMIN },
+  { label: "Admin Manager", role: ROLES.ADMIN_MANAGER },
+  { label: "Support", role: ROLES.SUPPORT },
   { label: "Auditor", role: ROLES.AUDITOR },
-  { label: "Support Manager", role: ROLES.SUPPORT },
+  { label: "Sales Rep", role: ROLES.SALES_REP },
 ];

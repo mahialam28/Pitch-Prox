@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, GitBranch, Sparkles } from "lucide-react";
 import SettingsDropdown from "@/components/shared/dropdown/settings-dropdown";
@@ -34,7 +34,11 @@ const AddLogicRuleModal = ({
   const [action, setAction] = useState("");
   const [priority, setPriority] = useState("High");
 
-  useEffect(() => {
+  // Reset the form whenever the modal opens (or switches item) — synced during render, not in an effect
+  const [syncedFor, setSyncedFor] = useState(null);
+  const syncKey = isOpen ? editRule ?? "new" : null;
+  if (syncedFor !== syncKey) {
+    setSyncedFor(syncKey);
     if (editRule) {
       setStage(editRule.stage || "Discovery");
       setCondition(editRule.condition || "");
@@ -46,7 +50,7 @@ const AddLogicRuleModal = ({
       setAction("");
       setPriority("High");
     }
-  }, [editRule, isOpen]);
+  }
 
   if (!isOpen) return null;
 

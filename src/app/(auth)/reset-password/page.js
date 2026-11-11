@@ -5,8 +5,8 @@ export const metadata = {
   description: "Reset your PitchProX account password.",
 };
 
-const ResetPassword = () => {
-  return <ResetPasswordForm />;
-};
-
-export default ResetPassword;
+// Link from the password reset email: /reset-password?token=...
+export default async function ResetPassword({ searchParams }) {
+  const { token } = await searchParams;
+  return <ResetPasswordForm token={typeof token === "string" ? token : ""} />;
+}

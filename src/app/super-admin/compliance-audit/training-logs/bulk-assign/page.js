@@ -1,41 +1,59 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import toast from "react-hot-toast";
 import SelectTraining from "./components/select-training";
 import ChooseEmployees from "./components/choose-employees";
 import AssignmentSettings from "./components/assignment-settings";
 import AssignmentSummary from "./components/assignment-summary";
+import { apiRequest } from "@/lib/client-api";
+import { showError } from "@/lib/alerts";
 
 export default function BulkAssignPage() {
-  const [selectedCourses, setSelectedCourses] = useState(["course-1"]);
+  const router = useRouter();
+  const [trainings, setTrainings] = useState(null);
+  const [employees, setEmployees] = useState(null);
+  const [selectedCourses, setSelectedCourses] = useState([]);
   const [courseSearch, setCourseSearch] = useState("");
   const [courseCategory, setCourseCategory] = useState("All");
-  const [courseFormat, setCourseFormat] = useState("All");
-
-  const [selectedEmployees, setSelectedEmployees] = useState([
-    "emp-1",
-    "emp-2",
-    "emp-3",
-    "emp-4",
-    "emp-5",
-  ]);
+  const [selectedEmployees, setSelectedEmployees] = useState([]);
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [employeeDept, setEmployeeDept] = useState("All");
   const [employeeRole, setEmployeeRole] = useState("All");
-
-  const [dueDate, setDueDate] = useState("May 31, 2024");
+  const [dueDate, setDueDate] = useState(() => new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10));
   const [priority, setPriority] = useState("Required");
   const [sendNotification, setSendNotification] = useState(true);
   // Off by default; when on, a completed Training gets a new assignment record (the old one is kept)
   const [allowReassignment, setAllowReassignment] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  const handleAssign = () => {
-    toast.success(
-      `Successfully assigned training to ${selectedEmployees.length || 24} employees!`
-    );
+  useEffect(() => {
+    Promise.all([apiRequest("/api/v1/compliance/training/courses"), apiRequest("/api/v1/compliance/training/employees")])
+      .then(([courses, people]) => {
+        setTrainings(courses.results);
+        setEmployees(people.results);
+      })
+      .catch((error) => showError("Not loaded", error.message));
+  }, []);
+
+  const handleAssign = async () => {
+    setBusy(true);
+    try {
+      const result = await apiRequest("/api/v1/compliance/training/assignments", {
+        method: "POST",
+        body: { courseIds: selectedCourses, userIds: selectedEmployees, dueDate, requirement: priority, notify: sendNotification, allowReassign: allowReassignment },
+      });
+      const skipped = result.skipped.length ? ` ${result.skipped.length} skipped (already assigned or completed).` : "";
+      toast.success(`${result.created} assignment${result.created === 1 ? "" : "s"} created.${skipped}`);
+      if (result.created) router.push("/super-admin/compliance-audit/training-logs");
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -55,7 +73,7 @@ export default function BulkAssignPage() {
           Bulk Assign Training
         </h1>
         <p className="text-xs sm:text-sm text-medium-black">
-          Assign one or more training materials to multiple employees at once.
+          Assign one or more Trainings to several employees at once.
         </p>
       </div>
 
@@ -64,17 +82,17 @@ export default function BulkAssignPage() {
         {/* Left Column (col-span-8) */}
         <div className="lg:col-span-8 flex flex-col gap-6 w-full min-w-0">
           <SelectTraining
+            trainings={trainings}
             selectedCourses={selectedCourses}
             setSelectedCourses={setSelectedCourses}
             searchTerm={courseSearch}
             setSearchTerm={setCourseSearch}
             selectedCategory={courseCategory}
             setSelectedCategory={setCourseCategory}
-            selectedFormat={courseFormat}
-            setSelectedFormat={setCourseFormat}
           />
 
           <ChooseEmployees
+            employees={employees}
             selectedEmployees={selectedEmployees}
             setSelectedEmployees={setSelectedEmployees}
             searchTerm={employeeSearch}
@@ -105,6 +123,7 @@ export default function BulkAssignPage() {
             dueDate={dueDate}
             notificationsOn={sendNotification}
             onAssign={handleAssign}
+            busy={busy}
           />
         </div>
       </div>

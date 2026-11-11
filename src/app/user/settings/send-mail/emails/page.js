@@ -7,15 +7,12 @@ import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import Title from "@/components/texts/title";
 import Text from "@/components/texts/text";
 import Dropdown from "@/components/shared/dropdown/dropdown";
-import { useMail, WAITING_LABEL } from "../mail-view";
+import { MAIL_STATUS, mailHref, useMail } from "../mail-view";
 import { usePortal } from "@/components/shared/use-portal";
 
 const filterOptions = [
   { value: "all", label: "All Status" },
-  { value: WAITING_LABEL, label: "Waiting to send" },
-  { value: "Sent", label: "Sent" },
-  { value: "Opened", label: "Opened" },
-  { value: "Draft", label: "Draft" },
+  ...Object.values(MAIL_STATUS).filter((item, index, all) => all.findIndex((other) => other.label === item.label) === index).map((item) => ({ value: item.label, label: item.label })),
 ];
 
 const PER_PAGE = 6;
@@ -28,7 +25,7 @@ export default function EmailsPage() {
   const { mails: allEmails, loaded } = useMail();
 
   const openEmail = (mail) => {
-    router.push(`${portal.mailBase}/emails/${mail.id}`);
+    router.push(mailHref(portal.mailBase, mail));
   };
 
   const filteredMails =

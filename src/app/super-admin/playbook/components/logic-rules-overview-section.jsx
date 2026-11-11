@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   Check,
 } from "lucide-react";
+import { confirmReset } from "@/lib/alerts";
 import toast from "react-hot-toast";
 
 export const DEFAULT_RULES_BY_CATEGORY = {
@@ -393,7 +394,7 @@ const LogicRulesOverviewSection = ({
   category = "intent-detection",
   rules = null,
   onChange = () => {},
-  onResetDefaults = () => {},
+  onResetDefaults,
 }) => {
   const currentCategoryKey =
     category && DEFAULT_RULES_BY_CATEGORY[category]
@@ -428,7 +429,8 @@ const LogicRulesOverviewSection = ({
     }
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
+    if (!(await confirmReset("Rule Category"))) return;
     if (onResetDefaults) {
       onResetDefaults(currentCategoryKey);
     } else {
@@ -470,9 +472,8 @@ const LogicRulesOverviewSection = ({
 
       {/* ── Table Header ── */}
       <div className="flex items-center justify-between gap-3 px-3.5 text-[11px] font-bold text-light-black uppercase tracking-wider select-none">
-        <div className="w-[180px] sm:w-[200px] shrink-0">LOGIC RULE</div>
-        <div className="flex-1 min-w-0 hidden sm:block">HOW IT WORKS</div>
-        <div className="w-[85px] shrink-0 text-right">STATUS</div>
+        <div>LOGIC RULE &amp; HOW IT WORKS</div>
+        <div className="shrink-0 text-right">STATUS</div>
       </div>
 
       {/* ── Rules Rows ── */}
@@ -483,35 +484,28 @@ const LogicRulesOverviewSection = ({
           return (
             <div
               key={rule.id}
-              className="p-3.5 sm:p-4 rounded-xl border flex items-center justify-between gap-3 bg-white hover:bg-light-gray/30 border-light-gray hover:border-medium-black/20 shadow-2xs transition-all"
+              className="p-3.5 sm:p-4 rounded-xl border bg-white hover:bg-light-gray/30 border-light-gray hover:border-medium-black/20 shadow-2xs transition-all space-y-2"
             >
-              {/* Left Column: Icon + Title + Subtitle */}
-              <div className="w-[180px] sm:w-[200px] flex items-center gap-3 shrink-0 min-w-0">
-                <div className="w-8 h-8 rounded-full bg-teal-50 text-primary border border-teal-200/70 flex items-center justify-center shrink-0">
-                  <Icon className="w-4 h-4 stroke-[2.2]" />
+              {/* Icon + title + subtitle, with the status button on the right */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-full bg-teal-50 text-primary border border-teal-200/70 flex items-center justify-center shrink-0">
+                    <Icon className="w-4 h-4 stroke-[2.2]" />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-xs sm:text-[13px] font-bold text-dark-black font-secondary leading-snug">
+                      {rule.title}
+                    </h4>
+                    <p className="text-[11px] text-medium-black font-normal mt-0.5 leading-tight">
+                      {rule.subtitle}
+                    </p>
+                  </div>
                 </div>
-                <div className="min-w-0 pr-1">
-                  <h4 className="text-xs sm:text-[13px] font-bold text-dark-black font-secondary leading-snug">
-                    {rule.title}
-                  </h4>
-                  <p className="text-[11px] text-medium-black font-normal mt-0.5 leading-tight">
-                    {rule.subtitle}
-                  </p>
-                </div>
-              </div>
 
-              {/* Middle Column: How it Works */}
-              <div className="flex-1 min-w-0 hidden sm:block pr-2">
-                <p className="text-xs text-medium-black font-normal leading-relaxed">
-                  {rule.howItWorks}
-                </p>
-              </div>
-
-              {/* Right Column: Status Button (NO ARROW) */}
-              <div className="w-[85px] shrink-0 flex items-center justify-end">
                 <button
                   type="button"
                   onClick={(e) => handleToggleRule(rule.id, e)}
+                  aria-pressed={Boolean(rule.active)}
                   className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer shadow-2xs shrink-0 select-none ${
                     rule.active
                       ? "bg-teal-50 border border-primary/40 text-primary hover:bg-teal-100/60"
@@ -524,6 +518,11 @@ const LogicRulesOverviewSection = ({
                   <span>{rule.active ? "Active" : "Inactive"}</span>
                 </button>
               </div>
+
+              {/* How it works */}
+              <p className="text-xs text-medium-black font-normal leading-relaxed pl-11">
+                {rule.howItWorks}
+              </p>
             </div>
           );
         })}

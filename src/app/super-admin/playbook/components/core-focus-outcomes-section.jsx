@@ -8,7 +8,6 @@ import {
   X,
   GripVertical,
   Trash2,
-  ChevronDown,
 } from "lucide-react";
 import Text from "@/components/texts/text";
 import AddFocusModal from "./add-focus-modal";
@@ -41,15 +40,13 @@ const CoreFocusOutcomesSection = ({
     formData.focusAreas || ["build-trust", "uncover-needs", "objection-handling"]
   );
   const [internalTags, setInternalTags] = useState(
-    formData.internalTags || initialTags
+    formData.internalTags ?? initialTags
   );
   const [outcomes, setOutcomes] = useState(
     formData.keyOutcomes || initialOutcomes
   );
-  const [internalNotes, setInternalNotes] = useState(
-    formData.internalNotes ||
-      "This playbook uses the Herjavec framework with a trust-first approach. Focus on value, transparency and confidence."
-  );
+  // What's saved (an empty value stays empty after a reload)
+  const [internalNotes, setInternalNotes] = useState(formData.internalNotes ?? "");
 
   // Modal states
   const [showAddFocusModal, setShowAddFocusModal] = useState(false);
@@ -180,7 +177,7 @@ const CoreFocusOutcomesSection = ({
                     >
                       {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                     </div>
-                    <span className="truncate">{area.label}</span>
+                    <span className="min-w-0 break-words leading-snug">{area.label}</span>
                   </button>
                 );
               })}
@@ -220,7 +217,6 @@ const CoreFocusOutcomesSection = ({
                   </span>
                 ))}
               </div>
-              <ChevronDown className="w-4 h-4 text-light-black shrink-0" />
             </div>
 
             {/* + Add Tag Button */}
@@ -255,7 +251,7 @@ const CoreFocusOutcomesSection = ({
                 >
                   <div className="flex items-center gap-2.5 min-w-0 flex-1">
                     <GripVertical className="w-4 h-4 text-light-black shrink-0 cursor-grab active:cursor-grabbing" />
-                    <span className="text-xs sm:text-sm font-normal text-dark-black/80 leading-snug truncate">
+                    <span className="text-xs sm:text-sm font-normal text-dark-black/80 leading-snug min-w-0 break-words">
                       {outcome.text}
                     </span>
                   </div>
@@ -332,7 +328,7 @@ const CoreFocusOutcomesSection = ({
               </span>
             </div>
             <textarea
-              rows={3}
+              rows={5}
               maxLength={500}
               value={internalNotes}
               onChange={(e) => handleNotesChange(e.target.value)}

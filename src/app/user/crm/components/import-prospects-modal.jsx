@@ -6,14 +6,13 @@ import DialogModal, { DialogButton } from "@/components/modals/dialog-modal";
 
 const MAX_ROWS = 5000;
 const MAX_BYTES = 10 * 1024 * 1024;
-const TEMPLATE_HEADERS = ["Full Name", "Phone Number", "Email", "Property Address", "City", "State", "Zip Code", "Lead Type", "Lead Stage", "Status", "Outcome"];
+const TEMPLATE_HEADERS = ["Full Name", "Phone 1", "Phone 2", "Phone 3", "Phone 4", "Email", "Property Address", "City", "State", "Zip Code", "Lead Type", "Lead Stage", "Status", "Outcome"];
 
 // CSV header (lower-case) → prospect field
 const HEADER_MAP = {
   "full name": "name",
   name: "name",
-  "phone number": "phoneNumber",
-  phone: "phoneNumber",
+  // Several phone columns are kept (Phone 1-6, Mobile / Home / Work Phone); see PHONE_HEADERS
   email: "email",
   "property address": "propertyAddress",
   address: "propertyAddress",
@@ -26,6 +25,16 @@ const HEADER_MAP = {
   stage: "stage",
   status: "status",
   outcome: "outcome",
+};
+
+// Phone columns → the type the number gets. Every one is kept, in this column order.
+const PHONE_HEADERS = {
+  "phone number": "Mobile", phone: "Mobile", "phone 1": "Mobile", "phone 2": "Mobile", "phone 3": "Mobile", "phone 4": "Mobile", "phone 5": "Mobile", "phone 6": "Mobile",
+  "phone number 1": "Mobile", "phone number 2": "Mobile", "phone number 3": "Mobile", "phone number 4": "Mobile",
+  mobile: "Mobile", "mobile phone": "Mobile", cell: "Mobile", "cell phone": "Mobile",
+  home: "Home", "home phone": "Home", landline: "Home",
+  work: "Work", "work phone": "Work", "office phone": "Work",
+  "other phone": "Other",
 };
 
 const parseCsvLine = (line) => {
@@ -55,13 +64,18 @@ const parseCsvLine = (line) => {
 const parseCsv = (text) => {
   const lines = text.replace(/^﻿/, "").split(/\r?\n/).filter((line) => line.trim());
   if (!lines.length) return [];
-  const headers = parseCsvLine(lines[0]).map((header) => HEADER_MAP[header.trim().toLowerCase()]);
+  const raw = parseCsvLine(lines[0]).map((header) => header.trim().toLowerCase());
+  const headers = raw.map((header) => HEADER_MAP[header]);
   return lines.slice(1).map((line) => {
     const cells = parseCsvLine(line);
-    const row = {};
+    const row = { phones: [] };
     headers.forEach((field, index) => {
       if (field && cells[index]?.trim()) row[field] = cells[index].trim();
     });
+    raw.forEach((header, index) => {
+      if (PHONE_HEADERS[header] && cells[index]?.trim()) row.phones.push({ number: cells[index].trim(), label: PHONE_HEADERS[header] });
+    });
+    row.phoneNumber = row.phones[0]?.number;
     return row;
   });
 };
@@ -72,6 +86,7 @@ const parseJson = (text) => {
   return list.map((item) => ({
     name: item.name || item.fullName,
     phoneNumber: item.phoneNumber || item.phone,
+    phones: Array.isArray(item.phones) ? item.phones : (item.phoneNumbers ?? [item.phoneNumber || item.phone]).filter(Boolean).map((number) => ({ number, label: "Mobile" })),
     email: item.email,
     propertyAddress: item.propertyAddress,
     city: item.city,
@@ -87,7 +102,7 @@ const parseJson = (text) => {
 const digits = (value) => String(value || "").replace(/\D/g, "");
 
 const downloadTemplate = () => {
-  const example = ["Jane Cooper", "(555) 123-4567", "jane@example.com", "12 Oak Street", "Austin", "TX", "78701", "", "New", "Unknown", ""];
+  const example = ["Jane Cooper", "(555) 123-4567", "(555) 987-6543", "", "", "jane@example.com", "12 Oak Street", "Austin", "TX", "78701", "", "New", "Unknown", ""];
   const csv = `${TEMPLATE_HEADERS.join(",")}\n${example.map((value) => `"${value}"`).join(",")}\n`;
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
   Object.assign(document.createElement("a"), { href: url, download: "pitchprox-prospects-template.csv" }).click();
@@ -159,12 +174,14 @@ const ImportProspectsModal = ({ isOpen, onClose, existingProspects = [], onImpor
   // Rows that will actually be sent, after skipping duplicate phone numbers
   const toImport = (() => {
     if (!skipDuplicates) return rows;
-    const seen = new Set(existingProspects.map((prospect) => digits(prospect.phoneNumber)).filter(Boolean));
+    // Any of a row's numbers already on a prospect (or earlier in the file) makes it a duplicate
+    const numbersOf = (item) => [item.phoneNumber, ...(item.phones ?? []).map((phone) => phone.number)].map(digits).filter(Boolean);
+    const seen = new Set(existingProspects.flatMap(numbersOf));
     return rows.filter((row) => {
-      const phone = digits(row.phoneNumber);
-      if (!phone) return true;
-      if (seen.has(phone)) return false;
-      seen.add(phone);
+      const numbers = numbersOf(row);
+      if (!numbers.length) return true;
+      if (numbers.some((number) => seen.has(number))) return false;
+      numbers.forEach((number) => seen.add(number));
       return true;
     });
   })();

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import AddPromptRuleModal from "./add-prompt-rule-modal";
 import AddPromptToneModal from "./add-prompt-tone-modal";
+import { confirmReset } from "@/lib/alerts";
 import toast from "react-hot-toast";
 
 export const DEFAULT_PROMPT_VOICE = {
@@ -82,7 +83,7 @@ const OVERALL_VOICE_OPTIONS = [
 const PromptVoiceSection = ({
   data = {},
   onChange = () => {},
-  onResetDefaults = () => {},
+  onResetDefaults,
 }) => {
   const [toneModalOpen, setToneModalOpen] = useState(false);
   const [ruleModalOpen, setRuleModalOpen] = useState(false);
@@ -136,7 +137,8 @@ const PromptVoiceSection = ({
     }
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
+    if (!(await confirmReset("Prompt Voice"))) return;
     if (onResetDefaults) {
       onResetDefaults();
     } else {
@@ -378,7 +380,7 @@ const PromptVoiceSection = ({
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {(currentData.examples || DEFAULT_PROMPT_VOICE.examples).map((ex) => {
             const isSelected = activeExampleId === ex.id;
 

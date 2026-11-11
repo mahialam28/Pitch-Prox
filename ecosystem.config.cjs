@@ -48,5 +48,25 @@ module.exports = {
       restart_delay: 10000,
       time: true,
     },
+    {
+      // AI call service (live coaching): browsers connect over WebSocket through NGINX at /call-ws/
+      // (see DEPLOYMENT.md §8). Needs CALL_SERVICE_SECRET in .env.local, the same value the app uses.
+      name: "pitchprox-calls",
+      cwd: __dirname,
+      script: "services/call-service.mjs",
+      node_args: "--disable-warning=MODULE_TYPELESS_PACKAGE_JSON",
+      exec_mode: "fork",
+      instances: 1, // calls live in memory: one instance (scale later with sticky routing)
+      env: {
+        NODE_ENV: "production",
+        CALL_SERVICE_PORT: 3010,
+        CALL_SERVICE_APP_URL: `http://127.0.0.1:${PORT}`,
+      },
+      autorestart: true,
+      max_memory_restart: "512M",
+      kill_timeout: 10000, // lets open calls save before a restart
+      restart_delay: 3000,
+      time: true,
+    },
   ],
 };

@@ -11,7 +11,7 @@ export const GET = withApi(async () => {
   return NextResponse.json({ results, count: results.length });
 });
 
-// Body: { to, cc?, bcc?, subject, body, trackOpens? } — stored until an email service is connected
+// Body: { to, cc?, bcc?, subject, body, trackOpens?, draft? } — sent through Postmark ("Name via PitchProX", replies to the sender), or saved as a draft
 export const POST = withApi(async (request) => {
   const user = await requireRole(...CUSTOMER_ROLES, ...STAFF_ROLES);
   return NextResponse.json({ message: await queueMail(user, await readJson(request)) }, { status: 201 });

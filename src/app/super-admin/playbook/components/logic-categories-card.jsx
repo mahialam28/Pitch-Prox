@@ -104,7 +104,7 @@ const LogicCategoriesCard = ({
                     }`}
                 />
                 <span
-                  className={`text-xs sm:text-[13px] truncate font-secondary ${isActive
+                  className={`text-xs sm:text-[13px] leading-snug min-w-0 break-words font-secondary ${isActive
                       ? "font-semibold text-primary"
                       : "font-medium text-medium-black group-hover:text-dark-black"
                     }`}

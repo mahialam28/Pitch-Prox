@@ -21,7 +21,7 @@ export default function CampaignMetrics({ overview }) {
       id: "emails-sent",
       label: "EMAILS (30 DAYS)",
       value: mail ? mail.total.toLocaleString("en-US") : "—",
-      subtext: mail ? (overview.providerConnected ? `${mail.sent} delivered` : `${mail.queued} waiting for an email service`) : "",
+      subtext: mail ? (overview.providerConnected ? `${mail.sent} sent · ${mail.delivered ?? 0} delivered` : `${mail.queued} waiting for an email service`) : "",
       subtextColor: overview?.providerConnected ? "text-emerald-600" : "text-amber-600",
       icon: Mail,
       iconBg: "bg-sky-50 text-sky-600",

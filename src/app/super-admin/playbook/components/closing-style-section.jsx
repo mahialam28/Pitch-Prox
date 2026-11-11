@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import AddPromptRuleModal from "./add-prompt-rule-modal";
 import AddCoachingPillarModal from "./add-coaching-pillar-modal";
+import { confirmReset } from "@/lib/alerts";
 import toast from "react-hot-toast";
 
 export const DEFAULT_CLOSING_STYLE = {
@@ -68,7 +69,7 @@ export const DEFAULT_CLOSING_STYLE = {
 const ClosingStyleSection = ({
   data = {},
   onChange = () => {},
-  onResetDefaults = () => {},
+  onResetDefaults,
 }) => {
   const [techModalOpen, setTechModalOpen] = useState(false);
   const [avoidModalOpen, setAvoidModalOpen] = useState(false);
@@ -104,7 +105,8 @@ const ClosingStyleSection = ({
     handleFieldChange("avoidList", [...(currentData.avoidList || []), text]);
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
+    if (!(await confirmReset("Closing Style"))) return;
     if (onResetDefaults) {
       onResetDefaults();
     } else {
@@ -153,16 +155,16 @@ const ClosingStyleSection = ({
           <textarea
             value={currentData.philosophy}
             onChange={(e) => {
-              if (e.target.value.length <= 300) {
+              if (e.target.value.length <= 500) {
                 handleFieldChange("philosophy", e.target.value);
               }
             }}
             rows={2}
-            maxLength={300}
+            maxLength={500}
             className="w-full px-3.5 py-2.5 pb-6 rounded-xl border border-light-gray bg-white text-xs sm:text-[13px] text-dark-black focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none font-normal leading-relaxed"
           />
           <div className="absolute right-3 bottom-2 text-[10px] sm:text-[11px] font-medium text-medium-black/70 pointer-events-none">
-            {(currentData.philosophy || "").length}/300
+            {(currentData.philosophy || "").length}/500
           </div>
         </div>
       </div>
@@ -176,16 +178,16 @@ const ClosingStyleSection = ({
           <textarea
             value={currentData.guidance}
             onChange={(e) => {
-              if (e.target.value.length <= 300) {
+              if (e.target.value.length <= 500) {
                 handleFieldChange("guidance", e.target.value);
               }
             }}
             rows={2}
-            maxLength={300}
+            maxLength={500}
             className="w-full px-3.5 py-2.5 pb-6 rounded-xl border border-light-gray bg-white text-xs sm:text-[13px] text-dark-black focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none font-normal leading-relaxed"
           />
           <div className="absolute right-3 bottom-2 text-[10px] sm:text-[11px] font-medium text-medium-black/70 pointer-events-none">
-            {(currentData.guidance || "").length}/300
+            {(currentData.guidance || "").length}/500
           </div>
         </div>
       </div>
@@ -264,11 +266,11 @@ const ClosingStyleSection = ({
           Closing Progression Structure
         </label>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {(currentData.cadence || DEFAULT_CLOSING_STYLE.cadence).map((c) => (
             <div
               key={c.step}
-              className="p-3.5 rounded-xl border border-light-gray bg-white space-y-1.5 shadow-2xs"
+              className="p-3.5 rounded-xl border border-light-gray bg-white space-y-1.5 shadow-2xs min-w-0 break-words"
             >
               <div className="w-5 h-5 rounded-full bg-light-gray flex items-center justify-center text-[11px] font-bold text-medium-black">
                 {c.step}

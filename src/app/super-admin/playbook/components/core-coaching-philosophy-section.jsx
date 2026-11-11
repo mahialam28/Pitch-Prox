@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { Info, RotateCcw, Plus, Check } from "lucide-react";
 import AddCoachingPillarModal from "./add-coaching-pillar-modal";
+import { confirmReset } from "@/lib/alerts";
 import toast from "react-hot-toast";
 
 export const DEFAULT_COACHING_PHILOSOPHY = {
@@ -74,7 +75,7 @@ const QUESTIONS = [
 const CoreCoachingPhilosophySection = ({
   data = {},
   onChange = () => {},
-  onResetDefaults = () => {},
+  onResetDefaults,
 }) => {
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -112,7 +113,8 @@ const CoreCoachingPhilosophySection = ({
     }
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
+    if (!(await confirmReset("Core Coaching Philosophy"))) return;
     if (onResetDefaults) {
       onResetDefaults();
     } else {
@@ -212,7 +214,7 @@ const CoreCoachingPhilosophySection = ({
         </div>
 
         {/* Pillars Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           {allPillars.map((pillar) => {
             const isSelected = selectedPillars.includes(pillar);
             return (
@@ -229,7 +231,7 @@ const CoreCoachingPhilosophySection = ({
                 {isSelected && (
                   <Check className="w-3.5 h-3.5 text-primary stroke-[2.5] shrink-0" />
                 )}
-                <span className="truncate">{pillar}</span>
+                <span className="min-w-0 break-words leading-snug">{pillar}</span>
               </button>
             );
           })}

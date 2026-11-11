@@ -1,6 +1,7 @@
 import { createId, query } from "@/lib/db";
 import { ApiError } from "@/lib/api";
 import { recordAudit } from "@/lib/audit";
+import { notify, ticketLink } from "@/lib/notifications";
 import { getSubscription } from "@/lib/billing";
 import { formatBytes, saveUpload } from "@/lib/storage";
 import { requireCurrentUser } from "@/lib/auth";
@@ -42,7 +43,7 @@ export const TICKET_SELECT = `SELECT support_tickets.id, support_tickets.number,
   support_tickets.status, support_tickets.created_at AS createdAt, support_tickets.updated_at AS updatedAt,
   support_tickets.first_response_at AS firstResponseAt, support_tickets.escalated_at AS escalatedAt, support_tickets.resolved_at AS resolvedAt,
   support_tickets.organization_id AS organizationId, organizations.name AS company, organizations.created_at AS memberSince,
-  creators.name AS customerName, creators.email AS customerEmail,
+  creators.id AS customerId, creators.name AS customerName, creators.email AS customerEmail,
   agents.id AS agentId, agents.name AS agentName, agents.email AS agentEmail, agents.role AS agentRole
   FROM support_tickets
   JOIN organizations ON organizations.id = support_tickets.organization_id
@@ -201,6 +202,7 @@ export async function replyAsAgent(user, id, form) {
     "UPDATE support_tickets SET status = ?, first_response_at = COALESCE(first_response_at, NOW()), assigned_to = COALESCE(assigned_to, ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?",
     [status, user.id, id]
   );
+  await notify([ticket.customerId], { type: "ticket", title: `New reply on TKT-${ticket.number}`, body: `${user.name}: ${body}`.slice(0, 300), link: (role) => ticketLink(role, id), entityType: "support_ticket", entityId: id, actor: user });
   return getStaffTicket(id);
 }
 
@@ -240,6 +242,10 @@ export async function updateStaffTicket(user, id, body) {
   if (typeof body.note === "string" && body.note.trim()) {
     await query("INSERT INTO support_internal_notes (id, ticket_id, author_id, body) VALUES (?, ?, ?, ?)", [createId("tnote"), id, user.id, text(body.note, "Note", 5000)]);
   }
+  if (body.assignedTo) await notify([body.assignedTo], { type: "ticket", title: `Ticket assigned to you: TKT-${ticket.number}`, body: ticket.subject, link: (role) => ticketLink(role, id), entityType: "support_ticket", entityId: id, actor: user });
+  if (body.status && ["Resolved", "Closed"].includes(body.status) && body.status !== ticket.status) {
+    await notify([ticket.customerId], { type: "ticket", title: `TKT-${ticket.number} is ${body.status.toLowerCase()}`, body: ticket.subject, link: (role) => ticketLink(role, id), entityType: "support_ticket", entityId: id, actor: user });
+  }
   if (changes.length) await recordAudit(user, { action: "support.ticket_updated", entityType: "support_ticket", entityId: id, organizationId: ticket.organizationId, summary: `TKT-${ticket.number}: ${changes.join(", ")}` });
   return getStaffTicket(id);
 }
@@ -252,6 +258,7 @@ export async function escalateTicket(user, id, { assignedTo, priority, reason })
   const why = text(reason, "Reason for escalation", 2000);
   await query("UPDATE support_tickets SET assigned_to = ?, priority = ?, status = IF(status IN ('Resolved', 'Closed'), 'Open', status), escalated_at = NOW(), updated_at = CURRENT_TIMESTAMP WHERE id = ?", [agent.id, priority, id]);
   await query("INSERT INTO support_internal_notes (id, ticket_id, author_id, body) VALUES (?, ?, ?, ?)", [createId("tnote"), id, user.id, `Escalated to ${agent.name}: ${why}`]);
+  await notify([agent.id], { type: "ticket", title: `Ticket escalated to you: TKT-${ticket.number}`, body: `${user.name}: ${why}`.slice(0, 300), link: (role) => ticketLink(role, id), entityType: "support_ticket", entityId: id, actor: user });
   await recordAudit(user, { action: "support.ticket_escalated", entityType: "support_ticket", entityId: id, organizationId: ticket.organizationId, summary: `Escalated TKT-${ticket.number} to ${agent.name}` });
   return getStaffTicket(id);
 }

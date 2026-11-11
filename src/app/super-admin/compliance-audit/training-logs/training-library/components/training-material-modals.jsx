@@ -1,136 +1,125 @@
 "use client";
 
 import React, { useState } from "react";
-import { ChevronLeft, ChevronRight, Pause, Play, ZoomIn, ZoomOut } from "lucide-react";
+import { ExternalLink } from "lucide-react";
+import toast from "react-hot-toast";
 import DialogModal, { DialogButton } from "@/components/modals/dialog-modal";
-import { showSavedToast } from "@/lib/toast";
+import { apiRequest } from "@/lib/client-api";
+import { MATERIAL_FILE_TYPES } from "@/lib/compliance/training-catalog";
 
-// Design-only viewers: sample page content and a placeholder player (no real files yet).
+const fileUrl = (material) => `/api/v1/compliance/training/materials/${material.id}/file`;
 
-const SECTIONS = ["Purpose", "Scope", "Responsibilities"];
-const ZOOM_STEPS = [75, 100, 125, 150];
-
-const subtitleFor = (material) => [material?.format, material?.meta, material?.updatedDate].filter(Boolean).join(" · ");
-const pageCount = (material) => Number.parseInt(material?.meta, 10) || 1;
-
-export const TrainingPreviewModal = ({ material, onClose, onDownload }) => {
-  const [zoomIndex, setZoomIndex] = useState(1);
-  const [page, setPage] = useState(1);
-  const pages = material?.format === "PDF" ? pageCount(material) : 1;
-  const zoom = ZOOM_STEPS[zoomIndex];
-  const topic = material?.title?.split(" ")[0].toLowerCase() ?? "";
-
+// Preview a library material: PDFs and uploaded videos play in the page; Word files and video
+// links open from a link.
+export function MaterialViewer({ material, onClose }) {
+  if (!material) return null;
+  const inline = `${fileUrl(material)}?inline=1`;
   return (
     <DialogModal
-      isOpen={Boolean(material)}
+      isOpen
       onClose={onClose}
-      title={material?.title}
-      subtitle={subtitleFor(material)}
+      title={material.title}
+      subtitle={`${material.format} · ${material.category}${material.file ? ` · ${material.file.size}` : ""}`}
       size="2xl"
       footer={
         <>
-          <DialogButton onClick={() => onDownload(material)}>Download</DialogButton>
+          {material.file && <a href={fileUrl(material)} className="px-4 py-2.5 rounded-xl border border-gray-300 text-sm font-medium text-dark-black hover:bg-light-gray">Download</a>}
           <DialogButton onClick={onClose}>Close</DialogButton>
         </>
       }
     >
-      <div className="rounded-xl border border-gray-200 bg-light-gray/70 p-6 sm:p-8 h-[340px] overflow-auto flex justify-center">
-        <article
-          className="bg-white border border-gray-200 shadow-xs w-full max-w-[420px] px-8 py-7 origin-top transition-transform h-fit"
-          style={{ transform: `scale(${zoom / 100})` }}
-        >
-          <h3 className="text-lg font-semibold text-dark-black mb-3">{material?.title}</h3>
-          {SECTIONS.map((section, index) => (
-            <section key={section} className="mb-3">
-              <h4 className="text-sm font-semibold text-dark-black mb-1.5">
-                {index + 1 + (page - 1) * SECTIONS.length}. {section}
-              </h4>
-              <p className="text-[11px] leading-4 text-medium-black">
-                This document explains how employees recognise and report {topic === "security" ? "security threats" : "risks"} and keep company data safe.
-              </p>
-            </section>
-          ))}
-        </article>
-      </div>
-
-      <div className="flex items-center justify-center gap-3 mt-4 text-xs text-medium-black">
-        <button
-          type="button"
-          aria-label="Zoom out"
-          disabled={zoomIndex === 0}
-          onClick={() => setZoomIndex((value) => value - 1)}
-          className="p-1 rounded text-dark-black/70 hover:bg-light-gray disabled:opacity-40 cursor-pointer"
-        >
-          <ZoomOut className="w-4 h-4" />
-        </button>
-        <span className="font-semibold text-dark-black w-10 text-center">{zoom}%</span>
-        <button
-          type="button"
-          aria-label="Zoom in"
-          disabled={zoomIndex === ZOOM_STEPS.length - 1}
-          onClick={() => setZoomIndex((value) => value + 1)}
-          className="p-1 rounded text-dark-black/70 hover:bg-light-gray disabled:opacity-40 cursor-pointer"
-        >
-          <ZoomIn className="w-4 h-4" />
-        </button>
-        <span className="w-px h-4 bg-gray-300 mx-1" />
-        <button type="button" aria-label="Previous page" disabled={page === 1} onClick={() => setPage((value) => value - 1)} className="p-1 rounded hover:bg-light-gray disabled:opacity-40 cursor-pointer">
-          <ChevronLeft className="w-4 h-4" />
-        </button>
-        <span>
-          Page {page} of {pages}
-        </span>
-        <button type="button" aria-label="Next page" disabled={page === pages} onClick={() => setPage((value) => value + 1)} className="p-1 rounded hover:bg-light-gray disabled:opacity-40 cursor-pointer">
-          <ChevronRight className="w-4 h-4" />
-        </button>
-      </div>
+      {material.format === "PDF" && material.file && <iframe title={material.title} src={inline} className="w-full h-[60vh] rounded-xl border border-gray-200" />}
+      {material.format === "Video" && material.file && (
+        <video controls preload="metadata" src={inline} className="w-full max-h-[60vh] rounded-xl bg-black">
+          <track kind="captions" />
+        </video>
+      )}
+      {material.format === "Video" && !material.file && material.videoUrl && (
+        <a href={material.videoUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-4 rounded-xl border border-light-gray text-sm font-semibold text-primary hover:bg-primary/5">
+          <ExternalLink className="w-4 h-4" /> Open the video ({new URL(material.videoUrl).hostname})
+        </a>
+      )}
+      {material.format === "Doc" && (
+        <p className="text-sm text-medium-black p-4 rounded-xl bg-light-gray/50">Word documents open after downloading. {material.description}</p>
+      )}
+      {material.description && material.format !== "Doc" && <p className="text-sm text-medium-black mt-3">{material.description}</p>}
     </DialogModal>
   );
-};
+}
 
-export const TrainingVideoModal = ({ material, onClose, onDownload }) => {
-  const [playing, setPlaying] = useState(false);
-  const duration = `${Number.parseInt(material?.meta, 10) || 0}:24`;
+const input = "w-full px-3.5 py-2.5 rounded-xl border border-gray-300 bg-white text-sm text-dark-black focus:outline-none focus:border-primary";
+const ACCEPT = Object.values(MATERIAL_FILE_TYPES).flat().map((extension) => `.${extension}`).join(",");
 
-  const complete = () => {
-    onClose();
-    showSavedToast("Marked as complete", `"${material?.title}" was added to your completed training.`);
+// Upload Material: a PDF, Word document or video file, or a link to a video
+export function UploadMaterialModal({ categories, onClose, onSaved }) {
+  const [form, setForm] = useState({ title: "", description: "", categoryId: categories[0]?.id ?? "", minutes: "", videoUrl: "", file: null });
+  const [saving, setSaving] = useState(false);
+  const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+
+  const save = async () => {
+    if (!form.title.trim()) return toast.error("Enter a title.");
+    if (!form.file && !form.videoUrl.trim()) return toast.error("Choose a file or add a video link.");
+    const body = new FormData();
+    for (const key of ["title", "description", "categoryId", "minutes", "videoUrl"]) body.append(key, form[key]);
+    if (form.file) body.append("file", form.file);
+    setSaving(true);
+    try {
+      await apiRequest("/api/v1/compliance/training/materials", { method: "POST", body });
+      toast.success("Material added to the library.");
+      onSaved();
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <DialogModal
-      isOpen={Boolean(material)}
+      isOpen
       onClose={onClose}
-      title={material?.title}
-      subtitle={subtitleFor(material)}
-      size="2xl"
+      title="Upload Material"
+      subtitle="PDF, Doc (Word) or Video. Up to 25 MB for documents and 300 MB for videos."
+      size="md"
       footer={
         <>
-          <DialogButton onClick={() => onDownload(material)}>Download</DialogButton>
-          <DialogButton variant="primary" onClick={complete}>Mark as complete</DialogButton>
+          <DialogButton onClick={onClose}>Cancel</DialogButton>
+          <DialogButton variant="primary" onClick={save} disabled={saving}>{saving ? "Uploading..." : "Upload"}</DialogButton>
         </>
       }
     >
-      <div className="relative aspect-video max-h-[380px] w-full rounded-xl bg-[#0b1320] flex flex-col items-center justify-center gap-4">
-        <button
-          type="button"
-          onClick={() => setPlaying((value) => !value)}
-          aria-label={playing ? "Pause video" : "Play video"}
-          className="w-16 h-16 rounded-full bg-primary text-white flex items-center justify-center hover:bg-medium-teal transition-colors cursor-pointer"
-        >
-          {playing ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-0.5" />}
-        </button>
-        <p className="text-sm font-medium text-white">{playing ? "Video preview isn't connected yet" : material?.title}</p>
-      </div>
-      <div className="mt-5">
-        <div className="h-1 rounded-full bg-gray-200 overflow-hidden">
-          <div className={`h-full bg-primary transition-all duration-700 ${playing ? "w-[4%]" : "w-0"}`} />
+      <div className="space-y-4">
+        <div>
+          <label htmlFor="material-title" className="block text-xs font-medium text-medium-black mb-1.5">Title</label>
+          <input id="material-title" value={form.title} maxLength={255} onChange={(event) => set("title", event.target.value)} className={input} placeholder="e.g. Phishing Awareness Guide" />
         </div>
-        <div className="flex justify-between mt-2 text-xs text-medium-black">
-          <span>0:00</span>
-          <span>{duration}</span>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="material-category" className="block text-xs font-medium text-medium-black mb-1.5">Category</label>
+            <select id="material-category" value={form.categoryId} onChange={(event) => set("categoryId", event.target.value)} className={`${input} cursor-pointer`}>
+              {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="material-minutes" className="block text-xs font-medium text-medium-black mb-1.5">Duration (minutes, optional)</label>
+            <input id="material-minutes" type="number" min={1} max={1440} value={form.minutes} onChange={(event) => set("minutes", event.target.value)} className={input} />
+          </div>
+        </div>
+        <div>
+          <label htmlFor="material-file" className="block text-xs font-medium text-medium-black mb-1.5">File</label>
+          <input id="material-file" type="file" accept={ACCEPT} onChange={(event) => set("file", event.target.files?.[0] ?? null)} className="block w-full text-sm text-medium-black file:mr-3 file:px-3 file:py-2 file:rounded-lg file:border-0 file:bg-primary/10 file:text-primary file:font-semibold" />
+        </div>
+        {!form.file && (
+          <div>
+            <label htmlFor="material-video" className="block text-xs font-medium text-medium-black mb-1.5">…or a video link</label>
+            <input id="material-video" type="url" value={form.videoUrl} onChange={(event) => set("videoUrl", event.target.value)} className={input} placeholder="https://" />
+          </div>
+        )}
+        <div>
+          <label htmlFor="material-description" className="block text-xs font-medium text-medium-black mb-1.5">Description (optional)</label>
+          <textarea id="material-description" rows={2} maxLength={500} value={form.description} onChange={(event) => set("description", event.target.value)} className={`${input} resize-none`} />
         </div>
       </div>
     </DialogModal>
   );
-};
+}

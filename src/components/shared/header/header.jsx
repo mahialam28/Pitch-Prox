@@ -5,6 +5,7 @@ import { Search, Bell, Phone, Menu } from "lucide-react";
 import { motion } from "framer-motion";
 import { useRouter, usePathname } from "next/navigation";
 import NotificationsDropdown from "@/components/shared/header/notification-modal";
+import { useUnreadNotifications } from "@/components/shared/header/use-unread-notifications";
 import LiveCallingModal from "@/app/user/live-calling/components/live-calling-modal";
 import {
   PENDING_CALL_KEY,
@@ -52,7 +53,6 @@ const badgePulse = {
 
 const Header = ({
   leftContent = null,
-  notificationCount = 7,
   notifOpen = false,
   onSearchClick = () => {},
   onNotificationClick = () => {},
@@ -63,6 +63,7 @@ const Header = ({
   const router = useRouter();
   const pathname = usePathname();
   const [isCallModalOpen, setIsCallModalOpen] = useState(false);
+  const { unreadCount, setUnreadCount } = useUnreadNotifications();
 
   const isInternalRole = pathname?.startsWith("/internal-sales-representative");
   const canCall = !pathname?.startsWith("/super-admin");
@@ -129,24 +130,28 @@ const Header = ({
           <div className="relative">
             <motion.button
               onClick={onNotificationClick}
+              aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : "Notifications"}
               variants={iconButtonVariants}
               whileHover="hover"
               whileTap="tap"
               className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full bg-light-gray text-medium-black hover:bg-light-gray transition-colors cursor-pointer"
             >
               <Bell className="h-4 w-4 sm:h-5 sm:w-5" />
-              <motion.span
-                animate="animate"
-                variants={badgePulse}
-                className="absolute -top-1 -right-1 flex h-4.5 w-4.5 sm:h-5 sm:w-5 items-center justify-center rounded-full bg-red text-[10px] font-bold text-white ring-2 ring-white"
-              >
-                {notificationCount}
-              </motion.span>
+              {unreadCount > 0 && (
+                <motion.span
+                  animate="animate"
+                  variants={badgePulse}
+                  className="absolute -top-1 -right-1 flex h-4.5 min-w-4.5 sm:h-5 sm:min-w-5 px-1 items-center justify-center rounded-full bg-red text-[10px] font-bold text-white ring-2 ring-white"
+                >
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </motion.span>
+              )}
             </motion.button>
 
             <NotificationsDropdown
               isOpen={notifOpen}
               onClose={onCloseNotif}
+              onUnreadChange={setUnreadCount}
             />
           </div>
 

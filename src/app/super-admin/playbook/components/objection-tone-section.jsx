@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import AddPromptRuleModal from "./add-prompt-rule-modal";
 import AddCoachingPillarModal from "./add-coaching-pillar-modal";
+import { confirmReset } from "@/lib/alerts";
 import toast from "react-hot-toast";
 
 export const DEFAULT_OBJECTION_TONE = {
@@ -48,6 +49,12 @@ export const DEFAULT_OBJECTION_TONE = {
     "Restore confidence",
   ],
   adaptToEmotionLevel: true,
+  // How the AI changes its response as the lead gets more emotional (used when adaptToEmotionLevel is on)
+  intensityLevels: {
+    low: "Answer directly and move the conversation forward.",
+    medium: "Acknowledge the concern first, slow down, then reframe with one clear point.",
+    high: "Lower the pace, validate the feeling, ask a calming question and hold the pitch until they settle.",
+  },
 };
 
 const RESPONSE_STEPS = [
@@ -76,7 +83,7 @@ const RESPONSE_STEPS = [
 const ObjectionToneSection = ({
   data = {},
   onChange = () => {},
-  onResetDefaults = () => {},
+  onResetDefaults,
 }) => {
   const [avoidModalOpen, setAvoidModalOpen] = useState(false);
   const [focusModalOpen, setFocusModalOpen] = useState(false);
@@ -116,7 +123,8 @@ const ObjectionToneSection = ({
     handleFieldChange("selectedFocus", [...sel, text]);
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
+    if (!(await confirmReset("Objection Tone"))) return;
     if (onResetDefaults) {
       onResetDefaults();
     } else {
@@ -165,16 +173,16 @@ const ObjectionToneSection = ({
           <textarea
             value={currentData.intent}
             onChange={(e) => {
-              if (e.target.value.length <= 300) {
+              if (e.target.value.length <= 500) {
                 handleFieldChange("intent", e.target.value);
               }
             }}
             rows={2}
-            maxLength={300}
+            maxLength={500}
             className="w-full px-3.5 py-2.5 pb-6 rounded-xl border border-light-gray bg-white text-xs sm:text-[13px] text-dark-black focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none font-normal leading-relaxed"
           />
           <div className="absolute right-3 bottom-2 text-[10px] sm:text-[11px] font-medium text-medium-black/70 pointer-events-none">
-            {(currentData.intent || "").length}/300
+            {(currentData.intent || "").length}/500
           </div>
         </div>
       </div>
@@ -188,16 +196,16 @@ const ObjectionToneSection = ({
           <textarea
             value={currentData.emotionalResponse}
             onChange={(e) => {
-              if (e.target.value.length <= 300) {
+              if (e.target.value.length <= 500) {
                 handleFieldChange("emotionalResponse", e.target.value);
               }
             }}
             rows={2}
-            maxLength={300}
+            maxLength={500}
             className="w-full px-3.5 py-2.5 pb-6 rounded-xl border border-light-gray bg-white text-xs sm:text-[13px] text-dark-black focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none font-normal leading-relaxed"
           />
           <div className="absolute right-3 bottom-2 text-[10px] sm:text-[11px] font-medium text-medium-black/70 pointer-events-none">
-            {(currentData.emotionalResponse || "").length}/300
+            {(currentData.emotionalResponse || "").length}/500
           </div>
         </div>
       </div>
@@ -281,11 +289,11 @@ const ObjectionToneSection = ({
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {RESPONSE_STEPS.map((s) => (
             <div
               key={s.step}
-              className="p-3.5 rounded-xl border border-light-gray bg-white space-y-1.5 shadow-2xs"
+              className="p-3.5 rounded-xl border border-light-gray bg-white space-y-1.5 shadow-2xs min-w-0 break-words"
             >
               <div className="w-5 h-5 rounded-full bg-light-gray flex items-center justify-center text-[11px] font-bold text-medium-black">
                 {s.step}
@@ -307,29 +315,72 @@ const ObjectionToneSection = ({
           Objection intensity handling
         </label>
 
-        <div
-          onClick={() => setIntensityOpen(!intensityOpen)}
-          className="p-4 rounded-xl border border-light-gray bg-white flex items-center justify-between gap-4 cursor-pointer hover:border-medium-black/30 transition-all shadow-2xs"
-        >
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-8 h-8 rounded-xl bg-teal-50 text-primary border border-teal-200 flex items-center justify-center shrink-0">
-              <ShieldCheck className="w-4 h-4" />
+        <div className="rounded-xl border border-light-gray bg-white shadow-2xs overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setIntensityOpen(!intensityOpen)}
+            aria-expanded={intensityOpen}
+            className="w-full p-4 flex items-center justify-between gap-4 cursor-pointer hover:bg-light-gray/30 transition-all text-left"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-teal-50 text-primary border border-teal-200 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs sm:text-[13px] font-bold text-dark-black font-secondary">
+                  Adapt to emotion level
+                  <span className={`ml-2 text-[10px] font-semibold px-2 py-0.5 rounded-full ${currentData.adaptToEmotionLevel ? "bg-teal-50 text-primary" : "bg-light-gray text-medium-black"}`}>
+                    {currentData.adaptToEmotionLevel ? "On" : "Off"}
+                  </span>
+                </h4>
+                <p className="text-[11px] text-medium-black leading-snug">
+                  AI adjusts tone and depth based on the lead&apos;s emotional intensity.
+                </p>
+              </div>
             </div>
-            <div>
-              <h4 className="text-xs sm:text-[13px] font-bold text-dark-black font-secondary">
-                Adapt to emotion level
-              </h4>
-              <p className="text-[11px] text-medium-black leading-snug">
-                AI adjusts tone and depth based on the lead&apos;s emotional intensity.
-              </p>
-            </div>
-          </div>
 
-          <ChevronDown
-            className={`w-4 h-4 text-medium-black shrink-0 transition-transform ${
-              intensityOpen ? "rotate-180" : ""
-            }`}
-          />
+            <ChevronDown
+              className={`w-4 h-4 text-medium-black shrink-0 transition-transform ${
+                intensityOpen ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+
+          {intensityOpen && (
+            <div className="px-4 pb-4 pt-1 space-y-3 border-t border-light-gray">
+              <label className="flex items-center justify-between gap-3 pt-3 cursor-pointer">
+                <span className="text-xs text-dark-black font-medium">Adapt responses to the lead&apos;s emotion level</span>
+                <input
+                  type="checkbox"
+                  role="switch"
+                  checked={Boolean(currentData.adaptToEmotionLevel)}
+                  onChange={(e) => handleFieldChange("adaptToEmotionLevel", e.target.checked)}
+                  className="w-4 h-4 accent-primary cursor-pointer"
+                />
+              </label>
+              {[
+                ["low", "Calm / mild concern"],
+                ["medium", "Frustrated / guarded"],
+                ["high", "Upset / emotional"],
+              ].map(([level, label]) => {
+                const levels = { ...DEFAULT_OBJECTION_TONE.intensityLevels, ...(currentData.intensityLevels || {}) };
+                return (
+                  <div key={level} className={`space-y-1 ${currentData.adaptToEmotionLevel ? "" : "opacity-50"}`}>
+                    <label htmlFor={`intensity-${level}`} className="block text-[11px] font-semibold text-medium-black">{label}</label>
+                    <textarea
+                      id={`intensity-${level}`}
+                      rows={2}
+                      maxLength={200}
+                      disabled={!currentData.adaptToEmotionLevel}
+                      value={levels[level]}
+                      onChange={(e) => handleFieldChange("intensityLevels", { ...levels, [level]: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-light-gray text-xs text-dark-black focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 resize-none disabled:bg-light-gray/30"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 

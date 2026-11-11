@@ -15,13 +15,13 @@ export default function OffboardingChecklistBanner({ onViewOffboarding, counts =
   };
 
   return (
-    <div className="w-full bg-white border border-light-gray/80 rounded-2xl p-5 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-5 transition-all duration-200">
+    <div className="w-full bg-white border border-light-gray/80 rounded-2xl p-5 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-5 transition-all duration-200">
       {/* Left Info */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 min-w-0">
         <div className="w-11 h-11 rounded-xl bg-[#E6F7F7] text-[#0EADAB] flex items-center justify-center shrink-0">
           <UserX className="w-5 h-5 stroke-[2.2]" />
         </div>
-        <div className="flex flex-col">
+        <div className="flex flex-col min-w-0">
           <h4 className="text-sm font-bold text-dark-black/90 font-secondary">
             Offboarding Checklist
           </h4>

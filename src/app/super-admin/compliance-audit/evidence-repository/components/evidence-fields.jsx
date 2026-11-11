@@ -2,11 +2,12 @@
 
 import React from "react";
 import DatePicker from "@/components/modals/date-picker";
-import { EVIDENCE_OWNERS, SOC2_CONTROLS, TRUST_SERVICE_CRITERIA } from "../evidence-options";
+import { TRUST_SERVICE_CRITERIA } from "@/lib/compliance/evidence-catalog";
 
 // Shared by Upload Evidence and Edit Evidence:
 // Associated Controls and Trust Service Criteria (multi-select), Evidence Owner, Evidence Expiration.
-// value: { controls: [], criteria: [], owner, expires: "never" | "on", expiryDate }
+// value: { controls: [], criteria: [], ownerId, expires: "never" | "on", expiryDate }
+// controls: the SOC 2 control library [{ id, name }]; owners: [{ id, name }] (people with Compliance access)
 const Pill = ({ active, onClick, children, title }) => (
   <button
     type="button"
@@ -21,14 +22,14 @@ const Pill = ({ active, onClick, children, title }) => (
 
 const toggle = (list, item) => (list.includes(item) ? list.filter((value) => value !== item) : [...list, item]);
 
-export default function EvidenceFields({ value, onChange }) {
+export default function EvidenceFields({ value, onChange, controls = [], owners = [] }) {
   const set = (changes) => onChange({ ...value, ...changes });
   return (
     <div className="flex flex-col gap-4">
       <div className="space-y-1.5">
         <label className="font-semibold text-dark-black/80 block">Associated Controls</label>
         <div className="flex flex-wrap gap-1.5">
-          {SOC2_CONTROLS.map((control) => (
+          {controls.map((control) => (
             <Pill key={control.id} title={control.name} active={value.controls.includes(control.id)} onClick={() => set({ controls: toggle(value.controls, control.id) })}>
               {control.id}
             </Pill>
@@ -52,12 +53,13 @@ export default function EvidenceFields({ value, onChange }) {
           <label htmlFor="evidence-owner" className="font-semibold text-dark-black/80 block">Evidence Owner</label>
           <select
             id="evidence-owner"
-            value={value.owner}
-            onChange={(event) => set({ owner: event.target.value })}
+            value={value.ownerId}
+            onChange={(event) => set({ ownerId: event.target.value })}
             className="w-full px-3.5 py-2.5 rounded-xl border border-light-gray text-dark-black/80 bg-white font-medium text-xs outline-none focus:border-primary"
           >
-            {EVIDENCE_OWNERS.map((owner) => (
-              <option key={owner} value={owner}>{owner}</option>
+            <option value="">Me (the uploader)</option>
+            {owners.map((owner) => (
+              <option key={owner.id} value={owner.id}>{owner.name}</option>
             ))}
           </select>
         </div>
@@ -90,4 +92,8 @@ export default function EvidenceFields({ value, onChange }) {
 }
 
 // Checks before saving; returns an error message or null
-export const evidenceFieldsError = (value) => (value.expires === "on" && !value.expiryDate ? "Choose an expiration date, or select Does Not Expire." : null);
+export const evidenceFieldsError = (value) => {
+  if (!value.controls.length) return "Choose at least one associated control.";
+  if (!value.criteria.length) return "Choose at least one Trust Service Criteria.";
+  return value.expires === "on" && !value.expiryDate ? "Choose an expiration date, or select Does Not Expire." : null;
+};

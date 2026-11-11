@@ -213,7 +213,10 @@ export default function CallsTable({ prospectType, outcome, purpose }) {
                   <ArrowUpDown className="w-3 h-3 text-light-black" />
                 </div>
               </th>
-              <th className="pb-3 text-left">PROSPECT / COMPANY</th>
+              <th className="pb-3 text-left">
+                <div>PROSPECT</div>
+                <div className="text-[10px] font-normal mt-0.5">COMPANY</div>
+              </th>
               <th className="pb-3 text-left">PROSPECT TYPE</th>
               <th className="pb-3 text-left">PURPOSE</th>
               <th className="pb-3 text-left">DURATION</th>

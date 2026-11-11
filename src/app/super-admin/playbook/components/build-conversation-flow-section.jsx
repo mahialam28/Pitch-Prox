@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmReset } from "@/lib/alerts";
 import React, { useState } from "react";
 import {
   GitBranch,
@@ -141,7 +142,8 @@ const BuildConversationFlowSection = ({
     onChange(updated);
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
+    if (!(await confirmReset("Conversation Flow"))) return;
     setStageList(DEFAULT_STAGES);
     onResetDefaults();
     onChange(DEFAULT_STAGES);

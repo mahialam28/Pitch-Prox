@@ -3,20 +3,16 @@
 import React from "react";
 import { ArrowRight } from "lucide-react";
 
-// Status totals use exactly the four Training statuses and add up to Total Assignments (256)
-const SEGMENTS = [
-  { label: "Completed", count: 187, color: "#0EADAB" },
-  { label: "In Progress", count: 35, color: "#F79009" },
-  { label: "Not Started", count: 17, color: "#A5B1B5" },
-  { label: "Overdue", count: 17, color: "#F04438" },
-];
-const TOTAL = SEGMENTS.reduce((sum, segment) => sum + segment.count, 0);
+// Status totals use exactly the four Training statuses and add up to Total Assignments
+const COLORS = { Completed: "#0EADAB", "In Progress": "#F79009", "Not Started": "#A5B1B5", Overdue: "#F04438" };
 
-export default function CompletionOverview({ onActionClick }) {
+export default function CompletionOverview({ statuses, onViewReport }) {
+  const SEGMENTS = (statuses ?? []).map((item) => ({ label: item.status, count: item.count, color: COLORS[item.status] }));
+  const TOTAL = SEGMENTS.reduce((sum, segment) => sum + segment.count, 0) || 1;
   const radius = 44;
   const strokeWidth = 10;
   const circumference = 2 * Math.PI * radius;
-  const completedPercent = Math.round((SEGMENTS[0].count / TOTAL) * 100);
+  const completedPercent = Math.round(((SEGMENTS.find((segment) => segment.label === "Completed")?.count ?? 0) / TOTAL) * 100);
   // Each arc starts where the previous one ended
   const arcs = SEGMENTS.reduce((list, segment) => {
     const start = list.length ? list[list.length - 1].end : 0;
@@ -33,7 +29,7 @@ export default function CompletionOverview({ onActionClick }) {
         </h3>
         <button
           type="button"
-          onClick={() => onActionClick?.("view_report")}
+          onClick={onViewReport}
           className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline cursor-pointer transition-colors"
         >
           View report

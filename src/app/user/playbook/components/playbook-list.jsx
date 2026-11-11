@@ -125,14 +125,14 @@ const PlaybookList = ({ playbooks = [], loaded = true, onActivate, onDelete, onC
       result.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     } else if (sortSelected === "price-low") {
       result.sort((a, b) => {
-        const pa = parseFloat((a.price || "$0").replace("$", ""));
-        const pb = parseFloat((b.price || "$0").replace("$", ""));
+        const pa = parseFloat((a.price || "$0").replace("$", "")) || 0;
+        const pb = parseFloat((b.price || "$0").replace("$", "")) || 0;
         return pa - pb;
       });
     } else if (sortSelected === "price-high") {
       result.sort((a, b) => {
-        const pa = parseFloat((a.price || "$0").replace("$", ""));
-        const pb = parseFloat((b.price || "$0").replace("$", ""));
+        const pa = parseFloat((a.price || "$0").replace("$", "")) || 0;
+        const pb = parseFloat((b.price || "$0").replace("$", "")) || 0;
         return pb - pa;
       });
     }
@@ -501,6 +501,7 @@ const PlaybookList = ({ playbooks = [], loaded = true, onActivate, onDelete, onC
         isOpen={!!selectedPlaybook}
         onClose={() => setSelectedPlaybook(null)}
         playbook={selectedPlaybook}
+        onActivate={onActivate}
       />
 
       <AlertModal

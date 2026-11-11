@@ -70,8 +70,12 @@ const LiveCallingModal = ({
       return;
     }
     setError("");
-    onSetupChange({ ...setup, ...formData });
-    onStartCall({ ...setup, ...formData });
+    // A call typed in by hand isn't the CRM contact from before unless the name and number are unchanged
+    const digits = (value) => String(value ?? "").replace(/\D/g, "");
+    const sameContact = setup.contactId && formData.leadName === setup.leadName && digits(formData.phoneNumber) === digits(setup.phoneNumber);
+    const next = { ...setup, ...formData, ...(sameContact ? {} : { contactKind: null, contactId: null, phoneId: null }) };
+    onSetupChange(next);
+    onStartCall(next);
   };
 
   if (!isOpen) return null;

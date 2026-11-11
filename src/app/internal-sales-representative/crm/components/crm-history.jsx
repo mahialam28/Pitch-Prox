@@ -263,9 +263,12 @@ const followUpStatusOptions = [
 ];
 
 // Build relative mock dates so the Date Range filter demo works
+// Sample calls (until calling is connected). A fixed time of day keeps the server's and the
+// browser's rendering identical (the server works these out once, when it starts).
 const daysFromNow = (days) => {
   const d = new Date();
   d.setDate(d.getDate() - days);
+  d.setHours(9, 47, 0, 0);
   return d;
 };
 

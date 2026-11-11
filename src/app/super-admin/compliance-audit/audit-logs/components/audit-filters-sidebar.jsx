@@ -1,244 +1,131 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
-import { ChevronDown, Calendar, RotateCcw } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import DatePicker from "@/components/modals/date-picker";
-import {
-  categoryFilterOptions,
-  actionFilterOptions,
-  entityFilterOptions,
-  userFilterOptions,
-} from "../audit-logs-data";
+import { categoryFilterOptions } from "../audit-logs-data";
 
-export default function AuditFiltersSidebar({
-  selectedCategory,
-  setSelectedCategory,
-  selectedAction,
-  setSelectedAction,
-  selectedEntity = "All Entities",
-  setSelectedEntity = () => {},
-  selectedUser,
-  setSelectedUser,
-  ipSearch,
-  setIpSearch,
-  dateRange,
-  setDateRange,
-  onResetFilters,
-  onApplyFilters,
-}) {
-  const [openDropdown, setOpenDropdown] = useState(null); // 'category' | 'action' | 'user'
+// One dropdown field; options are [{ value, label }], "" = all
+function SelectField({ id, label, value, allLabel, options, open, onToggle, onSelect }) {
+  const current = options.find((option) => option.value === value)?.label ?? allLabel;
+  return (
+    <div className="space-y-1.5 relative">
+      <label htmlFor={id} className="text-xs font-semibold text-dark-black/75 block">{label}</label>
+      <button
+        id={id}
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="w-full px-3.5 py-2.5 rounded-xl border border-light-gray text-xs font-medium text-dark-black/85 bg-white flex items-center justify-between hover:border-primary/50 transition-all cursor-pointer shadow-2xs"
+      >
+        <span className="truncate text-medium-black font-medium">{current}</span>
+        <ChevronDown className="w-3.5 h-3.5 text-light-black shrink-0 ml-2" />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-light-gray rounded-xl shadow-xl py-1 z-30 max-h-56 overflow-y-auto">
+          {[{ value: "", label: allLabel }, ...options].map((option) => (
+            <button
+              key={option.value || "all"}
+              type="button"
+              onClick={() => onSelect(option.value)}
+              className={`w-full px-3 py-1.5 text-left text-xs transition-colors cursor-pointer ${
+                value === option.value ? "text-primary font-semibold bg-primary/5" : "text-medium-black hover:bg-light-gray/50"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// options: { actions, entities, users, ips } from the API (only values present in the log)
+export default function AuditFiltersSidebar({ options, selectedCategory, setSelectedCategory, filters, setFilter, onResetFilters, onApplyFilters }) {
+  const [openDropdown, setOpenDropdown] = useState(null);
   const sidebarRef = useRef(null);
 
-  // Click outside to close open dropdown
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (sidebarRef.current && !sidebarRef.current.contains(event.target)) {
-        setOpenDropdown(null);
-      }
+      if (sidebarRef.current && !sidebarRef.current.contains(event.target)) setOpenDropdown(null);
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const toggleDropdown = (name) => {
-    setOpenDropdown((prev) => (prev === name ? null : name));
-  };
+  const field = (key, label, allLabel, list) => (
+    <SelectField
+      id={`audit-filter-${key}`}
+      label={label}
+      value={filters[key]}
+      allLabel={allLabel}
+      options={list}
+      open={openDropdown === key}
+      onToggle={() => setOpenDropdown((current) => (current === key ? null : key))}
+      onSelect={(value) => {
+        setFilter(key, value);
+        setOpenDropdown(null);
+      }}
+    />
+  );
+
+  const categories = categoryFilterOptions.slice(1).map((label) => ({ value: label, label }));
 
   return (
-    <div
-      ref={sidebarRef}
-      className="bg-white rounded-2xl border border-light-gray/80 p-5 shadow-xs flex flex-col gap-4 w-full"
-    >
-      {/* Header with Title and Reset */}
+    <div ref={sidebarRef} className="bg-white rounded-2xl border border-light-gray/80 p-5 shadow-xs flex flex-col gap-4 w-full">
       <div className="flex items-center justify-between pb-2 border-b border-light-gray/70">
-        <h3 className="text-sm font-bold text-dark-black/90 font-secondary">
-          Filters
-        </h3>
-        <button
-          type="button"
-          onClick={onResetFilters}
-          className="text-xs font-semibold text-primary hover:text-[#0c9593] transition-colors cursor-pointer flex items-center gap-1"
-        >
-          <span>Reset</span>
+        <h3 className="text-sm font-bold text-dark-black/90 font-secondary">Filters</h3>
+        <button type="button" onClick={onResetFilters} className="text-xs font-semibold text-primary hover:text-[#0c9593] transition-colors cursor-pointer">
+          Reset
         </button>
       </div>
 
-      {/* Field 1: Date Range */}
+      {/* Date Range */}
       <div className="space-y-1.5">
-        <label className="text-xs font-semibold text-dark-black/75 block">
-          Date Range
-        </label>
-        <DatePicker
-          value={dateRange}
-          onChange={(val) => setDateRange(val)}
-          placeholder="May 13, 2024 - May 19, 2024"
-          placement="bottom"
-        />
+        <span className="text-xs font-semibold text-dark-black/75 block">Date Range</span>
+        <div className="grid grid-cols-2 gap-2">
+          <DatePicker value={filters.from} onChange={(value) => setFilter("from", value)} placeholder="From" placement="bottom" />
+          <DatePicker value={filters.to} onChange={(value) => setFilter("to", value)} placeholder="To" placement="bottom" />
+        </div>
       </div>
 
-      {/* Field 2: Category */}
-      <div className="space-y-1.5 relative">
-        <label className="text-xs font-semibold text-dark-black/75 block">
-          Category
-        </label>
-        <button
-          type="button"
-          onClick={() => toggleDropdown("category")}
-          className="w-full px-3.5 py-2.5 rounded-xl border border-light-gray text-xs font-medium text-dark-black/85 bg-white flex items-center justify-between hover:border-primary/50 transition-all cursor-pointer shadow-2xs"
-        >
-          <span className="truncate text-medium-black font-medium">{selectedCategory}</span>
-          <ChevronDown className="w-3.5 h-3.5 text-light-black shrink-0 ml-2" />
-        </button>
+      {/* Category: the same filter as the tabs, so it applies straight away */}
+      <SelectField
+        id="audit-filter-category"
+        label="Category"
+        value={selectedCategory === "All Categories" ? "" : selectedCategory}
+        allLabel="All Categories"
+        options={categories}
+        open={openDropdown === "category"}
+        onToggle={() => setOpenDropdown((current) => (current === "category" ? null : "category"))}
+        onSelect={(value) => {
+          setSelectedCategory(value || "All Categories");
+          setOpenDropdown(null);
+        }}
+      />
 
-        {openDropdown === "category" && (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-light-gray rounded-xl shadow-xl py-1 z-30 max-h-48 overflow-y-auto">
-            {categoryFilterOptions.map((opt) => (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => {
-                  setSelectedCategory(opt);
-                  setOpenDropdown(null);
-                }}
-                className={`w-full px-3 py-1.5 text-left text-xs transition-colors cursor-pointer ${
-                  selectedCategory === opt
-                    ? "text-primary font-semibold bg-primary/5"
-                    : "text-medium-black hover:bg-light-gray/50"
-                }`}
-              >
-                {opt}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      {field("action", "Action", "All Actions", options?.actions ?? [])}
+      {field("entity", "Entity", "All Entities", options?.entities ?? [])}
+      {field("user", "User", "All Users", (options?.users ?? []).map((name) => ({ value: name, label: name })))}
 
-      {/* Field 3: Action */}
-      <div className="space-y-1.5 relative">
-        <label className="text-xs font-semibold text-dark-black/75 block">
-          Action
-        </label>
-        <button
-          type="button"
-          onClick={() => toggleDropdown("action")}
-          className="w-full px-3.5 py-2.5 rounded-xl border border-light-gray text-xs font-medium text-dark-black/85 bg-white flex items-center justify-between hover:border-primary/50 transition-all cursor-pointer shadow-2xs"
-        >
-          <span className="truncate text-medium-black font-medium">{selectedAction}</span>
-          <ChevronDown className="w-3.5 h-3.5 text-light-black shrink-0 ml-2" />
-        </button>
-
-        {openDropdown === "action" && (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-light-gray rounded-xl shadow-xl py-1 z-30 max-h-48 overflow-y-auto">
-            {actionFilterOptions.map((opt) => (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => {
-                  setSelectedAction(opt);
-                  setOpenDropdown(null);
-                }}
-                className={`w-full px-3 py-1.5 text-left text-xs transition-colors cursor-pointer ${
-                  selectedAction === opt
-                    ? "text-primary font-semibold bg-primary/5"
-                    : "text-medium-black hover:bg-light-gray/50"
-                }`}
-              >
-                {opt}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Field 4: Entity */}
-      <div className="space-y-1.5 relative">
-        <label className="text-xs font-semibold text-dark-black/75 block">
-          Entity
-        </label>
-        <button
-          type="button"
-          onClick={() => toggleDropdown("entity")}
-          className="w-full px-3.5 py-2.5 rounded-xl border border-light-gray text-xs font-medium text-dark-black/85 bg-white flex items-center justify-between hover:border-primary/50 transition-all cursor-pointer shadow-2xs"
-        >
-          <span className="truncate text-medium-black font-medium">{selectedEntity}</span>
-          <ChevronDown className="w-3.5 h-3.5 text-light-black shrink-0 ml-2" />
-        </button>
-
-        {openDropdown === "entity" && (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-light-gray rounded-xl shadow-xl py-1 z-30 max-h-48 overflow-y-auto">
-            {entityFilterOptions.map((opt) => (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => {
-                  setSelectedEntity(opt);
-                  setOpenDropdown(null);
-                }}
-                className={`w-full px-3 py-1.5 text-left text-xs transition-colors cursor-pointer ${
-                  selectedEntity === opt
-                    ? "text-primary font-semibold bg-primary/5"
-                    : "text-medium-black hover:bg-light-gray/50"
-                }`}
-              >
-                {opt}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Field 5: User */}
-      <div className="space-y-1.5 relative">
-        <label className="text-xs font-semibold text-dark-black/75 block">
-          User
-        </label>
-        <button
-          type="button"
-          onClick={() => toggleDropdown("user")}
-          className="w-full px-3.5 py-2.5 rounded-xl border border-light-gray text-xs font-medium text-dark-black/85 bg-white flex items-center justify-between hover:border-primary/50 transition-all cursor-pointer shadow-2xs"
-        >
-          <span className="truncate text-medium-black font-medium">{selectedUser}</span>
-          <ChevronDown className="w-3.5 h-3.5 text-light-black shrink-0 ml-2" />
-        </button>
-
-        {openDropdown === "user" && (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-light-gray rounded-xl shadow-xl py-1 z-30 max-h-48 overflow-y-auto">
-            {userFilterOptions.map((opt) => (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => {
-                  setSelectedUser(opt);
-                  setOpenDropdown(null);
-                }}
-                className={`w-full px-3 py-1.5 text-left text-xs transition-colors cursor-pointer ${
-                  selectedUser === opt
-                    ? "text-primary font-semibold bg-primary/5"
-                    : "text-medium-black hover:bg-light-gray/50"
-                }`}
-              >
-                {opt}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Field 6: IP Address */}
       <div className="space-y-1.5">
-        <label className="text-xs font-semibold text-dark-black/75 block">
-          IP Address
-        </label>
+        <label htmlFor="audit-filter-ip" className="text-xs font-semibold text-dark-black/75 block">IP Address</label>
         <input
+          id="audit-filter-ip"
           type="text"
-          value={ipSearch}
-          onChange={(e) => setIpSearch(e.target.value)}
+          value={filters.ip}
+          onChange={(event) => setFilter("ip", event.target.value)}
+          onKeyDown={(event) => event.key === "Enter" && onApplyFilters()}
           placeholder="Search IP address..."
+          list="audit-filter-ip-list"
           className="w-full px-3.5 py-2.5 rounded-xl border border-light-gray text-xs text-medium-black placeholder:text-light-black bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-normal shadow-2xs"
         />
+        <datalist id="audit-filter-ip-list">
+          {(options?.ips ?? []).map((ip) => <option key={ip} value={ip} />)}
+        </datalist>
       </div>
 
-      {/* Action Button: Apply Filters */}
       <div className="pt-2">
         <button
           type="button"

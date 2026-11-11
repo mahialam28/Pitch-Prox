@@ -40,7 +40,7 @@ export function actor({ userAgent } = {}) {
     const text = await res.text();
     let json = {};
     try { json = JSON.parse(text); } catch { /* not JSON */ }
-    return { status: res.status, json };
+    return { status: res.status, json, headers: res.headers };
   };
   return {
     cookie: () => cookieHeader(),

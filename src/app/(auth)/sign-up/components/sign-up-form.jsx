@@ -15,7 +15,7 @@ import { useRouter } from "next/navigation";
 import { showError, showSuccess } from "@/lib/alerts";
 import { dashboardPathFor } from "@/utils.js/roles";
 
-const SignUpForm = () => {
+const SignUpForm = ({ initialName = "", initialEmail = "", plan = "" }) => {
   const router = useRouter();
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -28,8 +28,8 @@ const SignUpForm = () => {
     setError,
   } = useForm({
     defaultValues: {
-      name: "",
-      email: "",
+      name: initialName,
+      email: initialEmail,
       password: "",
       confirmPassword: "",
     },
@@ -40,7 +40,7 @@ const SignUpForm = () => {
   const onSubmit = async (data) => {
     setLoading(true);
     try {
-      if (!agreeTerms) throw new Error("Please accept the Terms & Conditions.");
+      if (!agreeTerms) throw new Error("Please accept the Terms of Service and Privacy Policy.");
       const response = await fetch("/api/v1/auth/sign-up", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -49,7 +49,9 @@ const SignUpForm = () => {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Unable to create account.");
       await showSuccess("Account created", "Your customer workspace is ready.");
-      router.push(dashboardPathFor(result.user?.role) || "/user/dashboard");
+      // A plan chosen on "Your Video Is Ready" opens next; otherwise new customers start with
+      // calibration (they can choose "Do it later")
+      router.push(plan && plan !== "free-trial" ? `/user/settings/billing/upgrade?plan=${encodeURIComponent(plan)}` : result.user?.needsCalibration ? "/user/calibration" : dashboardPathFor(result.user?.role) || "/user/dashboard");
       router.refresh();
     } catch (error) {
       setError("root", { message: error.message });
@@ -156,7 +158,14 @@ const SignUpForm = () => {
             <span className={`font-medium transition-colors duration-200 ${
               agreeTerms ? "text-primary" : "text-light-black group-hover:text-primary"
             }`}>
-              I agree to the Terms & Conditions
+              I agree to the{" "}
+              <Link href="/terms" target="_blank" className="underline underline-offset-2 hover:text-primary" onClick={(event) => event.stopPropagation()}>
+                Terms of Service
+              </Link>{" "}
+              and{" "}
+              <Link href="/privacy" target="_blank" className="underline underline-offset-2 hover:text-primary" onClick={(event) => event.stopPropagation()}>
+                Privacy Policy
+              </Link>
             </span>
           </label>
         </div>

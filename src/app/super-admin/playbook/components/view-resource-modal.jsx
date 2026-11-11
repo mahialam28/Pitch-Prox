@@ -48,12 +48,12 @@ const ViewResourceModal = ({
                 <div className="flex items-center gap-3 text-[11px] text-light-black mt-0.5">
                   <span className="flex items-center gap-1">
                     <User className="w-3 h-3" />
-                    {resource.addedBy || "Daniel Miller"}
+                    {resource.addedBy || "—"}
                   </span>
                   <span>•</span>
                   <span className="flex items-center gap-1">
                     <Calendar className="w-3 h-3" />
-                    {resource.addedDate || "May 10, 2024"}
+                    {resource.addedDate || "—"}
                   </span>
                 </div>
               </div>
@@ -105,22 +105,18 @@ const ViewResourceModal = ({
               </div>
 
               <div className="p-4 rounded-xl bg-light-gray/40 border border-light-gray text-xs sm:text-sm text-dark-black/90 font-normal leading-relaxed whitespace-pre-line space-y-2">
-                {resource.content || (
-                  <>
-                    <p className="font-semibold text-dark-black">
-                      Recommended Delivery & Key Points:
-                    </p>
-                    <ul className="list-disc list-inside space-y-1 text-medium-black text-xs">
-                      <li>Maintain an authoritative, transparent tone throughout the conversation.</li>
-                      <li>Validate the prospect&apos;s viewpoint before transitioning to value differentiation.</li>
-                      <li>Use open-ended discovery to uncover unspoken motives and financial constraints.</li>
-                      <li>Close with an actionable next step rather than a vague follow-up.</li>
-                    </ul>
-                  </>
-                )}
+                {resource.content || <span className="text-light-black">No script text for this resource.</span>}
               </div>
             </div>
           </div>
+
+          {resource.file && (
+            <div className="px-5 sm:px-6 pb-2 -mt-2">
+              <a href={resource.file.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-light-gray text-xs text-dark-black/80 hover:border-primary hover:text-primary">
+                <FileText className="w-3.5 h-3.5" /> {resource.file.name} <span className="text-light-black">{resource.file.size}</span>
+              </a>
+            </div>
+          )}
 
           {/* Footer */}
           <div className="flex items-center justify-end p-4 px-6 border-t border-light-gray bg-white">

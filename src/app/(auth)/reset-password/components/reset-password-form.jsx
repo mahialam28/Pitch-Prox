@@ -10,8 +10,9 @@ import AuthPassword from "@/components/forms/auth-password";
 import ActionButton from "@/components/buttons/action-button";
 import Text from "@/components/texts/text";
 
-const ResetPasswordForm = () => {
+const ResetPasswordForm = ({ token = "" }) => {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(token ? "" : "This reset link is incomplete. Open the full link from your email, or ask for a new one.");
   const [passwordReset, setPasswordReset] = useState(false);
 
   const {
@@ -30,16 +31,14 @@ const ResetPasswordForm = () => {
 
   const onSubmit = async (data) => {
     setLoading(true);
+    setError("");
     try {
-      console.log("Reset Password Data submitted:", data);
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Show success message
+      const response = await fetch("/api/v1/auth/reset-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, password: data.password }) });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "This reset link couldn't be used.");
       setPasswordReset(true);
-    } catch (error) {
-      console.error("Reset Password Error:", error);
+    } catch (submitError) {
+      setError(submitError.message);
     } finally {
       setLoading(false);
     }
@@ -71,8 +70,8 @@ const ResetPasswordForm = () => {
             Password Reset Successfully
           </Text>
           <Text variant="small" className="max-w-sm mx-auto mb-6">
-            Your password has been reset successfully. 
-            You can now sign in with your new password.
+            Your password has been changed and you&apos;ve been signed out on every device.
+            Sign in with your new password.
           </Text>
           
           <Link
@@ -108,8 +107,8 @@ const ResetPasswordForm = () => {
           validationRules={{
             required: "Password is required",
             minLength: {
-              value: 6,
-              message: "Password must be at least 6 characters",
+              value: 8,
+              message: "Password must be at least 8 characters",
             },
           }}
         />
@@ -129,10 +128,22 @@ const ResetPasswordForm = () => {
           }}
         />
 
+        {error && (
+          <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+            {error}{" "}
+            {!token || /expired|already used|not valid/i.test(error) ? (
+              <Link href="/forgot-password" className="font-semibold underline">
+                Get a new link
+              </Link>
+            ) : null}
+          </p>
+        )}
+
         {/* Action Button with Loading State */}
         <ActionButton
           type="submit"
           loading={loading}
+          disabled={!token}
           text="Reset Password"
           loadingText="Resetting"
           icon={FaArrowRight}

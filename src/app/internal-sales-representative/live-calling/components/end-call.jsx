@@ -19,11 +19,14 @@ import {
   Smile,
   ListTodo,
   Check,
+  Mail,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import UpdateStatusModal from "./update-status-modal";
 import AddNoteModal from "./add-note-modal";
 import ScheduleFollowUpModal from "./schedule-followup-modal";
+import SendFollowUpEmailModal from "@/components/follow-up/send-follow-up-email-modal";
+import CallNumberPanel from "@/components/contacts/call-number-panel";
 import BadgeSelect from "@/components/shared/dropdown/badge-select";
 import { internalOutcomeOptions as outcomeOptions } from "@/utils.js/lead-options";
 
@@ -116,6 +119,7 @@ const EndCall = ({ setup = {}, onStartNewCall, outcome, onOutcomeChange }) => {
   const [isStatusOpen, setIsStatusOpen] = useState(false);
   const [isNoteOpen, setIsNoteOpen] = useState(false);
   const [isScheduleOpen, setIsScheduleOpen] = useState(false);
+  const [isEmailOpen, setIsEmailOpen] = useState(false);
   const [status, setStatus] = useState("Warm Lead");
 
   const handleDownloadReport = () => {
@@ -305,6 +309,14 @@ const EndCall = ({ setup = {}, onStartNewCall, outcome, onOutcomeChange }) => {
               >
                 Set A Follow Up
               </button>
+              <button
+                type="button"
+                onClick={() => setIsEmailOpen(true)}
+                className="px-6 py-2.5 rounded-full border border-[#00a884]/40 bg-[#051824] hover:bg-[#082a32] text-xs sm:text-sm font-semibold text-slate-200 transition-colors cursor-pointer inline-flex items-center gap-2"
+              >
+                <Mail className="w-4 h-4" />
+                Send an email
+              </button>
             </div>
           </div>
 
@@ -369,6 +381,9 @@ const EndCall = ({ setup = {}, onStartNewCall, outcome, onOutcomeChange }) => {
           </div>
         </div>
       </div>
+
+      {/* This number: its own status, and the contact's next number (calls started from CRM / Leads) */}
+      <CallNumberPanel setup={setup} onCallNext={onStartNewCall} />
 
       {/* Disposition & Metric Bar */}
       <div className="bg-white p-6 rounded-2xl border border-light-gray shadow-xs grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 items-center">
@@ -554,6 +569,10 @@ const EndCall = ({ setup = {}, onStartNewCall, outcome, onOutcomeChange }) => {
         onClose={() => setIsNoteOpen(false)}
         leadName={setup.leadName}
       />
+
+      {isEmailOpen && (
+        <SendFollowUpEmailModal key="follow-up-email" onClose={() => setIsEmailOpen(false)} setup={setup} mailPath="/internal-sales-representative/mail" />
+      )}
 
       <ScheduleFollowUpModal
         isOpen={isScheduleOpen}

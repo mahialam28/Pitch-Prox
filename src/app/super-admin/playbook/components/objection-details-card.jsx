@@ -1,5 +1,7 @@
 "use client";
 
+import { normalizeObjection } from "@/lib/playbook-compile";
+
 import React from "react";
 import { Play } from "lucide-react";
 
@@ -7,7 +9,8 @@ const ObjectionDetailsCard = ({
   selectedObjection = {
     title: "I don't want to pay commission.",
     subtitle: "Pricing Objection",
-    category: "Pricing",
+    category: "Financial",
+    subtype: "Affordability",
     stage: "Value Proposition",
     leadTypes: ["FSBO", "Expired", "Pre-Expired", "+2"],
     responseStyle: "Value & ROI Focus",
@@ -45,7 +48,7 @@ const ObjectionDetailsCard = ({
           {selectedObjection.title}
         </h4>
         <p className="text-xs text-light-black font-normal">
-          {selectedObjection.subtitle || `${selectedObjection.category} Objection`}
+          {selectedObjection.subtitle || `${selectedObjection.subtype ?? selectedObjection.category} Objection`}
         </p>
       </div>
 
@@ -56,7 +59,7 @@ const ObjectionDetailsCard = ({
             Category
           </span>
           <span className="font-bold text-dark-black/90">
-            {selectedObjection.category}
+            {normalizeObjection(selectedObjection).rootCategory ?? selectedObjection.category}{normalizeObjection(selectedObjection).subtype ? ` · ${normalizeObjection(selectedObjection).subtype}` : ""}
           </span>
         </div>
 

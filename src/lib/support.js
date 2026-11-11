@@ -1,9 +1,10 @@
 import { createId, query } from "@/lib/db";
 import { ApiError } from "@/lib/api";
 import { assertCanWrite } from "@/lib/permissions";
+import { notify, ticketLink, usersWithRoles } from "@/lib/notifications";
 import { getSubscription } from "@/lib/billing";
 import { formatBytes, saveUpload } from "@/lib/storage";
-import { CUSTOMER_ROLES } from "@/utils.js/roles";
+import { CUSTOMER_ROLES, ROLES } from "@/utils.js/roles";
 import { TICKET_ATTACHMENT_MAX_BYTES, TICKET_ATTACHMENT_TYPES, TICKET_CATEGORIES, TICKET_PRIORITIES } from "@/utils.js/support";
 
 const ticketColumns = "support_tickets.id, support_tickets.number, support_tickets.subject, support_tickets.status, support_tickets.priority, support_tickets.category, support_tickets.created_at AS createdAt, support_tickets.updated_at AS updatedAt";
@@ -32,6 +33,9 @@ const ownTickets = (user) =>
     ? { sql: "organization_id = ?", values: [user.organizationId] }
     : { sql: "organization_id = ? AND created_by = ?", values: [user.organizationId, user.id] };
 
+// Who handles new and unassigned customer tickets
+const supportTeam = () => usersWithRoles([ROLES.SUPPORT, ROLES.ADMIN_MANAGER]);
+
 export async function listCustomerTickets(user) {
   const scope = ownTickets(user);
   return query(`SELECT ${ticketColumns} FROM support_tickets WHERE ${scope.sql} ORDER BY updated_at DESC`, scope.values);
@@ -49,6 +53,8 @@ export async function createCustomerTicket(user, form) {
   const id = createId("ticket");
   await query("INSERT INTO support_tickets (id, organization_id, created_by, category, priority, subject) VALUES (?, ?, ?, ?, ?, ?)", [id, user.organizationId, user.id, category, priority, subject]);
   await addMessage(id, user, "customer", description, attachment);
+  const [{ number }] = await query("SELECT number FROM support_tickets WHERE id = ?", [id]);
+  await notify(await supportTeam(), { type: "ticket", title: `New support ticket: TKT-${number}`, body: `${user.organizationName ?? user.name}: ${subject}`, link: (role) => ticketLink(role, id), entityType: "support_ticket", entityId: id, actor: user });
   return getCustomerTicket(user, id);
 }
 
@@ -85,6 +91,9 @@ export async function replyAsCustomer(user, id, form) {
   // A reply reopens a finished ticket, and answers a "waiting on customer" one
   const status = ["Resolved", "Closed", "Waiting"].includes(ticket.status) ? "Open" : ticket.status;
   await query("UPDATE support_tickets SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [status, id]);
+  // The agent on the ticket hears about the reply; an unassigned ticket goes to the support team
+  const [{ assignedTo }] = await query("SELECT assigned_to AS assignedTo FROM support_tickets WHERE id = ?", [id]);
+  await notify(assignedTo ? [assignedTo] : await supportTeam(), { type: "ticket", title: `Customer replied on TKT-${ticket.number}`, body: `${user.name}: ${body}`.slice(0, 300), link: (role) => ticketLink(role, id), entityType: "support_ticket", entityId: id, actor: user });
   return getCustomerTicket(user, id);
 }
 

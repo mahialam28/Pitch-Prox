@@ -8,7 +8,7 @@ import toast from "react-hot-toast";
 export const InvoicePreviewModal = ({ isOpen, onClose, invoice, customer }) => {
   if (!isOpen) return null;
 
-  const invNum = invoice?.invoiceNumber || `INV-2024-${Math.floor(1000 + Math.random() * 9000)}`;
+  const invNum = invoice?.invoiceNumber || (invoice?.id ? `INV-${invoice.id}` : "INV-DRAFT");
   const custName = customer?.name || invoice?.customer || "Customer Account";
   const custCompany = customer?.company || "Real Estate Brokerage";
   const amount = invoice?.amount || customer?.amountDue || "$199.00";

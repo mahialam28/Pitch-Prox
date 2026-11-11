@@ -1,13 +1,18 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { apiRequest } from "@/lib/client-api";
 import { useRouter } from "next/navigation";
 
 export default function TrainingAcknowledgment() {
   const router = useRouter();
 
-  // Circular gauge calculations (SVG donut)
-  const percentage = 93;
+  // Training completion across all assignments (Training Logs)
+  const [stats, setStats] = useState(null);
+  useEffect(() => {
+    apiRequest("/api/v1/compliance/training").then((data) => setStats(data.stats)).catch(() => setStats(null));
+  }, []);
+  const percentage = stats?.total ? Math.round((stats.completed / stats.total) * 100) : 0;
   const radius = 42;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
@@ -54,10 +59,10 @@ export default function TrainingAcknowledgment() {
           {/* Inner Center Text */}
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
             <span className="text-xl font-bold text-dark-black/85 font-secondary tracking-tight">
-              93%
+              {stats ? `${percentage}%` : "—"}
             </span>
             <span className="text-[9px] font-semibold text-light-black tracking-wider uppercase">
-              UP TO DATE
+              COMPLETED
             </span>
           </div>
         </div>
@@ -71,7 +76,7 @@ export default function TrainingAcknowledgment() {
               <span className="text-medium-black font-medium">Completed</span>
             </div>
             <span className="font-bold text-dark-black/85 font-secondary">
-              187
+              {stats?.completed ?? "—"}
             </span>
           </div>
 
@@ -82,7 +87,7 @@ export default function TrainingAcknowledgment() {
               <span className="text-medium-black font-medium">Pending</span>
             </div>
             <span className="font-bold text-dark-black/85 font-secondary">
-              12
+              {stats ? stats.inProgress + stats.notStarted : "—"}
             </span>
           </div>
 
@@ -93,7 +98,7 @@ export default function TrainingAcknowledgment() {
               <span className="text-medium-black font-medium">Overdue</span>
             </div>
             <span className="font-bold text-dark-black/85 font-secondary">
-              3
+              {stats?.overdue ?? "—"}
             </span>
           </div>
         </div>

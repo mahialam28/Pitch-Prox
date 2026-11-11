@@ -8,6 +8,7 @@ import LogicRulesOverviewSection, {
   DEFAULT_RULES_BY_CATEGORY,
 } from "./logic-rules-overview-section";
 import PromptStylePreviewCard from "./prompt-style-preview-card";
+import { confirmAction } from "@/lib/alerts";
 import toast from "react-hot-toast";
 
 const CATEGORY_LIST = [
@@ -66,7 +67,8 @@ export default function AiLogicRulesTabSection({
     }
   };
 
-  const handleResetAllLogicDefaults = () => {
+  const handleResetAllLogicDefaults = async () => {
+    if (!(await confirmAction({ title: "Reset all to defaults?", text: "This resets every Logic & Rules category back to the defaults. Changes you made in them are lost.", confirmText: "Reset all" }))) return;
     onChange("logicRulesByCategory", DEFAULT_RULES_BY_CATEGORY);
     setSelectedCategory("intent-detection");
     toast.success("Reset all Logic & Rules to defaults!");

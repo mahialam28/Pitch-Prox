@@ -5,6 +5,7 @@ import { parseLeadFields, prospectColumns } from "@/lib/leads";
 import { requirePipelineUser } from "@/lib/pipeline";
 import { findLead } from "@/lib/lead-activity";
 import { findProspect } from "@/lib/prospects";
+import { copyLeadPhones, parsePhones, savePhones, withPhones } from "@/lib/phones";
 
 export const runtime = "nodejs";
 
@@ -12,7 +13,7 @@ export const GET = withApi(async () => {
   const { scope } = await requirePipelineUser();
   const where = scope("prospects");
   const results = await query(`SELECT ${prospectColumns} FROM prospects WHERE ${where.sql} ORDER BY updated_at DESC`, where.values);
-  return NextResponse.json({ results, count: results.length });
+  return NextResponse.json({ results: await withPhones("prospect", results), count: results.length });
 });
 
 export const POST = withApi(async (request) => {
@@ -24,5 +25,9 @@ export const POST = withApi(async (request) => {
   const id = createId("prospect");
   const columns = ["id", "organization_id", "lead_id", ...Object.keys(fields)];
   await query(`INSERT INTO prospects (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`, [id, user.organizationId, leadId, ...Object.values(fields)]);
-  return NextResponse.json({ prospect: await findProspect(id, scope) }, { status: 201 });
+  // A prospect made from a lead brings the lead's numbers (with their statuses) unless the form sent its own
+  const phones = parsePhones(body);
+  if (phones === undefined && leadId) await copyLeadPhones(leadId, id, user.organizationId);
+  else await savePhones("prospect", id, user.organizationId, phones);
+  return NextResponse.json({ prospect: await withPhones("prospect", await findProspect(id, scope)) }, { status: 201 });
 });

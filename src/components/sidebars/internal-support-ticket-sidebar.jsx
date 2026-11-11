@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import Link from "next/link";
+import { usePortal } from "@/components/shared/use-portal";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X,
@@ -146,6 +148,7 @@ export const InternalSupportTicketSidebar = ({
   // Staff who can take tickets: [{ id, name, openTickets }]
   agents = null,
 }) => {
+  const portal = usePortal();
   const agentList = agents ?? defaultAgents;
   const run = async (fn, success) => {
     try {
@@ -479,12 +482,14 @@ export const InternalSupportTicketSidebar = ({
                     <p className="text-xs text-light-black font-medium">
                       {t.customer?.company}
                     </p>
-                    <a
-                      href={`mailto:${t.customer?.email}`}
+                    {/* Opens Mail with the customer and the ticket filled in (sent through PitchProX, replies come to you) */}
+                    <Link
+                      href={`${portal.mailBase}?to=${encodeURIComponent(t.customer?.email ?? "")}&subject=${encodeURIComponent(`Re: ${String(t.id).replace(/^#/, "")}${t.subject ? ` · ${t.subject}` : ""}`)}`}
+                      title="Write an email to this customer"
                       className="text-xs text-light-blue hover:underline block pt-0.5"
                     >
                       {t.customer?.email}
-                    </a>
+                    </Link>
                   </div>
                 </div>
 

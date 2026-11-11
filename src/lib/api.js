@@ -54,7 +54,12 @@ export function withApi(handler) {
       await assertWritable(args[0]);
       return await handler(...args);
     } catch (error) {
-      if (error instanceof ApiError) return jsonError(error.message, error.status);
+      if (error instanceof ApiError) {
+        const response = jsonError(error.message, error.status);
+        // Attempt limits tell the client when to try again
+        if (error.retryAfter) response.headers.set("Retry-After", String(error.retryAfter));
+        return response;
+      }
       if (error?.message === "UNAUTHORIZED") return unauthorized();
       if (error?.message === "FORBIDDEN") return forbidden();
       console.error(error);

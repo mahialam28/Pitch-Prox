@@ -1,27 +1,21 @@
 "use client";
 
-import React, { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import React from "react";
 
-export default function IncidentSummary() {
-  const [timeframe, setTimeframe] = useState("This Month");
-  const [isTimeframeOpen, setIsTimeframeOpen] = useState(false);
+// summary: [{ status, count }] for Open / Investigating / Resolved / Closed (adds up to Total Incidents)
+const COLORS = { Open: "#F04438", Investigating: "#F97316", Resolved: "#0EADAB", Closed: "#38BDF8" };
 
-  const timeframeOptions = ["This Month", "Last 30 Days", "This Quarter", "This Year"];
+export default function IncidentSummary({ summary }) {
 
   // Statuses: Open, Investigating, Resolved, Closed (they add up to Total Incidents)
   const radius = 38;
   const circumference = 2 * Math.PI * radius;
-  const SLICES = [
-    { label: "Open", count: 4, color: "#F04438" },
-    { label: "Investigating", count: 3, color: "#F97316" },
-    { label: "Resolved", count: 13, color: "#0EADAB" },
-    { label: "Closed", count: 18, color: "#38BDF8" },
-  ];
+  const SLICES = (summary ?? []).map((item) => ({ label: item.status, count: item.count, color: COLORS[item.status] }));
   const total = SLICES.reduce((sum, slice) => sum + slice.count, 0);
+  const share = (count) => (total ? Math.round((count / total) * 100) : 0);
   const arcs = SLICES.reduce((list, slice) => {
     const start = list.length ? list[list.length - 1].end : 0;
-    const length = (slice.count / total) * circumference;
+    const length = total ? (slice.count / total) * circumference : 0;
     return [...list, { ...slice, start, length, end: start + length }];
   }, []);
 
@@ -33,39 +27,7 @@ export default function IncidentSummary() {
           Incident Summary
         </h3>
 
-        {/* Timeframe selector */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setIsTimeframeOpen(!isTimeframeOpen)}
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-medium-black hover:text-dark-black rounded-lg border border-light-gray bg-light-gray/30 hover:bg-light-gray/60 transition-colors cursor-pointer"
-          >
-            <span>{timeframe}</span>
-            <ChevronDown className="w-3.5 h-3.5 text-light-black" />
-          </button>
-
-          {isTimeframeOpen && (
-            <div className="absolute right-0 top-full mt-1 w-32 bg-white border border-light-gray rounded-xl shadow-lg py-1 z-20">
-              {timeframeOptions.map((opt) => (
-                <button
-                  key={opt}
-                  type="button"
-                  onClick={() => {
-                    setTimeframe(opt);
-                    setIsTimeframeOpen(false);
-                  }}
-                  className={`w-full px-3 py-1.5 text-left text-xs transition-colors cursor-pointer ${
-                    timeframe === opt
-                      ? "text-primary font-semibold bg-primary/5"
-                      : "text-dark-black/80 hover:bg-light-gray/50"
-                  }`}
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <span className="text-xs text-light-black">All time</span>
       </div>
 
       {/* Donut Chart & Legend */}
@@ -118,7 +80,7 @@ export default function IncidentSummary() {
                 <span className="text-medium-black text-xs">{slice.label}</span>
               </div>
               <span className="font-semibold text-dark-black text-xs shrink-0">
-                {slice.count} <span className="text-light-black font-normal">({Math.round((slice.count / total) * 100)}%)</span>
+                {slice.count} <span className="text-light-black font-normal">({share(slice.count)}%)</span>
               </span>
             </div>
           ))}

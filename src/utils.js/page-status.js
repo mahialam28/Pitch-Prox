@@ -12,7 +12,7 @@
 const NEEDS = {
   calling: "a phone-call provider and an AI provider (client decision)",
   payments: "a Stripe payment account (client)",
-  email: "an email-sending service (client)",
+  email: "the Postmark account (client)",
   integrations: "the client's Zoho, Google, Zoom and Outlook accounts",
   social: "the client's Google and Facebook developer accounts",
   ai: "an AI provider (client decision)",
@@ -22,7 +22,7 @@ const preview = (message = "This page shows sample data and isn't connected yet.
 const waiting = (feature, need) => ({ status: "waiting", message: `${feature} isn't connected yet — waiting for ${need}.` });
 const partial = (message) => ({ status: "partial", message });
 const working = { status: "working" };
-const MAIL = `Emails and support tickets save and are listed, but emails are only delivered once ${NEEDS.email} is connected. Templates (built-in, team and your own) are live; the AI draft button inserts sample text until ${NEEDS.ai} is connected.`;
+const MAIL = `Emails, drafts and support tickets save and are listed; emails are delivered once ${NEEDS.email} is connected. Templates (built-in, team and your own) are live; the AI draft button inserts sample text until ${NEEDS.ai} is connected.`;
 const CALENDAR = `Calendar events and announcements are live: events are shared by visibility (everyone, internal, management or private) and announcements reach the roles they are meant for. Emailing announcements waits for ${NEEDS.email}.`;
 const CUSTOMER_DETAIL = `Account details, notes, support history, credits and adjustments, plan changes (with proration), pause, cancel, suspend and impersonation are live. Call history, usage, reports and calibration detail wait for ${NEEDS.calling}; invoices and refunds are processed once ${NEEDS.payments} is connected.`;
 const CREDITS = `Credits, discounts, approvals and reversals are live and kept in the ledger. Refunds are recorded now and paid out once ${NEEDS.payments} is connected.`;
@@ -32,13 +32,17 @@ const STAFF_DASHBOARD = `Leads, accounts, revenue, alerts and activity are live.
 // First match wins: exact paths, or "/section/*" for a section page and everything under it
 const RULES = [
   // ── Public & sign-in ──
-  ["/", partial("The demo request form isn't connected yet; everything else on this page is informational.")],
+  ["/", working],
+  ["/see-how-it-works", working],
+  ["/privacy", working],
+  ["/terms", working],
+  ["/data-deletion", working],
   ["/about", working],
   ["/demo", working],
   ["/sign-in", partial(`Email sign-in works. Google and Facebook sign-in need ${NEEDS.social}.`)],
   ["/sign-up", partial(`Email sign-up works. Google and Facebook sign-up need ${NEEDS.social}.`)],
-  ["/forgot-password", waiting("Password reset email", NEEDS.email)],
-  ["/reset-password", waiting("Password reset email", NEEDS.email)],
+  ["/forgot-password", working],
+  ["/reset-password", working],
 
   // ── Customer panel ──
   ["/user/dashboard", partial("Lead numbers and the pipeline are live. Call stats appear once calling is connected.")],
@@ -48,15 +52,15 @@ const RULES = [
   ["/user/crm", working],
   ["/user/crm/add", working],
   ["/user/crm/edit", working],
-  ["/user/playbook", partial(`Choosing, creating, editing and deleting playbooks all save. Buying premium playbooks waits for ${NEEDS.payments}.`)],
+  ["/user/playbook", partial(`Choosing, creating, editing and deleting playbooks all save. Published playbooks show their real details, and owners can read what's inside. Buying premium playbooks waits for ${NEEDS.payments}.`)],
   ["/user/playbook/create", working],
-  ["/user/live-calling", waiting("Live calling", NEEDS.calling)],
-  ["/user/calls/*", waiting("Call history and call reports", NEEDS.calling)],
+  ["/user/live-calling", partial("Practice calls work now with the real AI coaching (simulated prospect). Phone calls connect once the calling service (Twilio) and speech-to-text are set up.")],
+  ["/user/calls/*", partial("Call history and call reports are live (practice calls now; phone calls once Twilio is connected).")],
   ["/user/performance-analytics", waiting("Performance analytics (built from call data)", NEEDS.calling)],
   ["/user/calibration", partial(`The microphone test works and finished sessions are saved. Scores are samples until ${NEEDS.ai} is connected.`)],
   ["/user/ai-training", partial(`Uploading, pausing and deleting training material all save. The AI starts learning from it once ${NEEDS.ai} is connected.`)],
   ["/user/settings/support-ticket/*", working],
-  ["/user/settings/security", partial("Your devices and sign-in history are live. Locations need an IP-lookup service; two-step login (2FA) is coming later.")],
+  ["/user/settings/security", partial("Two-step login (authenticator app), devices and sign-in history are live. Sign-in locations need an IP-lookup service.")],
   ["/user/settings/profile", partial("Your name and password save. Language and account deletion are coming later.")],
   ["/user/settings/preferences", working],
   ["/user/settings/notifications", working],
@@ -64,7 +68,7 @@ const RULES = [
   ["/user/settings/billing/upgrade", waiting("Changing plans", NEEDS.payments)],
   ["/user/settings/billing/payment-method", waiting("Payment methods", NEEDS.payments)],
   ["/user/settings/billing/*", partial(`Your plan and its limits are live. Payments, invoices and usage counts wait for ${NEEDS.payments} and for calling to be connected.`)],
-  ["/user/settings/send-mail/*", partial(`Emails are saved and listed, but only delivered once ${NEEDS.email} is connected. The AI draft button inserts sample text until ${NEEDS.ai} is connected.`)],
+  ["/user/settings/send-mail/*", partial(`Emails (and drafts) are saved and listed; they're delivered once ${NEEDS.email} is connected. The AI draft button inserts sample text until ${NEEDS.ai} is connected.`)],
 
   // ── Sales rep panel ──
   ["/internal-sales-representative/dashboard", partial(STAFF_DASHBOARD)],
@@ -74,12 +78,12 @@ const RULES = [
   ["/internal-sales-representative/billing/credits-adjustments", partial(CREDITS)],
   ["/internal-sales-representative/users", working],
   ["/internal-sales-representative/users/*", partial(CUSTOMER_DETAIL)],
-  ["/internal-sales-representative/user-portal", partial(`Creating the customer account works; share the activation link it shows. Emailing that link and taking the first payment wait for ${NEEDS.email} and ${NEEDS.payments}.`)],
+  ["/internal-sales-representative/user-portal", partial(`Creating the customer account works and the activation link is emailed to the customer (sent once ${NEEDS.email} is connected; until then share the link shown). Taking the first payment waits for ${NEEDS.payments}.`)],
   ["/internal-sales-representative/calendar", partial(CALENDAR)],
   ["/internal-sales-representative/playbook", working],
   ["/internal-sales-representative/calibration", partial(`Finished sessions are saved. Scores are samples until ${NEEDS.ai} is connected.`)],
   ["/internal-sales-representative/ai-training", partial(`Uploading, pausing and deleting training material all save. The AI starts learning from it once ${NEEDS.ai} is connected.`)],
-  ["/internal-sales-representative/settings/security", partial("Your devices and sign-in history are live. Locations need an IP-lookup service; two-step login (2FA) is coming later.")],
+  ["/internal-sales-representative/settings/security", partial("Two-step login (authenticator app), devices and sign-in history are live. Sign-in locations need an IP-lookup service.")],
   ["/internal-sales-representative/settings/profile", partial("Your name and password save. Language is coming later.")],
   ["/internal-sales-representative/settings/preferences", working],
   ["/internal-sales-representative/settings/notifications", working],
@@ -91,14 +95,23 @@ const RULES = [
 
   // ── Employee onboarding ──
   ["/accept-invite", working],
-  ["/onboarding", partial(`Every step saves. Voice calibration records completion; scores need ${NEEDS.ai}. Invite links are shown to the admin until ${NEEDS.email} is connected.`)],
+  ["/onboarding", partial(`Every step saves. Voice calibration records completion; scores need ${NEEDS.ai}. Invite links are emailed automatically once ${NEEDS.email} is connected (the admin can also copy them).`)],
   ["/onboarding/team", working],
 
   // ── Super admin panel ──
-  ["/super-admin/compliance-audit/access-records", partial(`Employees, invites, roles and access changes are live. Invite links are copied by the admin until ${NEEDS.email} is connected.`)],
+  ["/super-admin/compliance-audit/access-records", partial(`Employees, invites, roles and access changes are live. Invite links are emailed automatically once ${NEEDS.email} is connected (the admin can also copy them).`)],
   ["/super-admin/compliance-audit/offboarding", working],
+  ["/super-admin/compliance-audit/audit-logs", working],
+  ["/super-admin/playbook/*", partial("Drafts save automatically; publishing creates fixed versions (with checks, release notes and rollback) and an AI-safe download for the AI developer. Resources can be pinned to a shared Resource Library and imported into any playbook. The AI uses published playbooks once the calling/AI provider is connected.")],
+  ["/super-admin/compliance-audit/evidence-repository", working],
+  ["/super-admin/compliance-audit/soc2-readiness", working],
+  ["/super-admin/compliance-audit/overview", working],
+  ["/super-admin/compliance-audit/incident-management/*", partial(`Reporting, investigation, resolution, closing, reopening, notes, evidence and owners are live. "Request More Info" emails wait in the outbox until ${NEEDS.email} is connected.`)],
+  ["/super-admin/compliance-audit/training-logs/*", partial(`Trainings, the library, categories, assignments, employee completions, certificates and the report are live. Assignment emails and reminders wait in the outbox until ${NEEDS.email} is connected.`)],
+  ["/super-admin/compliance-audit/data-deletion", working],
+  ["/super-admin/compliance-audit/policy-documents/*", partial(`Policies, versions, approvals and employee signatures are live. Reminder emails wait in the outbox until ${NEEDS.email} is connected.`)],
   ["/super-admin/settings/integrations", waiting("Integrations", NEEDS.integrations)],
-  ["/super-admin/settings/security", partial("Your devices and sign-in history are live. Locations need an IP-lookup service; two-step login (2FA) is coming later.")],
+  ["/super-admin/settings/security", partial("Two-step login (authenticator app), devices and sign-in history are live. Sign-in locations need an IP-lookup service.")],
   ["/super-admin/settings/profile", partial("Your name and password save. Language is coming later.")],
   ["/super-admin/settings/preferences", working],
   ["/super-admin/settings/notifications", working],

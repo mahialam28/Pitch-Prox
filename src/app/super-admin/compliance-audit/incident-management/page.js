@@ -1,16 +1,27 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import IncidentStats from "./components/incident-stats";
 import IncidentTable from "./components/incident-table";
 import IncidentSummary from "./components/incident-summary";
 import IncidentsByCategory from "./components/incidents-by-category";
 import IncidentBanner from "./components/incident-banner";
 import ReportIncidentModal from "./components/report-incident-modal";
-import { initialIncidents } from "./incident-data";
+import { apiRequest } from "@/lib/client-api";
+import { showError } from "@/lib/alerts";
 
 export default function IncidentManagementPage() {
-  const [incidents, setIncidents] = useState(initialIncidents);
+  const router = useRouter();
+  const [data, setData] = useState(null);
+  const load = useCallback(
+    () => apiRequest("/api/v1/compliance/incidents").then(setData).catch((error) => showError("Incidents not loaded", error.message)),
+    []
+  );
+  useEffect(() => {
+    load();
+  }, [load]);
+  const incidents = data?.results ?? [];
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSeverity, setSelectedSeverity] = useState("All Severity");
   const [selectedCategory, setSelectedCategory] = useState("All Categories");
@@ -34,10 +45,9 @@ export default function IncidentManagementPage() {
   const filteredIncidents = incidents.filter((item) => {
     const matchesSearch =
       !searchTerm ||
-      item.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.subtitle &&
-        item.subtitle.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (item.relatedTicket?.reference ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.reportedBy.name.toLowerCase().includes(searchTerm.toLowerCase());
 
@@ -55,7 +65,7 @@ export default function IncidentManagementPage() {
 
     const matchesOwner =
       selectedOwner === "All Owners" ||
-      item.reportedBy.name.toLowerCase() === selectedOwner.toLowerCase();
+      item.assignedTo?.name === selectedOwner;
 
     return (
       TABS.find((tab) => tab.id === activeTab).match(item) &&
@@ -67,8 +77,9 @@ export default function IncidentManagementPage() {
     );
   });
 
-  const handleCreateIncident = (newIncident) => {
-    setIncidents((prev) => [newIncident, ...prev]);
+  const handleCreateIncident = (result) => {
+    load();
+    router.push(`/super-admin/compliance-audit/incident-management/${result.incident.id}`);
   };
 
   return (
@@ -84,7 +95,7 @@ export default function IncidentManagementPage() {
       </div>
 
       {/* ── 2. Top Stats KPI Cards ── */}
-      <IncidentStats />
+      <IncidentStats stats={data?.stats} />
 
       {/* ── 3. Main 2-Column Section (Table + Right Breakdown Widgets) ── */}
       <div className="flex flex-col gap-6 w-full">
@@ -124,14 +135,15 @@ export default function IncidentManagementPage() {
             setCurrentPage={setCurrentPage}
             pageSize={pageSize}
             setPageSize={setPageSize}
-            totalItems={incidents.length}
+            owners={data?.managers ?? []}
+            canReport={Boolean(data?.permissions.manage)}
           />
         </div>
 
         {/* Incident Summary (Donut) & Top Incident Categories, below the table */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
-          <IncidentSummary />
-          <IncidentsByCategory />
+          <IncidentSummary summary={data?.summary} />
+          <IncidentsByCategory top={data?.topCategories} total={data?.stats.total ?? 0} />
         </div>
       </div>
 
@@ -139,11 +151,12 @@ export default function IncidentManagementPage() {
       <IncidentBanner />
 
       {/* ── 5. Report New Incident Modal ── */}
-      <ReportIncidentModal
+      {isReportModalOpen && <ReportIncidentModal
+        managers={data?.managers ?? []}
         isOpen={isReportModalOpen}
         onClose={() => setIsReportModalOpen(false)}
         onSubmitSuccess={handleCreateIncident}
-      />
+      />}
     </div>
   );
 }

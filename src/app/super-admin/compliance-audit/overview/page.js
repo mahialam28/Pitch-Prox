@@ -1,52 +1,39 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Badge, Card, CardLink, DashboardGrid, DataTable, KpiRow, PageHeader, Person, Progress, StackedList } from "@/components/shared/dashboard-ui";
-
-// Design-only Compliance Overview: sample data until the compliance API exists.
+import { apiRequest, formatDate } from "@/lib/client-api";
+import { showError } from "@/lib/alerts";
 
 const BASE = "/super-admin/compliance-audit";
-
-const KPIS = [
-  { label: "Compliance Score", value: "92%", note: "3% from last month", trend: "up" },
-  { label: "Policies Approved", value: "22 / 28", note: "2 this month", trend: "up" },
-  { label: "Training Completion", value: "93%", note: "4% from last month", trend: "up" },
-  { label: "Open Incidents", value: "7", note: "2 from last week", trend: "down" },
-  { label: "Audit Readiness", value: "87%", note: "5% from last month", trend: "up" },
-];
-
-const AREAS = [
-  { area: "Security", owner: "Sarah Johnson", role: "Security Lead", score: 96, status: "Compliant", review: "May 10, 2025" },
-  { area: "Access & Identity", owner: "Mike Davis", role: "Operations", score: 92, status: "Compliant", review: "May 08, 2025" },
-  { area: "HR & People", owner: "Emily Brown", role: "HR Manager", score: 88, status: "Needs review", review: "Apr 29, 2025" },
-  { area: "AI Governance", owner: "Daniel Miller", role: "AI Lead", score: 84, status: "Needs review", review: "May 12, 2025" },
-  { area: "Operations", owner: "Tom Wilson", role: "Operations", score: 95, status: "Compliant", review: "May 02, 2025" },
-  { area: "Legal & Compliance", owner: "Jessica Lee", role: "Legal", score: 90, status: "Compliant", review: "May 06, 2025" },
-];
-
-const DEADLINES = [
-  { title: "SOC 2 evidence freeze", subtitle: "Evidence Repository", badge: { tone: "amber", label: "Jun 15" }, href: `${BASE}/evidence-repository` },
-  { title: "Annual review: Information Security Policy", subtitle: "Policy Documents", badge: { tone: "blue", label: "Jun 30" }, href: `${BASE}/policy-documents` },
-  { title: "Quarterly access review", subtitle: "Access Records", badge: { tone: "blue", label: "Jul 01" }, href: `${BASE}/access-records` },
-  { title: "Employee security training renewal", subtitle: "Training Logs", badge: { tone: "blue", label: "Jul 15" }, href: `${BASE}/training-logs` },
-];
-
-const ATTENTION = [
-  { title: "Overdue policy acknowledgments", subtitle: "Employees past due date", badge: { tone: "red", label: "3" }, href: `${BASE}/policy-documents` },
-  { title: "Policies under review", subtitle: "Waiting for approval", badge: { tone: "amber", label: "4" }, href: `${BASE}/policy-documents` },
-  { title: "Evidence expiring in 30 days", subtitle: "Evidence Repository", badge: { tone: "amber", label: "12" }, href: `${BASE}/evidence-repository` },
-  { title: "Open incidents", subtitle: "Incident Management", badge: { tone: "amber", label: "7" }, href: `${BASE}/incident-management` },
-];
+const pct = (value) => (value === null || value === undefined ? "—" : `${value}%`);
+const day = (value) => new Date(`${value}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
 const QUICK_LINKS = [
   { title: "Policy Documents", href: `${BASE}/policy-documents` },
   { title: "Training Logs", href: `${BASE}/training-logs` },
   { title: "Incident Management", href: `${BASE}/incident-management` },
   { title: "Audit Logs", href: `${BASE}/audit-logs` },
+  { title: "SOC 2 Readiness", href: `${BASE}/soc2-readiness` },
   { title: "Evidence Repository", href: `${BASE}/evidence-repository` },
 ];
 
+// Compliance Overview: every number comes from the other Compliance pages (/api/v1/compliance/overview)
 export default function ComplianceOverviewPage() {
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    apiRequest("/api/v1/compliance/overview").then(setData).catch((error) => showError("Overview not loaded", error.message));
+  }, []);
+
+  const kpis = data?.kpis;
+  const KPIS = [
+    { label: "Compliance Score", value: pct(kpis?.score), note: "Signatures, training, evidence and SOC 2", good: kpis?.score != null ? kpis.score >= 85 : undefined },
+    { label: "Policies Approved", value: kpis ? `${kpis.policiesApproved} / ${kpis.policiesTotal}` : "—", note: `${pct(kpis?.ackRate)} acknowledged` },
+    { label: "Training Completion", value: pct(kpis?.trainingRate), note: "All assignments", good: kpis?.trainingRate != null ? kpis.trainingRate >= 85 : undefined },
+    { label: "Active Incidents", value: kpis ? kpis.activeIncidents : "—", note: kpis ? `${kpis.criticalHigh} Critical / High` : "", good: kpis ? kpis.criticalHigh === 0 : undefined },
+    { label: "Audit Readiness", value: pct(kpis?.readiness), note: kpis ? `${kpis.openGaps} SOC 2 gap${kpis.openGaps === 1 ? "" : "s"}` : "", good: kpis ? kpis.readiness >= 85 : undefined },
+  ];
+
   return (
     <div className="w-full flex flex-col gap-5 pb-12 font-secondary">
       <PageHeader title="Compliance Overview" subtitle="Track compliance posture, deadlines and items that need attention." />
@@ -55,27 +42,35 @@ export default function ComplianceOverviewPage() {
         main={
           <>
             <Card title="Compliance Posture by Area" action={<CardLink href={`${BASE}/policy-documents`}>View all policies</CardLink>}>
-              <DataTable
-                rowKey={(row) => row.area}
-                rows={AREAS}
-                columns={[
-                  { key: "area", label: "Area" },
-                  { key: "owner", label: "Owner", render: (row) => <Person name={row.owner} role={row.role} /> },
-                  { key: "score", label: "Score", render: (row) => <Progress value={row.score} tone={row.score < 85 ? "bg-amber-500" : "bg-primary"} /> },
-                  { key: "status", label: "Status", render: (row) => <Badge tone={row.status === "Compliant" ? "green" : "amber"}>{row.status}</Badge> },
-                  { key: "review", label: "Last Review" },
-                ]}
-              />
+              {data && !data.areas.length ? (
+                <p className="text-xs text-medium-black">No approved policies yet.</p>
+              ) : (
+                <DataTable
+                  rowKey={(row) => row.area}
+                  rows={data?.areas ?? []}
+                  columns={[
+                    { key: "area", label: "Area" },
+                    { key: "owner", label: "Owner", render: (row) => (row.owner ? <Person name={row.owner} role={`${row.policies} polic${row.policies === 1 ? "y" : "ies"}`} /> : `${row.policies} polic${row.policies === 1 ? "y" : "ies"}`) },
+                    { key: "score", label: "Signed", render: (row) => <Progress value={row.score} tone={row.score < 85 ? "bg-amber-500" : "bg-primary"} /> },
+                    { key: "status", label: "Status", render: (row) => <Badge tone={row.status === "Compliant" ? "green" : "amber"}>{row.reviewsDue ? `Review overdue (${row.reviewsDue})` : row.status}</Badge> },
+                    { key: "lastApproved", label: "Last Approved", render: (row) => formatDate(row.lastApproved) },
+                  ]}
+                />
+              )}
             </Card>
             <Card title="Upcoming Deadlines" action={<CardLink href="/super-admin/calendar-announcements">View calendar</CardLink>}>
-              <StackedList items={DEADLINES} />
+              {data && !data.deadlines.length ? (
+                <p className="text-xs text-medium-black">Nothing due in the next 60 days.</p>
+              ) : (
+                <StackedList items={(data?.deadlines ?? []).map((item) => ({ title: item.title, subtitle: item.area, badge: { tone: "blue", label: day(item.date) }, href: item.href }))} />
+              )}
             </Card>
           </>
         }
         side={
           <>
             <Card title="Needs Attention">
-              <StackedList items={ATTENTION} />
+              <StackedList items={(data?.attention ?? []).map((item) => ({ title: item.title, subtitle: item.subtitle, badge: { tone: item.count ? item.tone : "green", label: String(item.count) }, href: item.href }))} />
             </Card>
             <Card title="Quick Links">
               <StackedList items={QUICK_LINKS} chevron />

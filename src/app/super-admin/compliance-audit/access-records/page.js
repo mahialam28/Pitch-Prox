@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Ban, Link2, ListChecks, RotateCcw, UserCog, UserMinus, Users, ShieldCheck, UserPlus } from "lucide-react";
+import { Ban, KeyRound, Link2, ListChecks, RotateCcw, UserCog, UserMinus, Users, ShieldCheck, UserPlus } from "lucide-react";
 import AccessStats from "./components/access-stats";
 import AccessTable from "./components/access-table";
 import AccessOverview from "./components/access-overview";
@@ -42,6 +42,7 @@ export default function AccessRecordsPage() {
   const [viewingProgress, setViewingProgress] = useState(null);
   const [offboarding, setOffboarding] = useState(null);
   const [deactivating, setDeactivating] = useState(null);
+  const [resettingMfa, setResettingMfa] = useState(null);
 
   const canWrite = me && me.role !== "auditor";
 
@@ -129,6 +130,8 @@ export default function AccessRecordsPage() {
           employee.status === "onboarding" && { label: "View onboarding progress", icon: ListChecks, onClick: () => setViewingProgress(employee) },
           employee.status !== "deactivated" && { label: "Change role", icon: UserCog, onClick: () => setChangingRole(employee) },
           ["active", "onboarding"].includes(employee.status) && { label: "Start offboarding", icon: UserMinus, onClick: () => setOffboarding(employee) },
+          // Lost phone and no recovery codes: a Super Admin clears two-step login
+          me?.role === "super_admin" && employee.mfaMethod === "authenticator" && { label: "Reset two-step login", icon: KeyRound, onClick: () => setResettingMfa(employee) },
           employee.status === "deactivated"
             ? {
                 label: "Reactivate",
@@ -249,6 +252,26 @@ export default function AccessRecordsPage() {
             await updateEmployee(deactivating, { status: "deactivated" }, { title: "Employee deactivated", text: `${deactivating.name} no longer has access.` });
           } catch (error) {
             showError("Not deactivated", error.message);
+            throw error;
+          }
+        }}
+      />
+      <ConfirmDialog
+        isOpen={Boolean(resettingMfa)}
+        onClose={() => setResettingMfa(null)}
+        title="Reset two-step login?"
+        icon={KeyRound}
+        iconTone="warning"
+        message={`${resettingMfa?.name ?? ""} will be signed out and can sign in with their password only, then set up their authenticator app again.`}
+        note="Only do this after confirming who you're talking to (for example on a call), since it removes a layer of protection."
+        confirmLabel="Reset"
+        onConfirm={async () => {
+          try {
+            await apiRequest(`/api/v1/admin/users/${resettingMfa.id}/mfa-reset`, { method: "POST" });
+            showSavedToast("Two-step login reset", `${resettingMfa.name} can set it up again from Settings → Security.`);
+            await refresh();
+          } catch (error) {
+            showError("Not reset", error.message);
             throw error;
           }
         }}

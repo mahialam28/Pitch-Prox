@@ -1,10 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useCallback, useEffect, useRef, useState, Suspense } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { apiRequest } from "@/lib/client-api";
 import { CATALOG } from "@/lib/playbook-catalog";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Wrench } from "lucide-react";
+import { ArrowLeft, ArrowRight, Wrench } from "lucide-react";
 import CreatePlaybookHeader from "../components/create-playbook-header";
 import PlaybookStepper, { PLAYBOOK_STEPS } from "../components/playbook-stepper";
 import PlaybookDetailsSection from "../components/playbook-details-section";
@@ -24,12 +26,15 @@ import ObjectionDetailsCard from "../components/objection-details-card";
 import ObjectionCoverageCard from "../components/objection-coverage-card";
 import AiCoachingQualityCard from "../components/ai-coaching-quality-card";
 import ResourcesScriptsSection, { DEFAULT_RESOURCES } from "../components/resources-scripts-section";
-import QuickScriptBuilderCard from "../components/quick-script-builder-card";
 import ResourceSummaryCard from "../components/resource-summary-card";
 import ResourceTipsCard from "../components/resource-tips-card";
 import AiPromptFrameworkSection from "../components/ai-prompt-framework-section";
 import ReviewPublishSection from "../components/review-publish-section";
 import toast from "react-hot-toast";
+
+// "short-conversational" → "Short Conversational"
+const toLabel = (value) => String(value ?? "").replace(/[-_]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()).trim();
+const joinLabels = (values) => (values ?? []).filter(Boolean).map(toLabel).join(", ");
 
 const initialFormData = {
   // Step 1: Basic Info
@@ -784,24 +789,201 @@ const initialFormData = {
   },
 };
 
-// Opened from the Playbook Library: ?id=<playbook> edits that playbook; no id starts a new one
+// Opened from the Playbook Library:
+//   ?build=<draft id>  continues a saved draft
+//   ?id=<playbook id>  starts the working copy of an existing platform playbook
+//   (nothing)          starts a new playbook
+// The draft is created on the first change and then saved automatically.
 export default function SuperAdminPlaybookPage() {
   return (
     <Suspense fallback={null}>
-      <PlaybookBuilder />
+      <PlaybookLoader />
     </Suspense>
   );
 }
 
-function PlaybookBuilder() {
-  const editingId = useSearchParams()?.get("id");
-  const [currentStep, setCurrentStep] = useState(1);
-  const [formData, setFormData] = useState(() => {
-    const existing = CATALOG.find((playbook) => playbook.id === editingId);
-    if (existing) return { ...initialFormData, playbookName: existing.title, shortDescription: existing.description, author: existing.subtitle === "Factory Default" ? "PitchProX" : existing.subtitle };
-    return { ...initialFormData, playbookName: "", shortDescription: "", author: "" };
+const BUILDS = "/api/v1/admin/playbook-builds";
+
+// Loads the draft (or prepares a new one) before the builder renders, because the builder's
+// sections copy their starting values once
+function PlaybookLoader() {
+  const params = useSearchParams();
+  const buildId = params?.get("build");
+  const playbookId = params?.get("id");
+  const [loaded, setLoaded] = useState(null);
+  const [failure, setFailure] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const done = (value) => !cancelled && setLoaded(value);
+    if (buildId) {
+      apiRequest(`${BUILDS}/${buildId}`)
+        .then(({ build }) => done({ buildId: build.id, playbookId: build.playbookId, content: { ...initialFormData, ...build.content }, step: build.currentStep, revision: build.revision, savedAt: build.updatedAt }))
+        .catch((error) => !cancelled && setFailure(error.message));
+    } else if (playbookId) {
+      // An existing playbook: reopen its draft if there is one
+      apiRequest(BUILDS)
+        .then(({ playbooks }) => {
+          const playbook = playbooks.find((item) => item.id === playbookId);
+          if (!playbook) throw new Error("That playbook doesn't exist.");
+          if (playbook.draftId) return apiRequest(`${BUILDS}/${playbook.draftId}`).then(({ build }) => done({ buildId: build.id, playbookId, content: { ...initialFormData, ...build.content }, step: build.currentStep, revision: build.revision, savedAt: build.updatedAt }));
+          // A playbook published from the builder: its new draft starts from the version in force
+          if (playbook.activeVersionId) {
+            return apiRequest(BUILDS, { method: "POST", body: { playbookId, content: {} } }).then(({ build }) => {
+              window.history.replaceState(null, "", `/super-admin/playbook/create?build=${build.id}`);
+              done({ buildId: build.id, playbookId, content: { ...initialFormData, ...build.content }, step: 1, revision: build.revision, savedAt: build.updatedAt });
+            });
+          }
+          const catalog = CATALOG.find((item) => item.id === playbookId);
+          done({
+            buildId: null,
+            playbookId,
+            content: { ...initialFormData, playbookName: playbook.title, shortDescription: playbook.description ?? "", author: playbook.kind === "standard" ? "PitchProX" : playbook.subtitle ?? "", price: playbook.priceCents ? (playbook.priceCents / 100).toFixed(2) : initialFormData.price, accessType: playbook.kind === "premium" ? "premium" : catalog?.kind ?? "standard" },
+            step: 1,
+            revision: null,
+            savedAt: null,
+          });
+        })
+        .catch((error) => !cancelled && setFailure(error.message));
+    } else {
+      // Defer one tick so the state update isn't synchronous inside the effect
+      Promise.resolve().then(() => done({ buildId: null, playbookId: null, content: { ...initialFormData, playbookName: "", shortDescription: "", author: "", internalNotes: "", internalTags: [] }, step: 1, revision: null, savedAt: null }));
+    }
+    return () => { cancelled = true; };
+  }, [buildId, playbookId]);
+
+  if (failure) {
+    return (
+      <div className="max-w-md mx-auto mt-16 bg-white rounded-2xl border border-light-gray p-8 text-center space-y-3">
+        <p className="text-sm font-semibold text-dark-black">This playbook couldn&apos;t be opened.</p>
+        <p className="text-xs text-medium-black">{failure}</p>
+        <Link href="/super-admin/playbook" className="inline-block px-4 py-2 rounded-xl bg-primary text-white text-xs font-semibold">Back to the Playbook Library</Link>
+      </div>
+    );
+  }
+  if (!loaded) return <div className="py-24 text-center text-sm text-light-black">Loading playbook...</div>;
+  return <PlaybookBuilder key={loaded.buildId ?? "new"} initial={loaded} />;
+}
+
+const AUTOSAVE_DELAY = 1500;
+
+function PlaybookBuilder({ initial }) {
+  const [currentStep, setCurrentStepState] = useState(initial.step);
+  const [formData, setFormDataState] = useState(initial.content);
+  const [selectedObjection, setSelectedObjection] = useState((initial.content.objections ?? DEFAULT_OBJECTIONS)[0] ?? DEFAULT_OBJECTIONS[0]);
+  // Saving: changes counter → debounced save; one save at a time; the revision guards against overwriting
+  const [changes, setChanges] = useState(0);
+  // Who is building it: the author shown in the previews when none is entered
+  const [currentUserName, setCurrentUserName] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    apiRequest("/api/v1/me").then((data) => !cancelled && setCurrentUserName(data.user?.name ?? "")).catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const [saveState, setSaveState] = useState(initial.buildId ? "saved" : null);
+  const [savedAt, setSavedAt] = useState(initial.savedAt);
+  const draft = useRef({ buildId: initial.buildId, playbookId: initial.playbookId, revision: initial.revision, saving: false, pendingAgain: false, savedChanges: 0, conflict: false, published: false });
+  const latest = useRef({ formData: initial.content, currentStep: initial.step, changes: 0 });
+
+  useEffect(() => {
+    latest.current = { formData, currentStep, changes };
   });
-  const [selectedObjection, setSelectedObjection] = useState(DEFAULT_OBJECTIONS[0]);
+
+  const markChanged = () => setChanges((count) => count + 1);
+  const setFormData = (update) => {
+    setFormDataState(update);
+    markChanged();
+  };
+  const setCurrentStep = (update) => {
+    setCurrentStepState(update);
+    markChanged();
+  };
+
+  // force: create the draft even if nothing changed yet (Review & Publish needs one)
+  const save = async ({ force = false } = {}) => {
+    const state = draft.current;
+    if (state.conflict || state.published) return;
+    if (state.saving) {
+      state.pendingAgain = true;
+      return;
+    }
+    const { formData: content, currentStep: step, changes: upTo } = latest.current;
+    if (upTo === state.savedChanges && !(force && !state.buildId)) return;
+    state.saving = true;
+    setSaveState("saving");
+    try {
+      if (!state.buildId) {
+        const { build } = await apiRequest(BUILDS, { method: "POST", body: { content, currentStep: step, playbookId: state.playbookId } });
+        state.buildId = build.id;
+        state.revision = build.revision;
+        setSavedAt(build.updatedAt);
+        // Keep the address pointing at the draft without reloading the builder
+        window.history.replaceState(null, "", `/super-admin/playbook/create?build=${build.id}`);
+      } else {
+        const { build } = await apiRequest(`${BUILDS}/${state.buildId}`, { method: "PATCH", body: { content, currentStep: step, revision: state.revision } });
+        state.revision = build.revision;
+        setSavedAt(build.updatedAt);
+      }
+      state.savedChanges = upTo;
+      setSaveState(latest.current.changes === upTo ? "saved" : "unsaved");
+    } catch (error) {
+      if (/saved this draft after you opened it/.test(error.message)) {
+        state.conflict = true;
+        setSaveState("conflict");
+      } else {
+        setSaveState("error");
+      }
+      toast.error(error.message);
+    } finally {
+      state.saving = false;
+      if (state.pendingAgain) {
+        state.pendingAgain = false;
+        if (!state.conflict) setTimeout(() => saveRef.current(), 0);
+      }
+    }
+  };
+  // The latest save function, for the timer and the retry above
+  const saveRef = useRef(save);
+  useEffect(() => {
+    saveRef.current = save;
+  });
+
+  // Saves anything pending and returns the draft id and revision (for checks and publishing)
+  const flush = useCallback(async () => {
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const state = draft.current;
+      if (state.saving) await new Promise((resolve) => setTimeout(resolve, 100));
+      else if (!state.conflict && (latest.current.changes !== state.savedChanges || !state.buildId)) await saveRef.current({ force: true });
+      else break;
+    }
+    if (draft.current.conflict) throw new Error("Someone else saved this draft. Reload before publishing.");
+    return { buildId: draft.current.buildId, revision: draft.current.revision };
+  }, []);
+
+  // Auto-save a moment after the last change
+  useEffect(() => {
+    if (!changes) return undefined;
+    const timer = setTimeout(() => {
+      // Only "unsaved" if something is still waiting (a flush may already have saved it)
+      if (latest.current.changes !== draft.current.savedChanges) setSaveState((current) => (current === "conflict" || draft.current.published ? current : "unsaved"));
+      saveRef.current();
+    }, AUTOSAVE_DELAY);
+    return () => clearTimeout(timer);
+  }, [changes]);
+
+  // Warn before leaving with changes that haven't reached the server
+  useEffect(() => {
+    const warn = (event) => {
+      if (latest.current.changes !== draft.current.savedChanges && !draft.current.conflict) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, []);
 
   const handleFieldChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -811,8 +993,8 @@ function PlaybookBuilder() {
     if (currentStep < PLAYBOOK_STEPS.length) {
       setCurrentStep((prev) => prev + 1);
     } else {
-      toast.success("Playbook published successfully!");
-      console.log("Playbook published:", formData);
+      // Last step: the publish card holds the checks, release notes and the Publish button
+      document.getElementById("publish-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   };
 
@@ -845,6 +1027,16 @@ function PlaybookBuilder() {
     }));
   };
 
+  // Shared by the preview cards: author (or whoever is building it) and the style tags
+  const creatorName = formData.author?.trim() || currentUserName || "PitchProX";
+  const previewTones = [...new Set([
+    ...(formData.tones ?? []).map(toLabel),
+    toLabel(formData.communicationStyle),
+    toLabel(formData.formality),
+    formData.energyLevel > 70 ? "High Energy" : "Balanced Energy",
+    formData.useOfHumor < 30 ? "Low Humor" : "Moderate Humor",
+  ].filter(Boolean))];
+
   const nextStepName =
     currentStep < PLAYBOOK_STEPS.length
       ? `Next: ${PLAYBOOK_STEPS[currentStep].name}`
@@ -862,10 +1054,17 @@ function PlaybookBuilder() {
         currentStep={currentStep}
         nextStepLabel={nextStepName}
         onSaveDraft={() => {
-          toast.success("Draft saved successfully!");
-          console.log("Draft saved:", formData);
+          if (!changes && !draft.current.buildId) {
+            toast("Make a change first, then it's saved.", { icon: "ℹ️" });
+            return;
+          }
+          markChanged();
+          save().then(() => draft.current.conflict || toast.success("Draft saved."));
         }}
         onNext={handleNext}
+        saveState={saveState}
+        savedAt={savedAt}
+        title={initial.playbookId ? `Edit Playbook: ${formData.playbookName || "Untitled"}` : "Create Internal Playbook"}
       />
 
       {/* 2. 7-Step Horizontal Wizard Stepper */}
@@ -891,6 +1090,7 @@ function PlaybookBuilder() {
               <PlaybookDetailsSection
                 formData={formData}
                 onChange={handleFieldChange}
+                currentUserName={currentUserName}
               />
 
               <CoreFocusOutcomesSection
@@ -904,15 +1104,16 @@ function PlaybookBuilder() {
               <PlaybookPreviewCard
                 avatarUrl={formData.coverImage || undefined}
                 playbookName={formData.playbookName}
-                creatorName={formData.author?.trim() || "Daniel Miller"}
+                creatorName={creatorName}
                 description={formData.shortDescription}
-                focusText="Trust, Value, Closing"
-                bestForText="High-value deals, Negotiations"
-                styleText="Direct, Confident, Results-driven"
+                focusText={joinLabels(formData.focusAreas) || "—"}
+                bestForText={joinLabels(formData.leadTypes) || "All lead types"}
+                styleText={joinLabels([formData.style, ...(formData.tones ?? [])]) || "—"}
                 accessType={formData.accessType}
               />
 
               <PlaybookAssetsCard
+                assets={formData.assets ?? []}
                 onAssetsChange={(assets) => handleFieldChange("assets", assets)}
               />
 
@@ -922,6 +1123,18 @@ function PlaybookBuilder() {
                 revenue="$0.00"
                 conversionRate="0%"
               />
+            </div>
+
+            {/* Step navigation: Next at the bottom right */}
+            <div className="xl:col-span-12 flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleNext}
+                  className="px-4 py-2.5 rounded-xl bg-primary hover:bg-medium-teal text-white text-xs font-semibold flex items-center gap-2 transition-all duration-200 shadow-2xs cursor-pointer"
+                >
+                  <span>{nextStepName}</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
             </div>
           </motion.div>
         )}
@@ -950,14 +1163,10 @@ function PlaybookBuilder() {
               <div className="xl:col-span-4 space-y-6">
                 <LiveStylePreviewCard
                   playbookName={formData.playbookName}
-                  creatorName={formData.author?.trim() || "Daniel Miller"}
-                  tones={[
-                    ...formData.tones.map((t) => t.charAt(0).toUpperCase() + t.slice(1)),
-                    "Consultative",
-                    "Professional",
-                    formData.energyLevel > 70 ? "High Energy" : "Balanced Energy",
-                    formData.useOfHumor < 30 ? "Low Humor" : "Moderate Humor",
-                  ]}
+                  creatorName={creatorName}
+                  tones={previewTones}
+                  avatarUrl={formData.coverImage || undefined}
+                  accessType={formData.accessType}
                 />
 
                 <StyleSummaryCard
@@ -1001,8 +1210,8 @@ function PlaybookBuilder() {
               </div>
             </div>
 
-            {/* Back Button */}
-            <div className="pt-1">
+            {/* Step navigation: Back, and Next at the bottom right */}
+            <div className="pt-1 flex items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={handleBack}
@@ -1010,6 +1219,14 @@ function PlaybookBuilder() {
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Back: Playbook Details</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleNext}
+                className="px-4 py-2.5 rounded-xl bg-primary hover:bg-medium-teal text-white text-xs font-semibold flex items-center gap-2 transition-all duration-200 shadow-2xs cursor-pointer"
+              >
+                <span>{nextStepName}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </motion.div>
@@ -1039,14 +1256,10 @@ function PlaybookBuilder() {
               <div className="xl:col-span-4 space-y-6">
                 <FlowPreviewCard
                   playbookName={formData.playbookName}
-                  creatorName={formData.author?.trim() || "Daniel Miller"}
-                  tones={[
-                    ...formData.tones.map((t) => t.charAt(0).toUpperCase() + t.slice(1)),
-                    "Consultative",
-                    "Professional",
-                    formData.energyLevel > 70 ? "High Energy" : "Balanced Energy",
-                    formData.useOfHumor < 30 ? "Low Humor" : "Moderate Humor",
-                  ]}
+                  creatorName={creatorName}
+                  tones={previewTones}
+                  avatarUrl={formData.coverImage || undefined}
+                  accessType={formData.accessType}
                   stages={formData.stages || DEFAULT_STAGES}
                 />
 
@@ -1054,8 +1267,8 @@ function PlaybookBuilder() {
               </div>
             </div>
 
-            {/* Back Button */}
-            <div className="pt-1">
+            {/* Step navigation: Back, and Next at the bottom right */}
+            <div className="pt-1 flex items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={handleBack}
@@ -1063,6 +1276,14 @@ function PlaybookBuilder() {
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Back: Style & Voice</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleNext}
+                className="px-4 py-2.5 rounded-xl bg-primary hover:bg-medium-teal text-white text-xs font-semibold flex items-center gap-2 transition-all duration-200 shadow-2xs cursor-pointer"
+              >
+                <span>{nextStepName}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </motion.div>
@@ -1103,8 +1324,8 @@ function PlaybookBuilder() {
               </div>
             </div>
 
-            {/* Back Button */}
-            <div className="pt-1">
+            {/* Step navigation: Back, and Next at the bottom right */}
+            <div className="pt-1 flex items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={handleBack}
@@ -1112,6 +1333,14 @@ function PlaybookBuilder() {
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Back: Conversation Flow</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleNext}
+                className="px-4 py-2.5 rounded-xl bg-primary hover:bg-medium-teal text-white text-xs font-semibold flex items-center gap-2 transition-all duration-200 shadow-2xs cursor-pointer"
+              >
+                <span>{nextStepName}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </motion.div>
@@ -1134,15 +1363,6 @@ function PlaybookBuilder() {
                   resources={formData.resources || DEFAULT_RESOURCES}
                   onChange={(updatedRes) => handleFieldChange("resources", updatedRes)}
                 />
-
-                <QuickScriptBuilderCard
-                  onAddResource={(newRes) =>
-                    handleFieldChange("resources", [
-                      newRes,
-                      ...(formData.resources || DEFAULT_RESOURCES),
-                    ])
-                  }
-                />
               </div>
 
               {/* RIGHT SIDEBAR COLUMN */}
@@ -1151,14 +1371,10 @@ function PlaybookBuilder() {
                   cardTitle="Playbook Preview"
                   showEyeIcon={false}
                   playbookName={formData.playbookName}
-                  creatorName={formData.author?.trim() || "Daniel Miller"}
-                  tones={[
-                    ...formData.tones.map((t) => t.charAt(0).toUpperCase() + t.slice(1)),
-                    "Consultative",
-                    "Professional",
-                    formData.energyLevel > 70 ? "High Energy" : "Balanced Energy",
-                    formData.useOfHumor < 30 ? "Low Humor" : "Moderate Humor",
-                  ]}
+                  creatorName={creatorName}
+                  tones={previewTones}
+                  avatarUrl={formData.coverImage || undefined}
+                  accessType={formData.accessType}
                   stages={formData.stages || DEFAULT_STAGES}
                 />
 
@@ -1188,8 +1404,8 @@ function PlaybookBuilder() {
               </div>
             </div>
 
-            {/* Back Button */}
-            <div className="pt-1">
+            {/* Step navigation: Back, and Next at the bottom right */}
+            <div className="pt-1 flex items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={handleBack}
@@ -1197,6 +1413,14 @@ function PlaybookBuilder() {
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Back: Objection Handling</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleNext}
+                className="px-4 py-2.5 rounded-xl bg-primary hover:bg-medium-teal text-white text-xs font-semibold flex items-center gap-2 transition-all duration-200 shadow-2xs cursor-pointer"
+              >
+                <span>{nextStepName}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </motion.div>
@@ -1217,8 +1441,8 @@ function PlaybookBuilder() {
               onChange={handleFieldChange}
             />
 
-            {/* Back Button */}
-            <div className="pt-1">
+            {/* Step navigation: Back, and Next at the bottom right */}
+            <div className="pt-1 flex items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={handleBack}
@@ -1226,6 +1450,14 @@ function PlaybookBuilder() {
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Back: Resources & Scripts</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleNext}
+                className="px-4 py-2.5 rounded-xl bg-primary hover:bg-medium-teal text-white text-xs font-semibold flex items-center gap-2 transition-all duration-200 shadow-2xs cursor-pointer"
+              >
+                <span>{nextStepName}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </motion.div>
@@ -1245,11 +1477,15 @@ function PlaybookBuilder() {
               formData={formData}
               onChange={handleFieldChange}
               onJumpToStep={(stepId) => setCurrentStep(stepId)}
-              onBack={handleBack}
+              flush={flush}
+              onPublished={() => {
+                draft.current.published = true;
+                setSaveState(null);
+              }}
             />
 
-            {/* Back Button */}
-            <div className="pt-1">
+            {/* Step navigation: Back, and Next at the bottom right */}
+            <div className="pt-1 flex items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={handleBack}

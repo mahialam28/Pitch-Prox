@@ -1,5 +1,7 @@
 "use client";
 
+import { normalizeObjection } from "@/lib/playbook-compile";
+
 import React, { useState } from "react";
 import {
   Shield,
@@ -28,7 +30,9 @@ export const DEFAULT_OBJECTIONS = [
     id: 1,
     title: "I don't want to pay commission.",
     subtitle: "Pricing Objection",
-    category: "Pricing",
+    category: "Financial",
+    rootCategory: "Financial",
+    subtype: "Affordability",
     stage: "Value Prop",
     leadTypes: ["FSBO", "Expired", "Pre-Expired", "+2"],
     responseStyle: "Value & ROI Focus",
@@ -40,7 +44,9 @@ export const DEFAULT_OBJECTIONS = [
     id: 2,
     title: "Not a good time to sell.",
     subtitle: "Timing Objection",
-    category: "Timing",
+    category: "Logistics",
+    rootCategory: "Logistics",
+    subtype: "Timing",
     stage: "Discovery",
     leadTypes: ["FSBO", "Absentee", "Pre-Expired", "+1"],
     responseStyle: "Market Analysis & Urgency",
@@ -52,7 +58,9 @@ export const DEFAULT_OBJECTIONS = [
     id: 3,
     title: "I already have an agent.",
     subtitle: "Competition Objection",
-    category: "Competition",
+    category: "Relationship",
+    rootCategory: "Relationship",
+    subtype: "Competition",
     stage: "Discovery",
     leadTypes: ["FSBO", "Expired", "Circle"],
     responseStyle: "Differentiated Track Record",
@@ -64,7 +72,9 @@ export const DEFAULT_OBJECTIONS = [
     id: 4,
     title: "How did you get my number?",
     subtitle: "Privacy Objection",
-    category: "Privacy",
+    category: "Risk",
+    rootCategory: "Risk",
+    subtype: "Privacy concern",
     stage: "Opening",
     leadTypes: ["FSBO", "Circle Prospecting", "Sphere"],
     responseStyle: "Transparent & Direct",
@@ -76,7 +86,9 @@ export const DEFAULT_OBJECTIONS = [
     id: 5,
     title: "I'm not interested.",
     subtitle: "Disinterest Objection",
-    category: "Disinterest",
+    category: "Relationship",
+    rootCategory: "Relationship",
+    subtype: "Identity cost / emotional",
     stage: "Objections",
     leadTypes: ["All Lead Types"],
     responseStyle: "Pattern Interrupt",
@@ -88,7 +100,9 @@ export const DEFAULT_OBJECTIONS = [
     id: 6,
     title: "Send me some information.",
     subtitle: "Information Objection",
-    category: "Information",
+    category: "Logistics",
+    rootCategory: "Logistics",
+    subtype: "Information needed",
     stage: "Follow Up",
     leadTypes: ["All Lead Types"],
     responseStyle: "Curiosity Anchor",
@@ -100,7 +114,9 @@ export const DEFAULT_OBJECTIONS = [
     id: 7,
     title: "I need to think about it.",
     subtitle: "Need Time Objection",
-    category: "Timing",
+    category: "Logistics",
+    rootCategory: "Logistics",
+    subtype: "Timing",
     stage: "Close",
     leadTypes: ["All Lead Types"],
     responseStyle: "Isolation & Clarification",
@@ -112,7 +128,9 @@ export const DEFAULT_OBJECTIONS = [
     id: 8,
     title: "Your fee is too high compared to others.",
     subtitle: "Pricing Objection",
-    category: "Pricing",
+    category: "Financial",
+    rootCategory: "Financial",
+    subtype: "Affordability",
     stage: "Value Prop",
     leadTypes: ["Expired", "FSBO"],
     responseStyle: "Net Proceeds Anchor",
@@ -160,6 +178,7 @@ const BuildObjectionLibrarySection = ({
     return (
       item.title?.toLowerCase().includes(q) ||
       item.category?.toLowerCase().includes(q) ||
+      item.subtype?.toLowerCase().includes(q) ||
       item.stage?.toLowerCase().includes(q) ||
       (Array.isArray(item.leadTypes) && item.leadTypes.some((t) => t.toLowerCase().includes(q)))
     );
@@ -403,7 +422,7 @@ const BuildObjectionLibrarySection = ({
                           {item.title}
                         </h4>
                         <span className="text-[11px] text-light-black font-normal block">
-                          {item.subtitle || `${item.category} Objection`}
+                          {item.subtitle || `${item.subtype ?? item.category} Objection`}
                         </span>
                       </div>
                     </div>
@@ -411,7 +430,7 @@ const BuildObjectionLibrarySection = ({
 
                   {/* Category */}
                   <td className="py-3 px-3 font-medium text-medium-black">
-                    {item.category}
+                    {normalizeObjection(item).rootCategory ?? item.category}{normalizeObjection(item).subtype ? ` · ${normalizeObjection(item).subtype}` : ""}
                   </td>
 
                   {/* Lead Types */}

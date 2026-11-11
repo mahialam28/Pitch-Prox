@@ -2,11 +2,13 @@ import { cookies } from "next/headers";
 import { createId, hashToken, query } from "@/lib/db";
 import { ApiError } from "@/lib/api";
 import { recordAudit } from "@/lib/audit";
+import { notify, superAdmins } from "@/lib/notifications";
 import { recordAccountEvent } from "@/lib/campaigns/events";
 import { SESSION_COOKIE, STAFF_SESSION_COOKIE, createSession, requireCurrentUser, swapToStaffSession } from "@/lib/auth";
 import { getSubscription, listInvoices } from "@/lib/billing";
 import { listAccountTickets } from "@/lib/support-staff";
 import { ROLES, canAccessSection } from "@/utils.js/roles";
+import { likePattern } from "@/lib/listing";
 
 // ── Customer accounts, managed from the staff portals (Phase 3) ──
 // Who can open an account:
@@ -283,6 +285,9 @@ export async function requestAdjustment({ user, account }, body) {
     organizationId: account.organization_id,
     summary: `${status === "applied" ? "Applied" : "Requested"} ${adjustment.value} for ${account.company} (${adjustment.reference}): ${reason}`,
   });
+  if (status === "pending") {
+    await notify(await superAdmins(), { type: "approval", title: `Approval needed: ${adjustment.reference}`, body: `${user.name} requested ${adjustment.value} for ${account.company}: ${reason}`, link: "/super-admin/billing/credits-adjustments", entityType: "adjustment", entityId: id, actor: user });
+  }
   return adjustment;
 }
 
@@ -315,6 +320,7 @@ export async function decideAdjustment(user, id, { approve, note }) {
   if (row.status !== "pending") throw new ApiError("This adjustment has already been decided.");
   const status = approve ? "applied" : "rejected";
   await query("UPDATE account_adjustments SET status = ?, decided_by = ?, decided_at = NOW(), decision_note = ? WHERE id = ? AND status = 'pending'", [status, user.id, text(note, "Note", 500), id]);
+  await notify([row.requested_by], { type: "approval", title: `Adjustment ADJ-${row.number} ${approve ? "approved" : "rejected"}`, body: `${user.name} ${approve ? "approved" : "rejected"} your request${note ? `: ${String(note).slice(0, 200)}` : "."}`, link: (role) => (role === "sales_rep" ? "/internal-sales-representative/dashboard" : "/super-admin/billing/credits-adjustments"), entityType: "adjustment", entityId: id, actor: user });
   await recordAudit(user, { action: approve ? "billing.credits_added" : "billing.adjustment_rejected", entityType: "account", entityId: row.organization_id, organizationId: row.organization_id, summary: `${approve ? "Approved" : "Rejected"} adjustment ADJ-${row.number}` });
   const [updated] = await query(`${ADJUSTMENT_SELECT} WHERE account_adjustments.id = ?`, [id]);
   return presentAdjustment(updated);
@@ -573,4 +579,54 @@ export async function listImpersonations(organizationId) {
      WHERE impersonation_sessions.organization_id = ? ORDER BY impersonation_sessions.started_at DESC LIMIT 20`,
     [organizationId]
   );
+}
+
+// ── Invoice Management (Billing page) ──
+// Every invoice on record (a sales rep: their accounts), newest first; ?organizationId= for one
+// customer's invoice history. Invoices are written when payments run (Stripe), so this is empty until then.
+export async function invoiceRecords(user, { organizationId = null, search = "" } = {}) {
+  const clauses = [];
+  const values = [];
+  if (user.role === ROLES.SALES_REP) {
+    clauses.push("customer_accounts.account_rep_id = ?");
+    values.push(user.id);
+  }
+  if (organizationId) {
+    clauses.push("invoices.organization_id = ?");
+    values.push(organizationId);
+  }
+  const term = String(search ?? "").trim().slice(0, 100);
+  if (term) {
+    clauses.push("(invoices.number LIKE ? OR organizations.name LIKE ? OR owners.name LIKE ?)");
+    const like = likePattern(term);
+    values.push(like, like, like);
+  }
+  const rows = await query(
+    `SELECT invoices.id, invoices.number, invoices.description, invoices.amount_cents AS amountCents, invoices.status, invoices.issued_at AS issuedAt,
+       invoices.organization_id AS organizationId, organizations.name AS company, owners.name AS customer
+     FROM invoices
+     JOIN organizations ON organizations.id = invoices.organization_id
+     LEFT JOIN customer_accounts ON customer_accounts.organization_id = invoices.organization_id
+     LEFT JOIN users AS owners ON owners.organization_id = invoices.organization_id AND owners.role = 'customer_admin'
+     ${clauses.length ? `WHERE ${clauses.join(" AND ")}` : ""}
+     ORDER BY invoices.issued_at DESC LIMIT 1000`,
+    values
+  );
+  const results = rows.map((row) => ({ ...row, amount: `${row.amountCents < 0 ? "-" : ""}${money(row.amountCents)}` }));
+  let account = null;
+  if (organizationId) {
+    const [row] = await query(
+      `SELECT organizations.id AS organizationId, organizations.name AS company, owners.name AS customer, owners.email, customer_accounts.account_rep_id AS repId
+       FROM organizations LEFT JOIN customer_accounts ON customer_accounts.organization_id = organizations.id
+       LEFT JOIN users AS owners ON owners.organization_id = organizations.id AND owners.role = 'customer_admin'
+       WHERE organizations.id = ?`,
+      [organizationId]
+    );
+    if (!row || (user.role === ROLES.SALES_REP && row.repId !== user.id)) throw new ApiError("Customer not found.", 404);
+    const { repId, ...rest } = row;
+    // Read only: the plan on record (getSubscription would start a trial for an account without one)
+    const [plan] = await query("SELECT plans.name FROM subscriptions JOIN plans ON plans.id = subscriptions.plan_id WHERE subscriptions.organization_id = ?", [organizationId]);
+    account = { ...rest, plan: plan?.name ?? null };
+  }
+  return { results, count: results.length, account, paymentsConnected: Boolean(process.env.STRIPE_SECRET_KEY) };
 }

@@ -11,6 +11,11 @@ import { ensureAccountSchema } from "./schema/accounts.js";
 import { ensurePricingSchema } from "./schema/pricing.js";
 import { ensureTeamSchema } from "./schema/team.js";
 import { ensureCampaignSchema } from "./schema/campaigns.js";
+import { ensureComplianceSchema } from "./schema/compliance.js";
+import { ensurePlaybookBuilderSchema } from "./schema/playbook-builder.js";
+import { ensureNotificationSchema } from "./schema/notifications.js";
+import { ensureSecuritySchema } from "./schema/security.js";
+import { ensureCallsSchema } from "./schema/calls.js";
 
 const database = mysql.createPool({
   host: process.env.MYSQL_HOST || "127.0.0.1",
@@ -60,6 +65,9 @@ async function ensureSchema() {
     await database.query("CREATE TABLE IF NOT EXISTS support_messages (id VARCHAR(64) PRIMARY KEY, ticket_id VARCHAR(64) NOT NULL, author_id VARCHAR(64) NOT NULL, author_role VARCHAR(20) NOT NULL, body TEXT NOT NULL, attachment_name VARCHAR(255) NULL, attachment_mime VARCHAR(120) NULL, attachment_size BIGINT NULL, attachment_path VARCHAR(500) NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX support_messages_ticket_idx (ticket_id, created_at), CONSTRAINT support_messages_ticket_fk FOREIGN KEY (ticket_id) REFERENCES support_tickets(id) ON DELETE CASCADE, CONSTRAINT support_messages_user_fk FOREIGN KEY (author_id) REFERENCES users(id)) ENGINE=InnoDB");
     // Emails written in the app; delivered once an email service is connected
     await database.query("CREATE TABLE IF NOT EXISTS mail_messages (id VARCHAR(64) PRIMARY KEY, organization_id VARCHAR(64) NOT NULL, user_id VARCHAR(64) NOT NULL, to_email VARCHAR(255) NOT NULL, cc VARCHAR(1000) NULL, bcc VARCHAR(1000) NULL, subject VARCHAR(255) NOT NULL, body TEXT NOT NULL, status VARCHAR(20) NOT NULL DEFAULT 'queued', track_opens TINYINT(1) NOT NULL DEFAULT 1, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX mail_messages_organization_idx (organization_id, created_at), CONSTRAINT mail_messages_organization_fk FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE, CONSTRAINT mail_messages_user_fk FOREIGN KEY (user_id) REFERENCES users(id)) ENGINE=InnoDB");
+    // Phase 10: drafts (status 'draft'), and the outbox row that delivers a sent email (Postmark)
+    await addColumnIfMissing("mail_messages", "delivery_id", "VARCHAR(64) NULL");
+    await addColumnIfMissing("mail_messages", "updated_at", "DATETIME NULL");
     // Plans (from the public pricing section), each company's subscription, invoices
     await database.query("CREATE TABLE IF NOT EXISTS plans (id VARCHAR(64) PRIMARY KEY, name VARCHAR(120) NOT NULL, description VARCHAR(500) NULL, price_monthly_cents INT NOT NULL, price_annual_cents INT NOT NULL, calls_per_month INT NOT NULL, reports_per_month INT NOT NULL, overage_cents_per_call INT NOT NULL, is_trial TINYINT(1) NOT NULL DEFAULT 0, sort_order INT NOT NULL DEFAULT 0, active TINYINT(1) NOT NULL DEFAULT 1) ENGINE=InnoDB");
     for (const plan of PLANS) {
@@ -78,7 +86,12 @@ async function ensureSchema() {
     await ensureAccountSchema(database, addColumnIfMissing);
     await ensurePricingSchema(database, addColumnIfMissing);
     await ensureTeamSchema(database);
-    await ensureCampaignSchema(database);
+    await ensureCampaignSchema(database, addColumnIfMissing);
+    await ensureComplianceSchema(database, addColumnIfMissing);
+    await ensurePlaybookBuilderSchema(database, addColumnIfMissing);
+    await ensureNotificationSchema(database);
+    await ensureSecuritySchema(database);
+    await ensureCallsSchema(database, addColumnIfMissing);
   })();
   // A failed attempt (e.g. MySQL not running yet) must be retried on the next query
   schemaPromise.catch(() => { schemaPromise = undefined; });

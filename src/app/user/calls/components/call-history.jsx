@@ -8,18 +8,12 @@ import Link from "next/link";
 import Dropdown from "@/components/shared/dropdown/dropdown";
 import BadgeSelect from "@/components/shared/dropdown/badge-select";
 import ContactProfileModal from "./contact-profile-modal";
+import { apiRequest } from "@/lib/client-api";
 import {
   dateRangeOptions,
   leadTypeOptions,
   outcomeOptions,
 } from "@/utils.js/lead-options";
-
-// ── Relative mock dates so filters demo correctly ──
-const daysFromNow = (days) => {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d;
-};
 
 const formatDate = (d) =>
   `${d.toLocaleString("en-US", { month: "short" })} ${d.getDate()}, ${d.getFullYear()}`;
@@ -27,188 +21,36 @@ const formatDate = (d) =>
 const formatTime = (d) =>
   d.toLocaleString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
 
-const initialCallsData = [
-  {
-    id: "1",
-    date: formatDate(daysFromNow(0)),
-    time: formatTime(daysFromNow(0)),
-    dateObj: daysFromNow(0),
-    name: "Ricky Smith",
-    propertyAddress: "1851 Lynch Street, Ne...",
-    leadType: "Expired Listings",
-    trustGain: 28,
-    outcome: "Appointment Set",
-    aiAdherence: 84,
-    duration: "2m 40s",
-    followUpDate: formatDate(daysFromNow(-2)),
-    note: "Seller is motivated — mentioned interest in listing after summer.",
-  },
-  {
-    id: "2",
-    date: formatDate(daysFromNow(1)),
-    time: formatTime(daysFromNow(1)),
-    dateObj: daysFromNow(1),
-    name: "Kimberly Mastrangelo",
-    propertyAddress: "1851 Lynch Street, Ne...",
-    leadType: "FSBO",
-    trustGain: 28,
-    outcome: "Follow-Up Required",
-    aiAdherence: 84,
-    duration: "2m 40s",
-    followUpDate: formatDate(daysFromNow(-1)),
-    note: "Asked to call back after 6 PM — prefers evening calls.",
-  },
-  {
-    id: "3",
-    date: formatDate(daysFromNow(5)),
-    time: formatTime(daysFromNow(5)),
-    dateObj: daysFromNow(5),
-    name: "Daniel Hamilton",
-    propertyAddress: "1851 Lynch Street, Ne...",
-    leadType: "Pre-Expired Listings",
-    trustGain: 28,
-    outcome: "Information Requested",
-    aiAdherence: 84,
-    duration: "2m 40s",
-    followUpDate: formatDate(daysFromNow(3)),
-    note: "Requested a list of recent sales in the neighborhood.",
-  },
-  {
-    id: "4",
-    date: formatDate(daysFromNow(20)),
-    time: formatTime(daysFromNow(20)),
-    dateObj: daysFromNow(20),
-    name: "Rodger Struck",
-    propertyAddress: "1851 Lynch Street, Ne...",
-    leadType: "Absentee Owners",
-    trustGain: 28,
-    outcome: "Not Interested",
-    aiAdherence: 84,
-    duration: "2m 40s",
-    followUpDate: formatDate(daysFromNow(5)),
-    note: "Not interested in selling right now — revisit in 6 months.",
-  },
-  {
-    id: "5",
-    date: formatDate(daysFromNow(45)),
-    time: formatTime(daysFromNow(45)),
-    dateObj: daysFromNow(45),
-    name: "Jerry Helfer",
-    propertyAddress: "1851 Lynch Street, Ne...",
-    leadType: "Circle Prospecting",
-    trustGain: 28,
-    outcome: "Voicemail",
-    aiAdherence: 84,
-    duration: "2m 40s",
-    followUpDate: formatDate(daysFromNow(2)),
-    note: "Left voicemail — no response yet.",
-  },
-  {
-    id: "6",
-    date: formatDate(daysFromNow(90)),
-    time: formatTime(daysFromNow(90)),
-    dateObj: daysFromNow(90),
-    name: "Rhonda Rhodes",
-    propertyAddress: "1851 Lynch Street, Ne...",
-    leadType: "Investor / Cash Buyers",
-    trustGain: 28,
-    outcome: "Not a Fit",
-    aiAdherence: 84,
-    duration: "2m 40s",
-    followUpDate: null,
-    note: "Investor — waiting on market data before deciding.",
-  },
-  {
-    id: "7",
-    date: formatDate(daysFromNow(150)),
-    time: formatTime(daysFromNow(150)),
-    dateObj: daysFromNow(150),
-    name: "Stephanie Sharkey",
-    propertyAddress: "1851 Lynch Street, Ne...",
-    leadType: "Past Clients & Sphere",
-    trustGain: 6,
-    outcome: "No Answer",
-    aiAdherence: 0,
-    duration: "2m 40s",
-    followUpDate: null,
-    note: "Past client — asked to be notified of new listings.",
-  },
-  {
-    id: "8",
-    date: formatDate(daysFromNow(2)),
-    time: formatTime(daysFromNow(2)),
-    dateObj: daysFromNow(2),
-    name: "Marcus Vance",
-    propertyAddress: "744 Park Ave, New York...",
-    leadType: "Pre-Foreclosure",
-    trustGain: 25,
-    outcome: "Appointment Set",
-    aiAdherence: 88,
-    duration: "3m 15s",
-    followUpDate: formatDate(daysFromNow(-3)),
-    note: "Discussed pre-foreclosure relief options. Meeting set for Thursday.",
-  },
-  {
-    id: "9",
-    date: formatDate(daysFromNow(6)),
-    time: formatTime(daysFromNow(6)),
-    dateObj: daysFromNow(6),
-    name: "Angela Davis",
-    propertyAddress: "220 Riverside Dr, New...",
-    leadType: "Divorce",
-    trustGain: 19,
-    outcome: "Follow-Up Required",
-    aiAdherence: 76,
-    duration: "4m 02s",
-    followUpDate: formatDate(daysFromNow(4)),
-    note: "Need to consult co-owner before making a decision.",
-  },
-  {
-    id: "10",
-    date: formatDate(daysFromNow(14)),
-    time: formatTime(daysFromNow(14)),
-    dateObj: daysFromNow(14),
-    name: "Tyler Jenkins",
-    propertyAddress: "910 5th Avenue, New Yo...",
-    leadType: "Tax Delinquent",
-    trustGain: 31,
-    outcome: "Wrong Number",
-    aiAdherence: 94,
-    duration: "5m 10s",
-    followUpDate: formatDate(daysFromNow(-4)),
-    note: "Motivated seller facing property tax deadlines.",
-  },
-  {
-    id: "11",
-    date: formatDate(daysFromNow(25)),
-    time: formatTime(daysFromNow(25)),
-    dateObj: daysFromNow(25),
-    name: "Chloe Bennett",
-    propertyAddress: "35 Bedford St, New York...",
-    leadType: "Vacant Properties",
-    trustGain: 22,
-    outcome: "Information Requested",
-    aiAdherence: 82,
-    duration: "2m 50s",
-    followUpDate: formatDate(daysFromNow(6)),
-    note: "Requested market comp report for vacant multi-family parcel.",
-  },
-  {
-    id: "12",
-    date: formatDate(daysFromNow(35)),
-    time: formatTime(daysFromNow(35)),
-    dateObj: daysFromNow(35),
-    name: "David Miller",
-    propertyAddress: "105 Duane St, New York...",
-    leadType: "Probate",
-    trustGain: 27,
-    outcome: "Do Not Contact",
-    aiAdherence: 86,
-    duration: "3m 45s",
-    followUpDate: formatDate(daysFromNow(1)),
-    note: "Estate executor looking to liquidate within 60 days.",
-  },
-];
+const formatDuration = (seconds) => {
+  const total = Math.max(0, Number(seconds) || 0);
+  return total >= 60 ? `${Math.floor(total / 60)}m ${String(total % 60).padStart(2, "0")}s` : `${total}s`;
+};
+
+// A saved call (GET /api/v1/calls) → a row of this table
+const FOLLOW_UP_DISPOSITIONS = ["Follow-Up Required", "Information Requested"];
+const rowOf = (call) => {
+  const startedAt = new Date(call.startedAt);
+  const gain = call.summary?.trust_gain?.value;
+  return {
+    id: call.id,
+    mode: call.mode,
+    date: formatDate(startedAt),
+    time: formatTime(startedAt),
+    dateObj: startedAt,
+    name: call.contactName || "Unknown",
+    propertyAddress: call.mode === "practice" ? "Practice call" : call.phoneNumber || "—",
+    phoneNumber: call.phoneNumber,
+    contactKind: call.contactKind,
+    contactId: call.contactId,
+    leadType: call.leadType || "—",
+    trustGain: gain === null || gain === undefined ? null : Math.round(gain),
+    outcome: call.disposition || "",
+    aiAdherence: call.summary?.adherence_pct ?? null,
+    duration: formatDuration(call.durationSeconds),
+    followUp: FOLLOW_UP_DISPOSITIONS.includes(call.disposition),
+    note: call.summary?.narrative ?? call.summary?.outcome_label ?? "",
+  };
+};
 
 const TABS = [
   { key: "callHistory", label: "Call History", icon: Phone },
@@ -218,10 +60,24 @@ const TABS = [
 const PAGE_SIZE = 6;
 
 const CallHistory = () => {
-  const [calls, setCalls] = useState(initialCallsData);
+  const [calls, setCalls] = useState([]);
+  const [loadState, setLoadState] = useState("loading"); // loading | ready | error
+
+  useEffect(() => {
+    let cancelled = false;
+    apiRequest("/api/v1/calls?limit=200")
+      .then((result) => {
+        if (cancelled) return;
+        setCalls(result.results.map(rowOf));
+        setLoadState("ready");
+      })
+      .catch(() => !cancelled && setLoadState("error"));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [activeTab, setActiveTab] = useState("callHistory");
   const [selectedCall, setSelectedCall] = useState(null);
-  const [currentPage, setCurrentPage] = useState(1);
 
   // Filter States
   const [dateRange, setDateRange] = useState("Last 6 Months");
@@ -236,10 +92,11 @@ const CallHistory = () => {
 
   const activeTabIndex = TABS.findIndex((t) => t.key === activeTab);
 
-  // Reset page to 1 when filters or tabs change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [activeTab, dateRange, leadFilter, outcomeFilter, customFrom, customTo]);
+  // Page resets to 1 when filters or tabs change (the page is remembered per filter combination)
+  const filterKey = [activeTab, dateRange, leadFilter, outcomeFilter, customFrom, customTo].join("|");
+  const [pageState, setPageState] = useState({ filterKey, page: 1 });
+  const currentPage = pageState.filterKey === filterKey ? pageState.page : 1;
+  const setCurrentPage = (next) => setPageState({ filterKey, page: typeof next === "function" ? next(currentPage) : next });
 
   // Tab scroll state
   const [tabCanScrollLeft, setTabCanScrollLeft] = useState(false);
@@ -282,12 +139,10 @@ const CallHistory = () => {
     };
   }, [updateTabArrows]);
 
+  // The outcome is saved on the call (and drives the follow-up queue)
   const handleOutcomeChange = (callId, newOutcome) => {
-    setCalls((prev) =>
-      prev.map((call) =>
-        call.id === callId ? { ...call, outcome: newOutcome } : call
-      )
-    );
+    setCalls((prev) => prev.map((call) => (call.id === callId ? { ...call, outcome: newOutcome, followUp: FOLLOW_UP_DISPOSITIONS.includes(newOutcome) } : call)));
+    apiRequest(`/api/v1/calls/${encodeURIComponent(callId)}`, { method: "PATCH", body: { disposition: newOutcome || null } }).catch(() => {});
   };
 
   const handleBodyScroll = useCallback(() => {
@@ -375,12 +230,12 @@ const CallHistory = () => {
   const followUpCalls = calls
     .filter(
       (call) =>
-        call.followUpDate &&
+        call.followUp &&
         isDateInRange(call.dateObj, dateRange) &&
         (!leadFilter || call.leadType === leadFilter) &&
         (!outcomeFilter || call.outcome === outcomeFilter)
     )
-    .sort((a, b) => new Date(a.followUpDate) - new Date(b.followUpDate));
+    .sort((a, b) => b.dateObj - a.dateObj);
 
   const visibleCalls = activeTab === "followUpQueue" ? followUpCalls : filteredCalls;
 
@@ -577,16 +432,16 @@ const CallHistory = () => {
                 {/* Date & Time */}
                 <td className="p-4 pl-6 align-middle w-[130px]">
                   <div className="flex flex-col">
-                    <span className="text-sm font-bold text-dark-black/90">
+                    <span className="text-sm font-bold text-dark-black/90" suppressHydrationWarning>
                       {call.date}
                     </span>
-                    <span className="text-[11px] font-semibold text-light-black mt-0.5">
+                    <span className="text-[11px] font-semibold text-light-black mt-0.5" suppressHydrationWarning>
                       {call.time}
                     </span>
-                    {activeTab === "followUpQueue" && call.followUpDate && (
+                    {activeTab === "followUpQueue" && call.followUp && (
                       <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-100 rounded-md px-1.5 py-0.5 w-fit">
                         <Calendar className="h-3 w-3" />
-                        Due {call.followUpDate}
+                        {call.outcome}
                       </span>
                     )}
                   </div>
@@ -616,8 +471,8 @@ const CallHistory = () => {
                 </td>
 
                 {/* Trust Gain */}
-                <td className="p-4 text-sm font-bold text-emerald-600 w-[100px]">
-                  +{call.trustGain}
+                <td className={`p-4 text-sm font-bold w-[100px] ${call.trustGain === null ? "text-light-black" : call.trustGain < 0 ? "text-red" : "text-emerald-600"}`}>
+                  {call.trustGain === null ? "—" : `${call.trustGain > 0 ? "+" : ""}${call.trustGain}`}
                 </td>
 
                 {/* Outcome Badge Dropdown */}
@@ -633,10 +488,10 @@ const CallHistory = () => {
                 {/* AI Adherence Level */}
                 <td
                   className={`p-4 text-sm font-bold text-center w-[120px] ${
-                    call.aiAdherence === 0 ? "text-red" : "text-emerald-600"
+                    call.aiAdherence === null ? "text-light-black" : call.aiAdherence === 0 ? "text-red" : "text-emerald-600"
                   }`}
                 >
-                  {call.aiAdherence}%
+                  {call.aiAdherence === null ? "—" : `${call.aiAdherence}%`}
                 </td>
 
                 {/* Duration */}
@@ -647,7 +502,7 @@ const CallHistory = () => {
                 {/* Action — View Report */}
                 <td className="p-4 pr-6 text-right w-[140px]" onClick={(e) => e.stopPropagation()}>
                   <Link
-                    href="/user/calls/report"
+                    href={`/user/calls/report?id=${encodeURIComponent(call.id)}`}
                     className="inline-block px-4 py-2 text-xs font-semibold whitespace-nowrap border border-primary text-primary rounded-xl hover:bg-primary/5 transition-colors shadow-sm cursor-pointer"
                   >
                     View Report
@@ -663,10 +518,10 @@ const CallHistory = () => {
       {visibleCalls.length === 0 && (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <span className="text-sm font-semibold text-medium-black">
-            No calls found
+            {loadState === "loading" ? "Loading calls…" : loadState === "error" ? "Calls couldn't be loaded." : calls.length === 0 ? "No calls yet" : "No calls found"}
           </span>
           <span className="text-xs text-light-black mt-1">
-            Try adjusting your date range, lead type, or outcome filters.
+            {loadState !== "ready" ? "" : calls.length === 0 ? "Calls you make (and practice calls) appear here with their reports." : "Try adjusting your date range, lead type, or outcome filters."}
           </span>
         </div>
       )}

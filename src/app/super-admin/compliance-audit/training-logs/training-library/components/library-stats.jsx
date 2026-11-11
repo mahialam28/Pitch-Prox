@@ -3,12 +3,14 @@
 import React from "react";
 import { FileText, FileCode, Video, Layers } from "lucide-react";
 
+// stats: { total, PDF, Doc, Video } from /api/v1/compliance/training/materials
 export default function LibraryStats({ stats }) {
+  const value = (key) => (stats ? String(stats[key] ?? 0) : "—");
   const defaultStats = [
     {
       id: "total",
       label: "Total Materials",
-      value: "48",
+      value: value("total"),
       subtext: "All formats",
       icon: Layers,
       iconBg: "bg-[#E6F7F7]",
@@ -17,7 +19,7 @@ export default function LibraryStats({ stats }) {
     {
       id: "pdf",
       label: "PDF",
-      value: "22",
+      value: value("PDF"),
       subtext: "PDF files",
       icon: FileText,
       iconBg: "bg-[#FEE4E2]",
@@ -25,25 +27,25 @@ export default function LibraryStats({ stats }) {
     },
     {
       id: "docs",
-      label: "Document",
-      value: "10",
-      subtext: "Word and text documents",
+      label: "Doc",
+      value: value("Doc"),
+      subtext: "Word documents",
       icon: FileCode,
       iconBg: "bg-[#EFF8FF]",
       iconColor: "text-[#175CD3]",
     },
     {
       id: "videos",
-      label: "Training Videos",
-      value: "16",
-      subtext: "Video files",
+      label: "Video",
+      value: value("Video"),
+      subtext: "Uploaded videos and links",
       icon: Video,
       iconBg: "bg-[#EEF2FF]",
       iconColor: "text-[#4F46E5]",
     },
   ];
 
-  const items = stats || defaultStats;
+  const items = defaultStats;
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">

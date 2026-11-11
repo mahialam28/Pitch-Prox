@@ -22,6 +22,8 @@ import {
 import Link from "next/link";
 import Sidebar from "@/components/shared/sidebar/sidebar";
 import Header from "@/components/shared/header/header";
+import PolicyPrompt from "@/components/shared/policy-prompt";
+import TrainingPrompt from "@/components/shared/training-prompt";
 import { usePortalUser } from "@/components/shared/use-portal-user";
 import { ADMIN_SECTIONS, ROLES } from "@/utils.js/roles";
 
@@ -57,6 +59,7 @@ export default function SuperAdminPortalShell({ user, children }) {
         { label: "Access Records", href: "/super-admin/compliance-audit/access-records" },
         { label: "SOC 2 Readiness", href: "/super-admin/compliance-audit/soc2-readiness" },
         { label: "Evidence Repository", href: "/super-admin/compliance-audit/evidence-repository" },
+        { label: "Data Deletion", href: "/super-admin/compliance-audit/data-deletion" },
       ],
     },
     { key: "playbook", label: "Playbook", icon: BookOpen, href: "/super-admin/playbook" },
@@ -72,10 +75,14 @@ export default function SuperAdminPortalShell({ user, children }) {
   // Sections outside this role's sidebar show a no-access message (the server should enforce this too)
   const sectionOf = (href) => href.split("/").slice(0, 3).join("/");
   const allowedSections = new Set(navItems.map((item) => sectionOf(item.href)));
-  const blocked = allNavItems.some((item) => {
-    const section = sectionOf(item.href);
-    return !allowedSections.has(section) && (pathname === section || pathname.startsWith(`${section}/`));
-  });
+  // The Support Dashboard goes with the Support Tickets section (Super Admin and Support)
+  const onSupportDashboard = pathname === "/super-admin/support-dashboard" || pathname.startsWith("/super-admin/support-dashboard/");
+  const blocked =
+    (onSupportDashboard && !navItems.some((item) => item.key === "support")) ||
+    allNavItems.some((item) => {
+      const section = sectionOf(item.href);
+      return !allowedSections.has(section) && (pathname === section || pathname.startsWith(`${section}/`));
+    });
 
   return (
     <div className="flex min-h-screen bg-light-gray">
@@ -109,7 +116,11 @@ export default function SuperAdminPortalShell({ user, children }) {
               </Link>
             </div>
           ) : (
-            children
+            <>
+              <PolicyPrompt />
+              <TrainingPrompt />
+              {children}
+            </>
           )}
         </main>
       </div>

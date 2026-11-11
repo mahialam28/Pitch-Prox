@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { createId, hashPassword, hashToken, query } from "@/lib/db";
 import { ApiError } from "@/lib/api";
 import { recordAudit } from "@/lib/audit";
+import { sendCustomerActivationEmail } from "@/lib/email/system";
 import { recordUserEvent } from "@/lib/campaigns/events";
 import { redeemPromo, validatePromo } from "@/lib/pricing";
 import { requireCurrentUser } from "@/lib/auth";
@@ -122,6 +123,7 @@ export async function createCustomerAccount(user, body) {
   await query("INSERT INTO subscriptions (organization_id, plan_id, status, billing_cycle, current_period_start) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)", [organizationId, plan.id, plan.isTrial ? "trialing" : "pending_payment", billingCycle]);
   if (promo) await redeemPromo(promo.promoId, organizationId);
   const invite = await createActivation(ownerId, user.id);
+  await sendCustomerActivationEmail({ userId: ownerId, name, email, token: invite.token, company });
   await recordAudit(user, { action: "customer.created", entityType: "organization", entityId: organizationId, organizationId, summary: `Created ${company} (${email}) on ${plan.name}, ${seats} seat${seats === 1 ? "" : "s"}${promo ? `, promo ${promo.code} (${promo.discount.label})` : ""}` });
   const [row] = await query(`${ACCOUNT_SELECT} WHERE organizations.id = ?`, [organizationId]);
   return { account: toAccount(row), invite };
@@ -140,7 +142,9 @@ export async function resendActivation(context, organizationId) {
   if (!row || (context.ownOnly && row.repId !== context.user.id)) throw new ApiError("Customer not found.", 404);
   if (row.activated) throw new ApiError("This customer has already activated their account.");
   await query("UPDATE account_invites SET expires_at = NOW() WHERE user_id = ? AND accepted_at IS NULL AND expires_at > NOW()", [row.ownerId]);
-  return { invite: await createActivation(row.ownerId, context.user.id) };
+  const invite = await createActivation(row.ownerId, context.user.id);
+  await sendCustomerActivationEmail({ userId: row.ownerId, name: row.name, email: row.email, token: invite.token, company: row.company });
+  return { invite };
 }
 
 // Activation link: set the first password → signed in as the customer owner

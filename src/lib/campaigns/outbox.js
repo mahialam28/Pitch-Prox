@@ -1,10 +1,11 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { createId, query } from "@/lib/db";
+import { postmarkConfigured, sendPostmark } from "@/lib/email/postmark";
 
 // ── Email outbox ──
 // Every customer email (broadcasts, journeys, transactional) is written here first.
-// deliverQueued() hands them to the email provider; until one is connected (phase 7)
-// they stay "queued" and are listed on the Campaigns pages.
+// deliverQueued() hands them to Postmark (lib/email/postmark.js); until POSTMARK_SERVER_TOKEN
+// is set they stay "queued" and are listed on the Campaigns pages.
 // Marketing and Lifecycle emails are skipped for addresses that unsubscribed;
 // Transactional emails (receipts, payment problems) always go.
 
@@ -53,39 +54,78 @@ export async function suppressedSet(emails) {
   return new Set(rows.map((row) => row.email));
 }
 
+// Transactional templates go out on Postmark's Transactional stream, Marketing/Lifecycle on Broadcast
+export const streamFor = (emailType) => (emailType === "Transactional" ? "transactional" : "broadcast");
+
 // One email for one person. A suppressed Marketing/Lifecycle email is recorded as "skipped".
 export async function queueEmail({ source, sourceId = null, enrollmentId = null, template, userId, email, subject, html, suppressed = false }) {
   const id = createId("mail");
   const skip = suppressed && template.emailType !== "Transactional";
   await query(
-    "INSERT INTO email_deliveries (id, source, source_id, enrollment_id, template_id, user_id, to_email, subject, html, status, status_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    [id, source, sourceId, enrollmentId, template.id, userId, email, subject.slice(0, 255), html, skip ? "skipped" : "queued", skip ? "Unsubscribed" : WAITING_FOR_PROVIDER]
+    "INSERT INTO email_deliveries (id, source, source_id, enrollment_id, template_id, user_id, to_email, subject, html, status, status_reason, stream) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    [id, source, sourceId, enrollmentId, template.id, userId, email, subject.slice(0, 255), html, skip ? "skipped" : "queued", skip ? "Unsubscribed" : WAITING_FOR_PROVIDER, streamFor(template.emailType)]
   );
   return { id, status: skip ? "skipped" : "queued" };
 }
 
-// The email provider. Phase 7 replaces this with the client's service (SendGrid, Postmark, SES …).
-// Return { ok: true, providerId } or { ok: false, error }; null means "no provider yet".
-async function sendWithProvider() {
-  return null;
-}
+export const emailProviderConnected = postmarkConfigured;
 
-export const emailProviderConnected = () => Boolean(process.env.EMAIL_PROVIDER);
-
-export async function deliverQueued({ limit = 200 } = {}) {
-  const rows = await query(`SELECT id, to_email AS toEmail, subject, html FROM email_deliveries WHERE status = 'queued' ORDER BY created_at LIMIT ${Number(limit)}`);
+// Hands queued emails to Postmark. Each row is claimed first (status "sending") so the job runner
+// and an immediate send (password reset, invite) never deliver the same email twice.
+// `ids` limits the pass to those emails (used right after a system email is queued).
+export async function deliverQueued({ limit = 200, ids = null } = {}) {
+  if (!postmarkConfigured()) {
+    const [{ waiting }] = await query("SELECT COUNT(*) AS waiting FROM email_deliveries WHERE status = 'queued'");
+    return { sent: 0, failed: 0, waiting: Number(waiting) };
+  }
+  // A send that crashed half-way gets another chance after 10 minutes
+  await query("UPDATE email_deliveries SET status = 'queued', locked_at = NULL WHERE status = 'sending' AND locked_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)");
+  const filter = ids?.length ? `AND email_deliveries.id IN (${ids.map(() => "?").join(", ")})` : "";
+  const rows = await query(
+    `SELECT email_deliveries.id, email_deliveries.source, email_deliveries.stream, email_deliveries.to_email AS toEmail, email_deliveries.subject, email_deliveries.html,
+      COALESCE(email_deliveries.from_name, campaign_templates.from_name) AS fromName, COALESCE(email_deliveries.reply_to, campaign_templates.reply_to) AS replyTo,
+      email_deliveries.cc, email_deliveries.bcc, email_deliveries.track_opens AS trackOpens
+     FROM email_deliveries LEFT JOIN campaign_templates ON campaign_templates.id = email_deliveries.template_id
+     WHERE email_deliveries.status = 'queued' ${filter} ORDER BY email_deliveries.created_at LIMIT ${Number(limit)}`,
+    ids ?? []
+  );
   let sent = 0;
   let failed = 0;
-  for (const row of rows) {
-    const result = await sendWithProvider(row);
-    if (!result) return { sent, failed, waiting: rows.length - sent - failed };
+  let skipped = 0;
+  for (const [index, row] of rows.entries()) {
+    const claimed = await query("UPDATE email_deliveries SET status = 'sending', locked_at = NOW() WHERE id = ? AND status = 'queued'", [row.id]);
+    if (!claimed.affectedRows) continue;
+    const result = await sendPostmark({
+      deliveryId: row.id,
+      to: row.toEmail,
+      subject: row.subject,
+      html: row.html,
+      fromName: row.fromName,
+      replyTo: row.replyTo,
+      stream: row.stream,
+      tag: row.source,
+      cc: row.cc,
+      bcc: row.bcc,
+      // Broadcast emails carry a one-click unsubscribe header; system emails (reset links, invites) aren't tracked.
+      // Emails written in Mail follow the sender's "Track email" switch and keep their links as written.
+      unsubscribeUrl: row.stream === "broadcast" ? await unsubscribeUrl(row.toEmail) : null,
+      track: row.trackOpens === null || row.trackOpens === undefined ? row.source !== "system" : Boolean(row.trackOpens),
+      trackLinks: row.source !== "system" && row.source !== "mail",
+    });
     if (result.ok) {
       sent += 1;
-      await query("UPDATE email_deliveries SET status = 'sent', sent_at = NOW(), provider_id = ?, status_reason = NULL, attempts = attempts + 1 WHERE id = ?", [result.providerId ?? null, row.id]);
+      await query("UPDATE email_deliveries SET status = 'sent', sent_at = NOW(), provider_id = ?, status_reason = NULL, locked_at = NULL, attempts = attempts + 1 WHERE id = ?", [result.providerId, row.id]);
+    } else if (result.stop) {
+      // Postmark unreachable, wrong token or rate limit: put it back and stop this pass
+      await query("UPDATE email_deliveries SET status = 'queued', status_reason = ?, locked_at = NULL WHERE id = ?", [result.error, row.id]);
+      return { sent, failed, skipped, waiting: rows.length - index, error: result.error };
+    } else if (result.inactive) {
+      skipped += 1;
+      await query("UPDATE email_deliveries SET status = 'skipped', status_reason = ?, locked_at = NULL, attempts = attempts + 1 WHERE id = ?", ["Postmark: this address bounced, complained or unsubscribed before", row.id]);
     } else {
       failed += 1;
-      await query("UPDATE email_deliveries SET status = IF(attempts >= 2, 'failed', 'queued'), status_reason = ?, attempts = attempts + 1 WHERE id = ?", [String(result.error).slice(0, 255), row.id]);
+      await query("UPDATE email_deliveries SET status = IF(attempts >= 2, 'failed', 'queued'), status_reason = ?, locked_at = NULL, attempts = attempts + 1 WHERE id = ?", [result.error, row.id]);
     }
   }
-  return { sent, failed, waiting: 0 };
+  return { sent, failed, skipped, waiting: 0 };
 }

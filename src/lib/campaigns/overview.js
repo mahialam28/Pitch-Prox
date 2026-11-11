@@ -1,12 +1,13 @@
 import { query } from "@/lib/db";
 import { ApiError } from "@/lib/api";
+import { likePattern } from "@/lib/listing";
 import { paged } from "@/lib/listing";
 import { emailProviderConnected } from "@/lib/campaigns/outbox";
 import { lastRun } from "@/lib/campaigns/runner";
 
 // ── Campaigns & Journeys: Overview, Broadcast KPIs and Analytics ──
 // Counts come from the outbox (email_deliveries), campaigns, journeys and enrollments.
-// "Sent", opens and clicks fill in once an email service is connected and reports them.
+// "Sent", deliveries, bounces, opens and clicks fill in from Postmark (send result + webhook).
 
 const DAY = 86400000;
 const n = (value) => Number(value ?? 0);
@@ -16,8 +17,9 @@ export async function campaignOverview() {
   const [mail] = await query(
     `SELECT COUNT(*) AS total, SUM(status = 'queued') AS queued, SUM(status = 'sent') AS sent, SUM(status = 'failed') AS failed, SUM(status = 'skipped') AS skipped,
       SUM(opened_at IS NOT NULL) AS opened, SUM(clicked_at IS NOT NULL) AS clicked,
+      SUM(delivered_at IS NOT NULL) AS delivered, SUM(bounced_at IS NOT NULL) AS bounced, SUM(complained_at IS NOT NULL) AS complained,
       SUM(source = 'campaign') AS fromCampaigns, SUM(source = 'journey') AS fromJourneys, SUM(source = 'transactional') AS transactional
-     FROM email_deliveries WHERE created_at >= ? AND source <> 'test'`,
+     FROM email_deliveries WHERE created_at >= ? AND source NOT IN ('test', 'compliance', 'system', 'mail')`,
     [since]
   );
   const [campaigns] = await query("SELECT SUM(status = 'sent' AND sent_at >= ?) AS sent30, SUM(status = 'scheduled') AS scheduled, COUNT(*) AS total FROM campaigns", [since]);
@@ -32,7 +34,7 @@ export async function campaignOverview() {
   // Last 14 days, per day
   const days = await query(
     `SELECT DATE(created_at) AS day, COUNT(*) AS queued, SUM(status = 'sent') AS sent, SUM(opened_at IS NOT NULL) AS opened, SUM(clicked_at IS NOT NULL) AS clicked
-     FROM email_deliveries WHERE created_at >= ? AND source <> 'test' GROUP BY DATE(created_at)`,
+     FROM email_deliveries WHERE created_at >= ? AND source NOT IN ('test', 'compliance', 'system', 'mail') GROUP BY DATE(created_at)`,
     [new Date(Date.now() - 13 * DAY)]
   );
   const key = (value) => new Date(value).toISOString().slice(0, 10);
@@ -72,24 +74,30 @@ export async function campaignOverview() {
 }
 
 // Outbox list: ?status=queued|sent|failed|skipped&source=campaign|journey|transactional
-export async function listDeliveries({ status, source, page, pageSize, offset }) {
+export async function listDeliveries({ status, source, search, page, pageSize, offset }) {
   const clauses = [];
   const values = [];
   if (status) {
-    if (!["queued", "sent", "failed", "skipped"].includes(status)) throw new ApiError("Unknown status.");
+    if (!["queued", "sending", "sent", "failed", "skipped"].includes(status)) throw new ApiError("Unknown status.");
     clauses.push("email_deliveries.status = ?");
     values.push(status);
   }
   if (source) {
-    if (!["campaign", "journey", "transactional", "test"].includes(source)) throw new ApiError("Unknown source.");
+    if (!["campaign", "journey", "transactional", "test", "compliance", "system", "mail"].includes(source)) throw new ApiError("Unknown source.");
     clauses.push("email_deliveries.source = ?");
     values.push(source);
+  }
+  // Search by recipient or subject
+  if (search) {
+    clauses.push("(email_deliveries.to_email LIKE ? OR email_deliveries.subject LIKE ?)");
+    values.push(likePattern(search), likePattern(search));
   }
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   const [{ total }] = await query(`SELECT COUNT(*) AS total FROM email_deliveries ${where}`, values);
   const rows = await query(
     `SELECT email_deliveries.id, email_deliveries.source, email_deliveries.to_email AS email, email_deliveries.subject, email_deliveries.status, email_deliveries.status_reason AS reason,
-      email_deliveries.created_at AS createdAt, email_deliveries.sent_at AS sentAt, email_deliveries.opened_at AS openedAt, email_deliveries.clicked_at AS clickedAt, campaign_templates.name AS templateName
+      email_deliveries.created_at AS createdAt, email_deliveries.sent_at AS sentAt, email_deliveries.opened_at AS openedAt, email_deliveries.clicked_at AS clickedAt,
+      email_deliveries.stream, email_deliveries.delivered_at AS deliveredAt, email_deliveries.bounced_at AS bouncedAt, email_deliveries.complained_at AS complainedAt, email_deliveries.provider_status AS providerStatus, campaign_templates.name AS templateName
      FROM email_deliveries LEFT JOIN campaign_templates ON campaign_templates.id = email_deliveries.template_id ${where}
      ORDER BY email_deliveries.created_at DESC LIMIT ${Number(pageSize)} OFFSET ${Number(offset)}`,
     values

@@ -59,14 +59,16 @@ export const DatePicker = ({
     selectedDateObj ? selectedDateObj.getFullYear() : new Date().getFullYear()
   );
 
-  // Sync calendar view when value changes
-  useEffect(() => {
+  // Sync calendar view when value changes (during render, not in an effect)
+  const [syncedValue, setSyncedValue] = useState(value);
+  if (syncedValue !== value) {
+    setSyncedValue(value);
     if (value) {
       const d = parseDate(value);
       setCurrentMonth(d.getMonth());
       setCurrentYear(d.getFullYear());
     }
-  }, [value]);
+  }
 
   // Click outside to close
   useEffect(() => {

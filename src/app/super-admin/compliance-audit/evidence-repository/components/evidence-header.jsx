@@ -3,9 +3,15 @@
 import React from "react";
 import Title from "@/components/texts/title";
 import Text from "@/components/texts/text";
-import { evidenceStats } from "../evidence-data";
 
-export default function EvidenceHeader() {
+// stats: /api/v1/compliance/evidence → stats (archived evidence isn't counted)
+export default function EvidenceHeader({ stats }) {
+  const value = (number) => (stats ? number.toLocaleString() : "—");
+  const evidenceStats = [
+    { id: "total_evidence", label: "Total Evidence", value: value(stats?.total ?? 0), subtext: "Not counting archived", subtextColor: "text-light-black" },
+    { id: "verified_evidence", label: "Verified Evidence", value: value(stats?.verified ?? 0), subtext: stats?.total ? `${Math.round((stats.verified / stats.total) * 100)}% verified · ${stats.underReview} under review` : "—", subtextColor: "text-primary" },
+    { id: "needs_attention", label: "Needs Attention", value: value(stats?.needsAttention ?? 0), subtext: stats ? `${stats.expiringSoon} expiring in 30 days · ${stats.expired} expired` : "—", subtextColor: stats?.needsAttention ? "text-amber-600" : "text-light-black" },
+  ];
   return (
     <div className="w-full flex flex-col gap-5">
       {/* ── Page Title & Subtitle ── */}

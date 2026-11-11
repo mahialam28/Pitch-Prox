@@ -1,6 +1,6 @@
 // Phase 5: Campaigns & Journeys — segments, email templates, broadcast campaigns, lifecycle
 // journeys, user events, the email outbox and suppressions. Called from ensureSchema() in lib/db.js.
-export async function ensureCampaignSchema(database) {
+export async function ensureCampaignSchema(database, addColumnIfMissing) {
   // Segments: Dynamic (rules JSON, membership computed) or Static (members table)
   await database.query(
     "CREATE TABLE IF NOT EXISTS campaign_segments (id VARCHAR(64) PRIMARY KEY, name VARCHAR(120) NOT NULL, description VARCHAR(300) NULL, type VARCHAR(10) NOT NULL, rules JSON NULL, system_key VARCHAR(40) NULL UNIQUE, created_by VARCHAR(64) NULL, created_by_name VARCHAR(255) NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NULL, archived_at DATETIME NULL) ENGINE=InnoDB"
@@ -56,6 +56,31 @@ export async function ensureCampaignSchema(database) {
   // source: campaign | journey | transactional. status: queued | sent | failed | skipped
   await database.query(
     "CREATE TABLE IF NOT EXISTS email_deliveries (id VARCHAR(64) PRIMARY KEY, source VARCHAR(15) NOT NULL, source_id VARCHAR(64) NULL, enrollment_id VARCHAR(64) NULL, template_id VARCHAR(64) NULL, user_id VARCHAR(64) NULL, to_email VARCHAR(255) NOT NULL, subject VARCHAR(255) NOT NULL, html MEDIUMTEXT NOT NULL, status VARCHAR(10) NOT NULL DEFAULT 'queued', status_reason VARCHAR(255) NULL, attempts INT NOT NULL DEFAULT 0, provider_id VARCHAR(255) NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, sent_at DATETIME NULL, opened_at DATETIME NULL, clicked_at DATETIME NULL, INDEX email_deliveries_status_idx (status, created_at), INDEX email_deliveries_source_idx (source, source_id), INDEX email_deliveries_user_idx (user_id, template_id)) ENGINE=InnoDB"
+  );
+  // Phase 7 (Postmark): which stream sends it, a claim while it is being sent, and what Postmark reports back
+  await addColumnIfMissing("email_deliveries", "stream", "VARCHAR(13) NOT NULL DEFAULT 'transactional'"); // transactional | broadcast
+  await addColumnIfMissing("email_deliveries", "locked_at", "DATETIME NULL");
+  await addColumnIfMissing("email_deliveries", "delivered_at", "DATETIME NULL");
+  await addColumnIfMissing("email_deliveries", "bounced_at", "DATETIME NULL");
+  await addColumnIfMissing("email_deliveries", "complained_at", "DATETIME NULL");
+  await addColumnIfMissing("email_deliveries", "provider_status", "VARCHAR(255) NULL");
+  // Phase 10: emails people write in Mail carry their own sender name, Reply-To, CC/BCC and open tracking
+  await addColumnIfMissing("email_deliveries", "from_name", "VARCHAR(160) NULL");
+  await addColumnIfMissing("email_deliveries", "reply_to", "VARCHAR(255) NULL");
+  await addColumnIfMissing("email_deliveries", "cc", "VARCHAR(1000) NULL");
+  await addColumnIfMissing("email_deliveries", "bcc", "VARCHAR(1000) NULL");
+  await addColumnIfMissing("email_deliveries", "track_opens", "TINYINT(1) NULL");
+  // Emails queued before streams existed: Marketing/Lifecycle templates go out on Broadcast
+  await database.query(
+    "UPDATE email_deliveries JOIN campaign_templates ON campaign_templates.id = email_deliveries.template_id SET email_deliveries.stream = 'broadcast' WHERE email_deliveries.status = 'queued' AND email_deliveries.stream = 'transactional' AND campaign_templates.email_type <> 'Transactional'"
+  );
+  // Every event Postmark sends to the webhook (delivery, bounce, spam complaint, open, click, subscription change)
+  await database.query(
+    "CREATE TABLE IF NOT EXISTS email_events (id VARCHAR(64) PRIMARY KEY, delivery_id VARCHAR(64) NULL, record_type VARCHAR(30) NOT NULL, email VARCHAR(255) NULL, provider_id VARCHAR(255) NULL, detail JSON NULL, occurred_at DATETIME NOT NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX email_events_delivery_idx (delivery_id, occurred_at), INDEX email_events_type_idx (record_type, occurred_at)) ENGINE=InnoDB"
+  );
+  // Password reset links (one hour, single use; only the hash is stored)
+  await database.query(
+    "CREATE TABLE IF NOT EXISTS password_resets (id VARCHAR(64) PRIMARY KEY, user_id VARCHAR(64) NOT NULL, token_hash VARCHAR(64) NOT NULL UNIQUE, expires_at DATETIME NOT NULL, used_at DATETIME NULL, ip VARCHAR(64) NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX password_resets_user_idx (user_id, created_at), CONSTRAINT password_resets_user_fk FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE) ENGINE=InnoDB"
   );
   // Addresses that unsubscribed (Marketing + Lifecycle) or hard-bounced
   await database.query(

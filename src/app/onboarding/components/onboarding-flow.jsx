@@ -19,8 +19,8 @@ const StepsSidebar = ({ steps, current, reached, done, onSelect, open, onClose }
     className={`fixed inset-y-0 left-0 z-40 w-60 bg-dark-black text-white flex flex-col transition-transform lg:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}
   >
     <div className="h-16 flex items-center justify-between px-6 border-b border-white/10">
-      <div className="w-[140px] h-12 overflow-hidden">
-        <Image src={whiteLogo} alt="PitchProX" width={140} height={48} className="w-full h-full object-contain" />
+      <div className="w-[170px] h-12 overflow-hidden">
+        <Image src={whiteLogo} alt="PitchProX" width={170} height={48} className="w-full h-full object-contain object-left" />
       </div>
       <button type="button" onClick={onClose} aria-label="Close steps" className="lg:hidden p-1 text-white/60 hover:text-white cursor-pointer">
         <X className="w-5 h-5" />

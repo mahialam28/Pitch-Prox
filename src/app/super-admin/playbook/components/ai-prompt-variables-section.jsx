@@ -35,6 +35,7 @@ import DoDontBoundariesSection, {
   DEFAULT_DO_DONT_BOUNDARIES,
 } from "./do-dont-boundaries-section";
 import PromptStylePreviewCard from "./prompt-style-preview-card";
+import { confirmAction } from "@/lib/alerts";
 import toast from "react-hot-toast";
 
 export default function AiPromptVariablesSection({
@@ -63,7 +64,8 @@ export default function AiPromptVariablesSection({
     onChange(key, val);
   };
 
-  const handleResetAllDnaAreas = () => {
+  const handleResetAllDnaAreas = async () => {
+    if (!(await confirmAction({ title: "Reset all to defaults?", text: "This resets every Prompt DNA area (coaching philosophy, voice, framing, styles, language rules and boundaries) back to the defaults. Changes you made in them are lost.", confirmText: "Reset all" }))) return;
     onChange("coachingPhilosophy", DEFAULT_COACHING_PHILOSOPHY);
     onChange("promptVoice", DEFAULT_PROMPT_VOICE);
     onChange("strategicFraming", DEFAULT_STRATEGIC_FRAMING);

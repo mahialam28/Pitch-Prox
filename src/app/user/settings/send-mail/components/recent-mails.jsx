@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMail } from "../mail-view";
+import { mailHref, useMail } from "../mail-view";
 import Text from "@/components/texts/text";
 import { usePortal } from "@/components/shared/use-portal";
 
@@ -14,7 +14,7 @@ export default function RecentMails() {
   const recentMailsData = mails.slice(0, 6);
 
   const openEmail = (item) => {
-    router.push(`${portal.mailBase}/emails/${item.id}`);
+    router.push(mailHref(portal.mailBase, item));
   };
 
   return (

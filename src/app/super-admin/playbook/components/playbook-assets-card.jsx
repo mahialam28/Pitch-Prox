@@ -16,51 +16,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import Text from "@/components/texts/text";
 import AddAssetModal from "./add-asset-modal";
 
-const initialAssets = [
-  {
-    id: 1,
-    title: "Playbook Overview (PDF)",
-    size: "2.4 MB",
-    type: "PDF",
-    color: "text-rose-500 bg-rose-50",
-    icon: FileText,
-  },
-  {
-    id: 2,
-    title: "Call Flow Overview (PDF)",
-    size: "1.8 MB",
-    type: "PDF",
-    color: "text-rose-500 bg-rose-50",
-    icon: FileText,
-  },
-  {
-    id: 3,
-    title: "Slide Deck (PPTX)",
-    size: "5.2 MB",
-    type: "PPTX",
-    color: "text-amber-500 bg-amber-50",
-    icon: Presentation,
-  },
-  {
-    id: 4,
-    title: "Objection Cheat Sheet (PDF)",
-    size: "1.2 MB",
-    type: "PDF",
-    color: "text-rose-500 bg-rose-50",
-    icon: FileText,
-  },
-  {
-    id: 5,
-    title: "Video Intro (MP4)",
-    size: "12.4 MB",
-    type: "MP4",
-    color: "text-emerald-500 bg-emerald-50",
-    icon: Video,
-  },
-];
+// Files attached to the playbook (uploaded through the builder; saved with the draft)
 
 const PlaybookAssetsCard = ({
-  assets = initialAssets,
+  assets = [],
   onAssetsChange = () => {},
 }) => {
   const [assetList, setAssetList] = useState(assets);
@@ -84,14 +43,8 @@ const PlaybookAssetsCard = ({
   };
 
   const handleAddAsset = (newAsset) => {
-    const iconData = getAssetIcon(newAsset.type);
-    const updated = [
-      ...assetList,
-      {
-        ...newAsset,
-        ...iconData,
-      },
-    ];
+    // Only plain data is kept (the icon is worked out from the type when shown), so it saves as JSON
+    const updated = [...assetList, newAsset];
     setAssetList(updated);
     onAssetsChange(updated);
     setShowAddModal(false);
@@ -129,8 +82,9 @@ const PlaybookAssetsCard = ({
 
       {/* Assets List */}
       <div className="space-y-2 pt-1">
+        {assetList.length === 0 && <p className="text-xs text-light-black">No assets yet. Attach guides, decks or videos for this playbook.</p>}
         {assetList.map((asset) => {
-          const IconComp = asset.icon || FileText;
+          const { icon: IconComp, color } = getAssetIcon(asset.type);
           return (
             <div
               key={asset.id}
@@ -140,14 +94,14 @@ const PlaybookAssetsCard = ({
               <div className="flex items-center gap-2.5 min-w-0 flex-1">
                 <div
                   className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                    asset.color || "text-rose-500 bg-rose-50"
+                    color
                   }`}
                 >
                   <IconComp className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
                   <h5 className="text-xs font-semibold text-dark-black/80 truncate leading-tight">
-                    {asset.title}
+                    {asset.url ? <a href={asset.url} target="_blank" rel="noreferrer" className="hover:text-primary hover:underline">{asset.title}</a> : asset.title}
                   </h5>
                   <span className="text-[10px] text-light-black font-normal block mt-0.5">
                     {asset.size} • {asset.type}

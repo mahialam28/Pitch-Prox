@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Award, Sparkles } from "lucide-react";
 
@@ -14,7 +14,11 @@ const AddDnaPillarModal = ({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
 
-  useEffect(() => {
+  // Reset the form whenever the modal opens (or switches item) — synced during render, not in an effect
+  const [syncedFor, setSyncedFor] = useState(null);
+  const syncKey = isOpen ? editPillar ?? "new" : null;
+  if (syncedFor !== syncKey) {
+    setSyncedFor(syncKey);
     if (editPillar) {
       setTitle(editPillar.title || "");
       setDescription(editPillar.description || "");
@@ -22,7 +26,7 @@ const AddDnaPillarModal = ({
       setTitle("");
       setDescription("");
     }
-  }, [editPillar, isOpen]);
+  }
 
   if (!isOpen) return null;
 

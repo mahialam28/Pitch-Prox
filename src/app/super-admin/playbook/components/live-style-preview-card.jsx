@@ -4,6 +4,9 @@ import React, { useState } from "react";
 import { Eye, RotateCcw } from "lucide-react";
 import Text from "@/components/texts/text";
 
+// "Herjavec Sales Method" → "HS"
+const initialsOf = (name) => String(name || "P").trim().split(/\s+/).slice(0, 2).map((word) => word[0]?.toUpperCase() ?? "").join("") || "P";
+
 const samplePrompts = [
   "Hey there, I've got you.\n\nI'll keep it direct, confident, and focused on what matters most to them.\n\nLet's build real trust and get to what will move this conversation forward.",
   "Great setup! Notice they hesitated on pricing. Keep your tone calm and authoritative.\n\nAsk: 'What specific outcome would make this an absolute no-brainer for your team this quarter?'",
@@ -11,9 +14,10 @@ const samplePrompts = [
 ];
 
 const LiveStylePreviewCard = ({
-  playbookName = "Herjavec Sales Method",
-  creatorName = "Robert Herjavec",
-  avatarUrl = "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150",
+  playbookName = "",
+  creatorName = "PitchProX",
+  avatarUrl = null,
+  accessType = "premium",
   tones = ["Confident", "Direct", "Consultative", "Professional", "High Energy", "Low Humor"],
 }) => {
   const [promptIndex, setPromptIndex] = useState(0);
@@ -43,16 +47,20 @@ const LiveStylePreviewCard = ({
       <div className="rounded-2xl border border-light-gray bg-white p-4 space-y-3.5 shadow-2xs">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border border-light-gray">
-            <img
-              src={avatarUrl}
-              alt={creatorName}
-              className="w-full h-full object-cover"
-            />
+            {avatarUrl ? (
+              <img src={avatarUrl} alt={creatorName} className="w-full h-full object-cover" />
+            ) : (
+              <span className="w-full h-full flex items-center justify-center bg-dark-black text-white text-xs font-bold">
+                {initialsOf(playbookName || creatorName)}
+              </span>
+            )}
           </div>
           <div className="min-w-0">
-            <span className="text-[9px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-amber-100/80 text-amber-800">
-              PREMIUM
-            </span>
+            {accessType === "premium" && (
+              <span className="text-[9px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-amber-100/80 text-amber-800">
+                PREMIUM
+              </span>
+            )}
             <h4 className="text-xs font-bold text-dark-black/90 truncate font-secondary mt-0.5">
               {playbookName}
             </h4>

@@ -3,6 +3,7 @@ import { ApiError } from "@/lib/api";
 import { loadSettings, saveSettings } from "@/lib/settings";
 import { STANDARD_PLAYBOOK_ID } from "@/lib/playbook-catalog";
 import { CUSTOMER_ROLES } from "@/utils.js/roles";
+import { aiPlaybook, playbookInside, playbookOverview } from "@/lib/playbook-runtime";
 
 // Customers share their company's custom playbooks; each sales rep sees only the ones they built.
 // PitchProX staff can use every premium playbook without buying it.
@@ -16,13 +17,18 @@ export const PREFERENCE_DEFAULTS = { fontSize: 110, defaultPlaybook: STANDARD_PL
 const MAX_CONTENT_BYTES = 256 * 1024;
 const STATUSES = new Set(["draft", "published"]);
 
-const columns = "id, organization_id AS organizationId, kind, title, subtitle, description, price_cents AS priceCents, icon_letter AS iconLetter, avatar_url AS avatarUrl, status, created_by AS createdBy, created_at AS createdAt, updated_at AS updatedAt";
+const columns = "id, organization_id AS organizationId, kind, title, subtitle, description, price_cents AS priceCents, icon_letter AS iconLetter, avatar_url AS avatarUrl, status, version, active_version_id AS activeVersionId, created_by AS createdBy, created_at AS createdAt, updated_at AS updatedAt";
 const parse = (value) => (typeof value === "string" ? JSON.parse(value) : value) ?? null;
+
+// Which platform playbooks a user sees (set when publishing from the builder): customers only
+// Marketplace ones; employees also Team / Organization ones; Private stays with Super Admins.
+// The seeded playbooks have no visibility and are shown to everyone.
+const platformVisibility = (user) => (isStaff(user) ? "(visibility IS NULL OR visibility IN ('marketplace', 'team', 'organization'))" : "(visibility IS NULL OR visibility = 'marketplace')");
 
 // Platform playbooks plus this organization's own, newest custom first
 async function visibleRows(user) {
   const scope = customScope(user);
-  return query(`SELECT ${columns} FROM playbooks WHERE organization_id IS NULL OR ${scope.sql} ORDER BY kind = 'custom' DESC, created_at ASC`, scope.values);
+  return query(`SELECT ${columns} FROM playbooks WHERE (organization_id IS NULL AND ${platformVisibility(user)}) OR ${scope.sql} ORDER BY kind = 'custom' DESC, created_at ASC`, scope.values);
 }
 
 async function purchasedIds(user) {
@@ -35,15 +41,18 @@ async function purchasedIds(user) {
 // once bought (payments aren't connected yet); custom when published.
 function isAvailable(playbook, purchased) {
   if (playbook.kind === "standard") return true;
-  if (playbook.kind === "premium") return purchased.has(playbook.id);
+  // A premium playbook published as Free (no price) is open to everyone
+  if (playbook.kind === "premium") return playbook.priceCents == null || purchased.has(playbook.id);
   return playbook.status === "published";
 }
 
-function present(playbook, purchased, activeId) {
-  const { priceCents, organizationId, content, ...rest } = playbook;
+function present(playbook, purchased, activeId, compiled = null) {
+  const { priceCents, organizationId, content, activeVersionId, ...rest } = playbook;
   return {
     ...rest,
-    price: priceCents == null ? null : `$${(priceCents / 100).toFixed(2)}`,
+    price: priceCents == null ? (playbook.kind === "premium" ? "Free" : null) : `$${(priceCents / 100).toFixed(2)}`,
+    // Facts from the published version (playbooks published from the Super Admin builder)
+    overview: playbookOverview(compiled),
     isCustom: Boolean(organizationId),
     isAvailable: isAvailable(playbook, purchased),
     isActive: playbook.id === activeId,
@@ -58,18 +67,47 @@ async function resolveActiveId(user, rows, purchased) {
   return chosen && isAvailable(chosen, purchased) ? chosen.id : STANDARD_PLAYBOOK_ID;
 }
 
+// Compiled PremiumPlaybook objects of the versions in force, by playbook id
+async function compiledVersions(rows) {
+  const ids = rows.map((row) => row.activeVersionId).filter(Boolean);
+  if (!ids.length) return new Map();
+  const versions = await query(`SELECT id, playbook_id AS playbookId, content FROM playbook_versions WHERE id IN (${ids.map(() => "?").join(", ")})`, ids);
+  return new Map(versions.map((version) => [version.playbookId, parse(version.content)]));
+}
+
 export async function listPlaybooks(user) {
   const [rows, purchased] = await Promise.all([visibleRows(user), purchasedIds(user)]);
-  const activeId = await resolveActiveId(user, rows, purchased);
-  return { results: rows.map((row) => present(row, purchased, activeId)), activePlaybookId: activeId };
+  const [activeId, compiled] = await Promise.all([resolveActiveId(user, rows, purchased), compiledVersions(rows)]);
+  return { results: rows.map((row) => present(row, purchased, activeId, compiled.get(row.id))), activePlaybookId: activeId };
 }
 
 export async function getPlaybook(user, id) {
   const scope = customScope(user);
-  const [row] = await query(`SELECT ${columns}, content FROM playbooks WHERE id = ? AND (organization_id IS NULL OR ${scope.sql})`, [id, ...scope.values]);
+  const [row] = await query(`SELECT ${columns}, content FROM playbooks WHERE id = ? AND ((organization_id IS NULL AND ${platformVisibility(user)}) OR ${scope.sql})`, [id, ...scope.values]);
   if (!row) throw new ApiError("Playbook not found.", 404);
   const purchased = await purchasedIds(user);
-  return present(row, purchased, await resolveActiveId(user, [row], purchased));
+  const compiled = (await compiledVersions([row])).get(row.id) ?? null;
+  const playbook = present(row, purchased, await resolveActiveId(user, [row], purchased), compiled);
+  // Buyers (and staff, and free playbooks) can read what's inside; everyone else sees the overview
+  return { ...playbook, inside: playbook.isAvailable ? playbookInside(compiled) : null };
+}
+
+// What the live-call AI loads for this user: the active playbook's version in force, AI-safe
+// (Spec 12 §11: price, access, cover art, marketplace text and internal notes removed).
+// Playbooks that were never published from the builder (the seeded ones, custom ones) have no
+// compiled version yet: `playbook` is null and the AI uses its built-in methodology for them.
+export async function activePlaybookRuntime(user) {
+  const { results, activePlaybookId } = await listPlaybooks(user);
+  const active = results.find((item) => item.id === activePlaybookId);
+  const [row] = await query("SELECT active_version_id AS activeVersionId, version FROM playbooks WHERE id = ?", [activePlaybookId]);
+  const compiled = row?.activeVersionId ? (await query("SELECT content FROM playbook_versions WHERE id = ?", [row.activeVersionId]))[0] : null;
+  return {
+    playbookId: activePlaybookId,
+    title: active?.title ?? null,
+    kind: active?.kind ?? null,
+    version: row?.version ?? null,
+    playbook: compiled ? aiPlaybook(parse(compiled.content)) : null,
+  };
 }
 
 export async function setActivePlaybook(user, id) {

@@ -104,8 +104,8 @@ const IntegrationApps = () => {
           >
             {/* ── Desktop (sm+): single horizontal row ── */}
             <div className="hidden sm:flex sm:flex-row sm:items-center justify-between gap-4">
-              {/* App Icon + Name + Description */}
-              <div className="flex items-center gap-5 md:gap-6">
+              {/* App Icon + Name + Description (shrinks so the Manage button always fits) */}
+              <div className="flex items-center gap-5 md:gap-6 min-w-0 flex-1">
                 <div
                   className="flex items-center justify-center flex-shrink-0"
                   style={{ width: app.iconSize, height: app.iconSize }}
@@ -118,7 +118,7 @@ const IntegrationApps = () => {
                     className="w-full h-full object-contain"
                   />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <Text variant="small" className="font-bold text-dark-black">
                     {app.name}
                   </Text>

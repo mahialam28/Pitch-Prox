@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import { apiRequest } from "@/lib/client-api";
 import { Calendar, TrendingUp, MessageSquare, Smile } from "lucide-react";
 import Title from "@/components/texts/title";
 import Text from "@/components/texts/text";
@@ -14,9 +15,57 @@ const periodOptions = [
   { value: "This Year", label: "This Year" },
 ];
 
+// Start of each period (in the browser's time zone)
+function periodStart(period, now = new Date()) {
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  if (period === "This Week") d.setDate(d.getDate() - d.getDay());
+  else if (period === "This Month") d.setDate(1);
+  else if (period === "Last Month") {
+    d.setDate(1);
+    d.setMonth(d.getMonth() - 1);
+  } else if (period === "Last 90 Days") d.setDate(d.getDate() - 90);
+  else if (period === "This Year") d.setMonth(0, 1);
+  return d;
+}
+function periodEnd(period, now = new Date()) {
+  if (period !== "Last Month") return null;
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(1);
+  return d;
+}
+const average = (values) => (values.length ? values.reduce((a, b) => a + b, 0) / values.length : null);
+
 export const CallsHeader = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [selected, setSelected] = useState(periodOptions[0].value);
+  const [calls, setCalls] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiRequest("/api/v1/calls?limit=200")
+      .then((result) => !cancelled && setCalls(result.results))
+      .catch(() => !cancelled && setCalls([]));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // The cards: real numbers from the calls in the chosen period
+  const from = periodStart(selected);
+  const until = periodEnd(selected);
+  const inPeriod = (calls ?? []).filter((call) => call.status === "completed" && new Date(call.startedAt) >= from && (!until || new Date(call.startedAt) < until));
+  const count = inPeriod.length;
+  const booked = inPeriod.filter((call) => call.summary?.conversion?.status === "confirmed").length;
+  const bookedPct = count ? Math.round((booked / count) * 100) : null;
+  const adherence = average(inPeriod.map((call) => call.summary?.adherence_pct).filter((v) => typeof v === "number"));
+  const adherencePct = adherence === null ? null : Math.round(adherence);
+  const gains = inPeriod.map((call) => call.summary?.trust_gain?.value).filter((v) => typeof v === "number");
+  const gain = average(gains);
+  const practiceCount = inPeriod.filter((call) => call.mode === "practice").length;
+  const basis = count ? `Across ${count} call${count === 1 ? "" : "s"}${practiceCount ? ` (${practiceCount} practice)` : ""}` : calls === null ? "Loading…" : "No calls in this period yet";
+  const zone = adherencePct === null ? null : adherencePct >= 80 ? { label: "Strong", cls: "bg-emerald-50 text-emerald-600", text: "You're following the coaching closely." } : adherencePct >= 60 ? { label: "Good", cls: "bg-blue-50 text-blue-600", text: "You use most of the suggested lines." } : { label: "Room to grow", cls: "bg-amber-50 text-amber-700", text: "Try using more of the suggested lines." };
   const dropdownRef = useRef(null);
 
   useEffect(() => {
@@ -124,15 +173,15 @@ export const CallsHeader = () => {
           </div>
 
           <div className="flex flex-col gap-1 mt-1">
-            <span className="text-3xl sm:text-4xl font-semibold text-dark-black/90 tracking-tight">37%</span>
+            <span className="text-3xl sm:text-4xl font-semibold text-dark-black/90 tracking-tight">{bookedPct === null ? "—" : `${bookedPct}%`}</span>
             <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-500">
-              <span>^ 4.2x</span>
-              <span className="text-light-black/60 font-medium">vs PitchProX Benchmark</span>
+              <span>{count ? `${booked} of ${count} booked` : ""}</span>
+              <span className="text-light-black/60 font-medium">{basis}</span>
             </div>
           </div>
 
           <Text variant="small" className="leading-relaxed mt-auto text-dark-black/70">
-            Weighted score of booked meetings, follow-ups, trials and subscriptions.
+            Calls that ended with a confirmed walkthrough, showing or meeting.
           </Text>
         </motion.div>
 
@@ -153,16 +202,18 @@ export const CallsHeader = () => {
 
           <div className="flex flex-col xs:flex-row justify-between items-start xs:items-end gap-3 mt-1">
             <div className="flex flex-col gap-2">
-              <span className="text-3xl sm:text-4xl font-semibold text-dark-black/90 tracking-tight leading-none">82%</span>
-              <span className="px-3 py-1 bg-emerald-50 text-emerald-600 text-[11px] font-bold rounded-full w-fit">
-                Optimal Zone
-              </span>
+              <span className="text-3xl sm:text-4xl font-semibold text-dark-black/90 tracking-tight leading-none">{adherencePct === null ? "—" : `${adherencePct}%`}</span>
+              {zone && (
+                <span className={`px-3 py-1 text-[11px] font-bold rounded-full w-fit ${zone.cls}`}>
+                  {zone.label}
+                </span>
+              )}
             </div>
             <Text
               variant="small"
               className="max-w-full xs:max-w-[140px] sm:max-w-[180px] leading-snug text-dark-black/70 pb-1"
             >
-              Great job! You&apos;re in the optimal adherence range.
+              {zone ? zone.text : basis}
             </Text>
           </div>
 
@@ -170,15 +221,12 @@ export const CallsHeader = () => {
             <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden relative">
               <div
                 className="h-full bg-indigo-500 rounded-full"
-                style={{ width: "82%" }}
+                style={{ width: `${adherencePct ?? 0}%` }}
               />
             </div>
             <div className="relative flex justify-between text-[10px] text-light-black/60 font-semibold px-0.5">
-              <span>80%</span>
-              <span className="absolute left-[82%] -translate-x-1/2 -top-1 font-bold text-dark-black">
-                ▼
-              </span>
-              <span>85%</span>
+              <span>0%</span>
+              <span>100%</span>
             </div>
           </div>
         </motion.div>
@@ -200,16 +248,16 @@ export const CallsHeader = () => {
 
           <div className="flex flex-col gap-1 mt-1">
             <div className="flex items-baseline gap-1">
-              <span className="text-3xl sm:text-4xl font-semibold text-dark-black/90 tracking-tight">+21</span>
+              <span className="text-3xl sm:text-4xl font-semibold text-dark-black/90 tracking-tight">{gain === null ? "—" : `${gain >= 0 ? "+" : ""}${Math.round(gain)}`}</span>
               <span className="text-sm font-bold text-light-black/50">pts</span>
             </div>
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-500">
-              <span>^ 214% vs baseline</span>
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-light-black/70">
+              <span>{gains.length ? `Across ${gains.length} call${gains.length === 1 ? "" : "s"}` : basis}</span>
             </div>
           </div>
 
           <Text variant="small" className="leading-relaxed mt-auto text-dark-black/70">
-            Average trust increase across all calls.
+            Average change in trust from the start to the end of a call.
           </Text>
         </motion.div>
       </div>

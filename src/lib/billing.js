@@ -1,3 +1,4 @@
+import { callUsage, reportUsage } from "@/lib/calls";
 import { query } from "@/lib/db";
 import { TRIAL_PLAN_ID } from "@/lib/plan-catalog";
 
@@ -40,10 +41,10 @@ export async function getSubscription(organizationId) {
     cancelAtPeriodEnd: Boolean(row.cancel_at_period_end),
     scheduledPlanId: row.scheduled_plan_id ?? null,
     scheduledCycle: row.scheduled_cycle ?? null,
-    // Calls and reports are counted once calling is connected; until then nothing is used
+    // Live calls this period (practice calls don't count); reports are counted with AI-4
     usage: {
-      calls: { used: 0, total: plan.callsPerMonth },
-      reports: { used: 0, total: plan.reportsPerMonth },
+      calls: { used: (await callUsage(organizationId)).used, total: plan.callsPerMonth },
+      reports: { used: (await reportUsage(organizationId)).used, total: plan.reportsPerMonth },
     },
   };
 }

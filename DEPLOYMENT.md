@@ -95,7 +95,29 @@ CRON_SECRET=<long-random-string>
 APP_SECRET=<long-random-string>
 ```
 
-`ecosystem.config.cjs` starts a second PM2 app, `pitchprox-jobs`, that runs the Campaigns & Journeys jobs every 5 minutes (scheduled broadcasts, journeys, transactional emails). Without it, scheduled campaigns and journeys don't move. Until an email service is connected, emails wait in the outbox (Campaigns & Journeys → Overview → Delivery).
+### Email delivery (Postmark)
+
+PitchProX keeps the campaigns, journeys and templates; Postmark only delivers. Add to `.env.local`:
+
+```dotenv
+# Postmark → Servers → PitchProX → API Tokens
+POSTMARK_SERVER_TOKEN=<server-api-token>
+# A sender on the verified domain (Postmark → Sender Signatures, DKIM + Return-Path DNS records)
+EMAIL_FROM_ADDRESS=no-reply@pitchprox.com
+# Message stream ids (Postmark's defaults; change only if the streams were renamed)
+POSTMARK_TRANSACTIONAL_STREAM=outbound
+POSTMARK_BROADCAST_STREAM=broadcast
+# Any long random string; also used in the webhook URL below
+POSTMARK_WEBHOOK_SECRET=<long-random-string>
+```
+
+In Postmark, on both streams → Webhooks → Add webhook:
+- URL: `https://postmark:<POSTMARK_WEBHOOK_SECRET>@app.pitchprox.com/api/v1/public/postmark/webhook` (Postmark sends it as Basic auth)
+- Events: Delivery, Bounce, Spam Complaint, Open, Link Click, Subscription Change (include message content: off)
+
+Restart both PM2 apps after changing these. Emails queued before the token was set go out on the next job run.
+
+`ecosystem.config.cjs` starts a second PM2 app, `pitchprox-jobs`, that runs the Campaigns & Journeys jobs every 5 minutes (scheduled broadcasts, journeys, transactional emails). Without it, scheduled campaigns and journeys don't move. Until `POSTMARK_SERVER_TOKEN` is set, emails wait in the outbox (Campaigns & Journeys → Overview → Delivery).
 
 ## 5. Run Next.js with PM2
 
@@ -137,6 +159,48 @@ PATH=<paste-the-output-of-echo-PATH-here>
 3. Create a lead and a CRM prospect, then check they remain after a refresh.
 4. Check `pm2 logs pitchprox --lines 100` for database or application errors.
 5. Confirm MySQL (3306) and the Node App Port (3005) are not reachable from the public internet.
+
+## 7. Health Check, Backups and Launch
+
+- Health check: `https://<your-domain>/api/health`. It returns 200 `{"status":"ok","database":"ok"}`, or 503 if the database is down, and shows no secrets. Point an uptime monitor at it.
+- Nightly backups of the database and `storage/uploads`, 14 days kept (`BACKUP_DIR`, `KEEP_DAYS` override):
+  ```
+  30 2 * * * cd /home/<site-user>/htdocs/<your-domain> && ./scripts/backup.sh >> storage/backup.log 2>&1
+  ```
+  Copy `storage/backups` off the server too, and do one restore test.
+- The full go-live list (secrets, third-party services, legal, smoke test, staging) is in `Docs/launch-checklist.md`.
+
+## 8. AI Call Service (live coaching)
+
+Live coaching runs in a second Node process, `pitchprox-calls` (started by `ecosystem.config.cjs`), next to the app. Browsers talk to it over a WebSocket.
+
+1. Add to `.env.local`:
+   ```
+   # Any long random string; the app and the call service must have the same value
+   CALL_SERVICE_SECRET=<long-random-string>
+   # The address browsers use to reach the call service (through NGINX below)
+   CALL_SERVICE_PUBLIC_URL=wss://<your-domain>/call-ws
+   # Optional until Bryce sends keys: without one, practice calls use built-in sample wording
+   OPENAI_API_KEY=
+   # AI_LLM_PROVIDER=anthropic and ANTHROPIC_API_KEY=… to use Claude instead; AI_LIVE_MODEL picks the model
+   ```
+2. In CloudPanel → the site → **Vhost**, add this inside the `server { … }` block for HTTPS, then save:
+   ```nginx
+   location /call-ws/ {
+     proxy_pass http://127.0.0.1:3010/;
+     proxy_http_version 1.1;
+     proxy_set_header Upgrade $http_upgrade;
+     proxy_set_header Connection "upgrade";
+     proxy_set_header Host $host;
+     proxy_set_header X-Real-IP $remote_addr;
+     proxy_read_timeout 3h;
+     proxy_send_timeout 3h;
+   }
+   ```
+3. Run `pm2 start ecosystem.config.cjs` (or `pm2 reload ecosystem.config.cjs`), then `pm2 save`.
+4. Check it: `curl http://127.0.0.1:3010/health` should show `{"status":"ok",…}`. In the app, Live Calling → Practice call → any scenario should show coaching lines.
+
+Port 3010 must stay closed to the internet; only NGINX reaches it. Practice calls never use a plan's calls. Phone calls are switched on later by the Twilio settings (AI-3).
 
 ## Updating the Site Manually
 

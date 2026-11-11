@@ -11,60 +11,20 @@ import {
 import Title from "@/components/texts/title";
 import Text from "@/components/texts/text";
 
-const policyStats = [
-  {
-    id: "total_policies",
-    label: "Total Policies",
-    value: "28",
-    trend: "↑ 2 this month",
-    trendColor: "text-primary",
-    icon: FileText,
-    iconWrapperBg: "bg-[#E6F8F7]",
-    iconColor: "text-[#0EADAB]",
-  },
-  {
-    id: "approved_policies",
-    label: "Approved Policies",
-    value: "22",
-    trend: "↑ 78% of total",
-    trendColor: "text-primary",
-    icon: CheckCircle2,
-    iconWrapperBg: "bg-[#F3E8FF]",
-    iconColor: "text-[#9333EA]",
-  },
-  {
-    id: "under_review",
-    label: "Under Review",
-    value: "4",
-    trend: "Requires attention",
-    trendColor: "text-[#D97706]",
-    icon: AlertTriangle,
-    iconWrapperBg: "bg-[#FEF3C7]",
-    iconColor: "text-[#D97706]",
-  },
-  {
-    id: "draft_policies",
-    label: "Draft Policies",
-    value: "2",
-    trend: "In progress",
-    trendColor: "text-medium-black",
-    icon: FileEdit,
-    iconWrapperBg: "bg-[#E0F2FE]",
-    iconColor: "text-[#0284C7]",
-  },
-  {
-    id: "acknowledgment_rate",
-    label: "Acknowledgment Rate",
-    value: "93%",
-    trend: "Employees up to date",
-    trendColor: "text-[#16A34A]",
-    icon: ShieldCheck,
-    iconWrapperBg: "bg-[#DCFCE7]",
-    iconColor: "text-[#16A34A]",
-  },
-];
+// Cards from /api/v1/compliance/policies → stats
+function policyStats(stats) {
+  const value = (number) => (stats ? number.toLocaleString() : "—");
+  const ack = stats?.acknowledgment;
+  return [
+    { id: "total_policies", label: "Total Policies", value: value(stats?.total ?? 0), trend: stats ? `${stats.addedThisMonth ? `↑ ${stats.addedThisMonth}` : "None"} added this month` : "", trendColor: "text-primary", icon: FileText, iconWrapperBg: "bg-[#E6F8F7]", iconColor: "text-[#0EADAB]" },
+    { id: "approved_policies", label: "Approved Policies", value: value(stats?.approved ?? 0), trend: stats?.total ? `${Math.round((stats.approved / stats.total) * 100)}% of total` : "", trendColor: "text-primary", icon: CheckCircle2, iconWrapperBg: "bg-[#E6F8F7]", iconColor: "text-[#0EADAB]" },
+    { id: "under_review", label: "Under Review", value: value(stats?.underReview ?? 0), trend: stats?.underReview ? "Requires attention" : "Nothing waiting", trendColor: stats?.underReview ? "text-[#D97706]" : "text-medium-black", icon: AlertTriangle, iconWrapperBg: "bg-[#FEF3C7]", iconColor: "text-[#D97706]" },
+    { id: "draft_policies", label: "Draft Policies", value: value(stats?.drafts ?? 0), trend: stats?.drafts ? "In progress" : "No drafts", trendColor: "text-medium-black", icon: FileEdit, iconWrapperBg: "bg-[#F3F4F6]", iconColor: "text-medium-black" },
+    { id: "ack_rate", label: "Acknowledgment Rate", value: ack?.rate == null ? "—" : `${ack.rate}%`, trend: ack ? (ack.overdue ? `${ack.overdue} overdue signature${ack.overdue === 1 ? "" : "s"}` : ack.pending ? `${ack.pending} waiting to sign` : "Employees up to date") : "", trendColor: ack?.overdue ? "text-red" : "text-[#16A34A]", icon: ShieldCheck, iconWrapperBg: "bg-[#DCFCE7]", iconColor: "text-[#16A34A]" },
+  ];
+}
 
-export default function ComplianceHeader() {
+export default function ComplianceHeader({ stats }) {
   return (
     <div className="w-full flex flex-col gap-6">
       {/* ── Page Title & Subtitle ── */}
@@ -82,7 +42,7 @@ export default function ComplianceHeader() {
 
       {/* ── 5 Metric Stat Cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-5 w-full">
-        {policyStats.map((stat) => {
+        {policyStats(stats).map((stat) => {
           const Icon = stat.icon;
           return (
             <div

@@ -48,7 +48,11 @@ export default function FailedDeliveriesSection({ overview, canRun = false, onRa
         ))}
       </div>
       <div className="mt-4 pt-3 border-t border-light-gray text-[11px] text-light-black space-y-1">
-        <p>{overview?.providerConnected ? "Email service connected." : "No email service connected yet: emails wait in the outbox."}</p>
+        <p>
+          {overview?.providerConnected
+            ? `Postmark connected · last 30 days: ${mail?.sent ?? 0} sent, ${mail?.delivered ?? 0} delivered, ${mail?.bounced ?? 0} bounced, ${mail?.complained ?? 0} marked as spam.`
+            : "Postmark isn't connected yet: emails wait in the outbox and go out once it is."}
+        </p>
         <p>
           Scheduler: {run?.finishedAt ? `last run ${formatWhen(run.finishedAt)}` : "hasn't run yet"}
           {run?.error ? <span className="text-red"> · last error: {run.error}</span> : null}

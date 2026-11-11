@@ -21,21 +21,12 @@ const DemoForm = () => {
     }
   };
 
-  const handleSubmit = async (e) => {
+  // The email carries over to the "See how it works" form below
+  const handleSubmit = (e) => {
     e.preventDefault();
     setLoading(true);
-    
-    try {
-      console.log("Email submitted:", email);
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      // Scroll to the how-it-works section
-      scrollToHowItWorks();
-    } catch (error) {
-      console.error("Demo submission error:", error);
-    } finally {
-      setLoading(false);
-    }
+    scrollToHowItWorks();
+    setLoading(false);
   };
 
   return (

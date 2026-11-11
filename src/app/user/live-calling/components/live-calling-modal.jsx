@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { AlertCircle, Phone, MapPin, X } from "lucide-react";
+import { AlertCircle, Phone, MapPin, X, GraduationCap, Info } from "lucide-react";
+import { apiRequest } from "@/lib/client-api";
 import SettingsDropdown from "@/components/shared/dropdown/settings-dropdown";
 import { leadTypeOptions } from "@/utils.js/lead-options";
 import { formatPhoneNumber } from "@/utils.js/phone";
@@ -20,6 +21,10 @@ const LiveCallingModal = ({
     address: setup.address || "",
   });
   const [error, setError] = useState("");
+  // Phone calls need Twilio (AI-3); until then the practice call shows the live AI coaching
+  const [options, setOptions] = useState(null);
+  const [mode, setMode] = useState(setup.mode === "live" ? "live" : "practice");
+  const [scriptId, setScriptId] = useState(setup.scriptId || "");
 
   // Reset the form whenever the modal opens so a previous submission never
   // leaks stale values into the next session. This is done as a render-phase
@@ -37,6 +42,21 @@ const LiveCallingModal = ({
       setError("");
     }
   }
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    apiRequest("/api/v1/calls/options")
+      .then((result) => {
+        if (cancelled) return;
+        setOptions(result);
+        setScriptId((current) => current || result.practiceScripts[0]?.id || "roleplay");
+      })
+      .catch(() => !cancelled && setOptions({ liveAvailable: false, practiceScripts: [], usage: null }));
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
 
   // Close on Escape key
   useEffect(() => {
@@ -70,13 +90,32 @@ const LiveCallingModal = ({
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (mode === "practice") {
+      if (!scriptId) {
+        setError("Choose a practice scenario.");
+        return;
+      }
+      setError("");
+      const next = { ...setup, mode: "practice", scriptId: scriptId === "roleplay" ? null : scriptId, roleplay: scriptId === "roleplay" };
+      onSetupChange(next);
+      onStartCall(next);
+      return;
+    }
+    if (options && !options.liveAvailable) {
+      setError("Phone calls aren't connected yet. Use a practice call to see the AI coaching.");
+      return;
+    }
     if (!formData.leadType || !formData.leadName || !formData.phoneNumber || !formData.address) {
       setError("Please fill in all required fields to start the call.");
       return;
     }
     setError("");
-    onSetupChange({ ...setup, ...formData });
-    onStartCall({ ...setup, ...formData });
+    // A call typed in by hand isn't the CRM contact from before unless the name and number are unchanged
+    const digits = (value) => String(value ?? "").replace(/\D/g, "");
+    const sameContact = setup.contactId && formData.leadName === setup.leadName && digits(formData.phoneNumber) === digits(setup.phoneNumber);
+    const next = { ...setup, ...formData, mode: "live", ...(sameContact ? {} : { contactKind: null, contactId: null, phoneId: null }) };
+    onSetupChange(next);
+    onStartCall(next);
   };
 
   if (!isOpen) return null;
@@ -100,7 +139,7 @@ const LiveCallingModal = ({
                 Start a Call
               </h2>
               <p className="text-xs text-light-black font-normal">
-                Enter lead details to begin a manual call
+                {mode === "practice" ? "Practice with a simulated prospect and real AI coaching" : "Enter lead details to begin a call"}
               </p>
             </div>
           </div>
@@ -119,7 +158,52 @@ const LiveCallingModal = ({
 
         {/* ── Form Body ── */}
         <form onSubmit={handleSubmit}>
+          {/* Phone call or practice call */}
+          <div className="px-6 pt-5">
+            <div role="tablist" aria-label="Call type" className="grid grid-cols-2 gap-1 rounded-xl bg-light-gray p-1">
+              {[
+                { key: "live", label: "Phone call", icon: Phone },
+                { key: "practice", label: "Practice call", icon: GraduationCap },
+              ].map(({ key, label, icon: Icon }) => (
+                <button key={key} type="button" role="tab" aria-selected={mode === key} onClick={() => { setMode(key); setError(""); }} className={`flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-colors cursor-pointer ${mode === key ? "bg-white text-primary shadow-xs" : "text-medium-black hover:text-dark-black"}`}>
+                  <Icon className="w-3.5 h-3.5" /> {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {mode === "practice" ? (
+            <div className="p-6 space-y-3">
+              <p className="text-xs text-medium-black">The prospect is simulated; the coaching is the real PitchProX AI. Practice calls don&apos;t use your plan&apos;s calls.</p>
+              <fieldset className="space-y-2">
+                <legend className="text-xs font-semibold text-medium-black mb-1.5">Scenario</legend>
+                {(options?.practiceScripts ?? []).map((script) => (
+                  <label key={script.id} className={`flex items-start gap-2.5 rounded-xl border p-3 cursor-pointer transition-colors ${scriptId === script.id ? "border-primary bg-primary/5" : "border-light-gray hover:border-primary/40"}`}>
+                    <input type="radio" name="practice-script" value={script.id} checked={scriptId === script.id} onChange={() => setScriptId(script.id)} className="mt-0.5 accent-primary" />
+                    <span>
+                      <span className="block text-xs font-semibold text-dark-black">{script.title}</span>
+                      <span className="block text-[11px] text-light-black">{script.leadType} · {script.prospectName}</span>
+                    </span>
+                  </label>
+                ))}
+                <label className={`flex items-start gap-2.5 rounded-xl border p-3 cursor-pointer transition-colors ${scriptId === "roleplay" ? "border-primary bg-primary/5" : "border-light-gray hover:border-primary/40"}`}>
+                  <input type="radio" name="practice-script" value="roleplay" checked={scriptId === "roleplay"} onChange={() => setScriptId("roleplay")} className="mt-0.5 accent-primary" />
+                  <span>
+                    <span className="block text-xs font-semibold text-dark-black">Role-play</span>
+                    <span className="block text-[11px] text-light-black">You (or a colleague) type the prospect&apos;s side.</span>
+                  </span>
+                </label>
+                {!options && <p className="text-[11px] text-light-black">Loading scenarios…</p>}
+              </fieldset>
+            </div>
+          ) : (
           <div className="p-6 space-y-4">
+            {options && !options.liveAvailable && (
+              <div className="flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3.5 py-2.5 text-[11px] text-amber-950">
+                <Info className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>Phone calls connect once the calling service (Twilio) is set up. Until then, use a <button type="button" onClick={() => setMode("practice")} className="font-semibold underline cursor-pointer">practice call</button> to see the AI coaching.</span>
+              </div>
+            )}
 
             {/* Lead Type Select — themed dropdown */}
             <div className="space-y-1.5">
@@ -197,6 +281,7 @@ const LiveCallingModal = ({
             </div>
 
           </div>
+          )}
 
           {/* Validation error */}
           {error && (
@@ -222,8 +307,8 @@ const LiveCallingModal = ({
               type="submit"
               className="flex items-center gap-1.5 px-5 py-2 text-xs font-semibold text-white bg-primary hover:bg-medium-teal rounded-xl transition-colors cursor-pointer shadow-xs"
             >
-              <Phone className="w-3.5 h-3.5 fill-current" />
-              <span>Start Call</span>
+              {mode === "practice" ? <GraduationCap className="w-3.5 h-3.5" /> : <Phone className="w-3.5 h-3.5 fill-current" />}
+              <span>{mode === "practice" ? "Start Practice Call" : "Start Call"}</span>
             </button>
           </div>
         </form>

@@ -26,7 +26,7 @@ export default function DemoPicker({ roles }) {
     <main className="min-h-screen bg-light-gray/40 px-4 py-10 sm:py-16">
       <div className="mx-auto w-full max-w-4xl">
         <div className="flex flex-col items-center text-center gap-4 mb-10">
-          <Image src={logo} alt="PitchProX" className="h-10 w-auto" priority />
+          <Image src={logo} alt="PitchProX" className="h-12 w-auto" priority />
           <h1 className="text-2xl sm:text-3xl font-bold text-dark-black">Explore PitchProX</h1>
           <p className="text-sm text-medium-black max-w-xl">
             This is a preview with sample data. Choose a role to see the app the way that person would. To switch roles, use Logout in the sidebar and you&apos;ll come back here.

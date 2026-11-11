@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import Dropdown from "@/components/shared/dropdown/dropdown";
+import { confirmReset } from "@/lib/alerts";
 import toast from "react-hot-toast";
 
 const IDEAL_OPTIONS = [
@@ -76,7 +77,8 @@ export default function AiPromptLengthSection({
     toast.success(`Auto adjust ${nextVal ? "enabled" : "disabled"}`);
   };
 
-  const handleResetToDefault = () => {
+  const handleResetToDefault = async () => {
+    if (!(await confirmReset("Prompt Length"))) return;
     setIdealLength("20 words");
     setMinLength("10 words");
     setMaxLength("25 words");

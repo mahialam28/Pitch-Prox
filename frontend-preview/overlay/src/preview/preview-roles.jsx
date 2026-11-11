@@ -6,14 +6,18 @@ import { PERSONAS } from "./personas";
 import { resetPreviewData } from "./mock-api";
 import { dashboardPathFor } from "@/utils.js/roles";
 
+const setPreviewSession = (key) => {
+  document.cookie = `pitchprox_session=${key}; path=/; max-age=${60 * 60 * 24 * 7}; samesite=lax`;
+  document.cookie = "pitchprox_preview_identity=; path=/; max-age=0";
+};
+
 // Sign-in page: open the app as any role with one click (design preview only)
 export default function PreviewRoles() {
   const [opening, setOpening] = useState(null);
   const open = (key) => {
     setOpening(key);
     resetPreviewData();
-    document.cookie = `pitchprox_session=${key}; path=/; max-age=${60 * 60 * 24 * 7}; samesite=lax`;
-    document.cookie = "pitchprox_preview_identity=; path=/; max-age=0";
+    setPreviewSession(key);
     const user = PERSONAS[key].user;
     window.location.assign(user.staffStatus === "onboarding" ? "/onboarding" : dashboardPathFor(user.role));
   };

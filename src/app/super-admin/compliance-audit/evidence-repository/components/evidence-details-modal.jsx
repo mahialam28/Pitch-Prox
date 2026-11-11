@@ -1,284 +1,165 @@
 "use client";
 
-import React from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  X,
-  FileText,
-  FileSpreadsheet,
-  Eye,
-  Download,
-  Trash2,
-  Edit3,
-} from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { Download, Eye, Upload } from "lucide-react";
 import toast from "react-hot-toast";
-import { controlsOf, criteriaOf } from "../evidence-options";
+import DialogModal, { DialogButton } from "@/components/modals/dialog-modal";
+import { apiRequest, formatDate, formatDateTime } from "@/lib/client-api";
 
-export default function EvidenceDetailsModal({
-  isOpen,
-  onClose,
-  evidence,
-  onEdit,
-  onDelete,
-  onUpdate,
-}) {
-  if (!isOpen || !evidence) return null;
+const STATUS_STYLES = {
+  Verified: "bg-emerald-50 text-emerald-600",
+  "Under Review": "bg-amber-50 text-amber-600",
+  "Needs Changes": "bg-rose-50 text-rose-600",
+  Draft: "bg-gray-100 text-gray-600",
+  Expired: "bg-red-50 text-red-600",
+  Archived: "bg-slate-100 text-slate-500",
+};
 
-  const status = evidence.status || "Verified";
-  const stamp = () => new Date().toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
-  // Status changes; Verified By / Verified At are filled automatically, never typed in
-  const changeStatus = (next, message, extra = {}) => {
-    onUpdate?.({ ...evidence, status: next, ...extra });
-    toast.success(message);
-    onClose();
-  };
-  const versions = evidence.versions ?? [{ version: 1 }];
+// One evidence item: details, files (every version), and the review actions for its status.
+// evidenceId: which item; onChanged: reload the list; onEdit(evidence): open the edit form
+export default function EvidenceDetailsModal({ evidenceId, onClose, onChanged, onEdit }) {
+  const [data, setData] = useState(null);
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef(null);
+  const base = `/api/v1/compliance/evidence/${evidenceId}`;
 
-  const handleDownload = () => {
-    toast.success(`Downloading ${evidence.name}.pdf...`);
-  };
+  useEffect(() => {
+    if (!evidenceId) return;
+    apiRequest(base).then(setData).catch((error) => toast.error(error.message));
+  }, [base, evidenceId]);
 
-  const handleView = () => {
-    toast.success(`Opening preview for ${evidence.name}`);
-  };
+  if (!evidenceId) return null;
+  const evidence = data?.evidence;
+  const canManage = data?.permissions.manage;
 
-  // Only drafts can be permanently deleted; submitted evidence is archived instead
-  const handleDelete = () => {
-    if (onDelete) {
-      onDelete(evidence.id);
+  const run = async (request, message, close = false) => {
+    setBusy(true);
+    try {
+      const result = await request();
+      toast.success(message);
+      onChanged?.();
+      if (close) onClose();
+      else {
+        setData(result);
+        setNote("");
+      }
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setBusy(false);
     }
-    toast.success(`Deleted draft "${evidence.name}"`);
-    onClose();
+  };
+  const act = (action, message) => run(() => apiRequest(`${base}/actions`, { method: "POST", body: { action, note: note.trim() || undefined } }), message);
+  const uploadVersion = (file) => {
+    if (!file) return;
+    const body = new FormData();
+    body.append("file", file);
+    if (note.trim()) body.append("note", note.trim());
+    run(() => apiRequest(`${base}/versions`, { method: "POST", body }), "New version uploaded. The old file is kept, and it's back under review.");
   };
 
-  const isPdf = evidence.fileType === "pdf" || !evidence.fileType;
-  const isXlsx = evidence.fileType === "xlsx";
+  const status = evidence?.status;
+  const button = "px-4 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50";
 
   return (
-    <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        {/* Backdrop */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
-          className="fixed inset-0 bg-black/45 backdrop-blur-xs"
-        />
-
-        {/* Modal Window */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.96, y: 10 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.96, y: 10 }}
-          transition={{ duration: 0.2 }}
-          className="relative bg-white rounded-3xl shadow-2xl border border-light-gray w-full max-w-xl max-h-[92vh] flex flex-col z-10 overflow-hidden"
-        >
-          {/* Header */}
-          <div className="flex items-start justify-between px-6 sm:px-7 pt-6 pb-4 border-b border-light-gray/60">
-            <div className="flex items-center gap-3.5">
-              {/* Document Type Icon Badge */}
-              <div
-                className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border ${
-                  isPdf
-                    ? "bg-red-50/80 border-red-100 text-red-500"
-                    : isXlsx
-                    ? "bg-emerald-50/80 border-emerald-100 text-emerald-500"
-                    : "bg-blue-50/80 border-blue-100 text-blue-500"
-                }`}
-              >
-                {isXlsx ? (
-                  <FileSpreadsheet className="w-6 h-6 stroke-[1.8]" />
-                ) : (
-                  <FileText className="w-6 h-6 stroke-[1.8]" />
-                )}
-              </div>
-
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-base sm:text-lg font-bold text-dark-black/90 font-secondary">
-                    {evidence.name}
-                  </h3>
-                  <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                      evidence.status === "Verified"
-                        ? "bg-[#E6F7F7] text-[#00A3A3]"
-                        : "bg-[#EFF6FF] text-[#2563EB]"
-                    }`}
-                  >
-                    {evidence.status || "Verified"}
-                  </span>
-                </div>
-                <p className="text-xs text-light-black">
-                  {evidence.description || "User access review attestation"}
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={onClose}
-              className="w-8 h-8 rounded-full hover:bg-light-gray/60 flex items-center justify-center text-light-black hover:text-dark-black transition-colors cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
+    <DialogModal
+      isOpen
+      onClose={onClose}
+      title={evidence ? evidence.name : "Loading..."}
+      subtitle={evidence ? `${evidence.reference} · ${evidence.controls.join(", ")}` : ""}
+      size="2xl"
+      footer={
+        evidence && (
+          <div className="flex flex-wrap items-center gap-2 w-full justify-end">
+            {canManage && status === "Draft" && (
+              <button type="button" disabled={busy} onClick={() => run(() => apiRequest(base, { method: "DELETE" }), "Draft deleted.", true)} className={`${button} mr-auto text-red-500 border border-red-200 hover:bg-red-50`}>Delete Draft</button>
+            )}
+            {canManage && ["Verified", "Expired", "Under Review", "Needs Changes"].includes(status) && (
+              <button type="button" disabled={busy} onClick={() => act("archive", "Archived. It stays in the audit history.")} className={`${button} mr-auto text-medium-black border border-light-gray hover:bg-light-gray/60`}>Archive</button>
+            )}
+            {canManage && status === "Archived" && <button type="button" disabled={busy} onClick={() => act("restore", "Restored and sent for review.")} className={`${button} border border-primary text-primary hover:bg-primary/5`}>Restore</button>}
+            <DialogButton onClick={onClose}>Close</DialogButton>
+            {canManage && ["Draft", "Needs Changes"].includes(status) && <button type="button" onClick={() => onEdit(evidence)} className={`${button} border border-light-gray hover:bg-light-gray/60`}>Edit</button>}
+            {canManage && ["Draft", "Needs Changes"].includes(status) && <button type="button" disabled={busy} onClick={() => act("submit", "Sent for review.")} className={`${button} bg-primary hover:bg-[#0c9593] text-white`}>Submit for Review</button>}
+            {canManage && status === "Under Review" && (
+              <>
+                <button type="button" disabled={busy || !note.trim()} title={note.trim() ? undefined : "Write what needs to change below"} onClick={() => act("request_changes", "Returned to the owner for changes.")} className={`${button} text-amber-700 border border-amber-300 hover:bg-amber-50`}>Request Changes</button>
+                <button type="button" disabled={busy} onClick={() => act("verify", "Evidence verified.")} className={`${button} bg-primary hover:bg-[#0c9593] text-white`}>Verify Evidence</button>
+              </>
+            )}
+            {canManage && ["Verified", "Expired", "Needs Changes"].includes(status) && (
+              <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} className={`${button} bg-primary hover:bg-[#0c9593] text-white flex items-center gap-1.5`}><Upload className="w-3.5 h-3.5" /> Upload New Version</button>
+            )}
+            <input ref={fileRef} type="file" className="hidden" onChange={(event) => { uploadVersion(event.target.files?.[0]); event.target.value = ""; }} />
+          </div>
+        )
+      }
+    >
+      {!evidence ? (
+        <p className="text-sm text-light-black py-8 text-center">Loading...</p>
+      ) : (
+        <div className="space-y-5 text-xs">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${STATUS_STYLES[status]}`}>{status}</span>
+            {evidence.criteria.map((item) => <span key={item} className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#E6F4F2] text-[#0D9488]">{item}</span>)}
           </div>
 
-          {/* Modal Body */}
-          <div className="overflow-y-auto px-6 sm:px-7 py-5 space-y-5 text-xs">
-            {/* ── Evidence details ── */}
-            <div className="bg-[#F8FAFA] rounded-2xl border border-light-gray/70 p-4 sm:p-5 grid grid-cols-2 gap-y-4 gap-x-6">
-              {[
-                ["Evidence Name", evidence.name],
-                ["Status", status],
-                ["Evidence Owner", evidence.owner?.name ?? "—"],
-                ["File Type / Size", `${(evidence.fileType || "PDF").toUpperCase()} • 2.4 MB`],
-                ["Associated Controls", controlsOf(evidence).join(", ") || "—"],
-                ["Trust Service Criteria", criteriaOf(evidence).join(", ") || "—"],
-                ["Evidence Period", evidence.period ?? "Q1 2024"],
-                ["Evidence Expiration", evidence.expiryDate?.date ?? "Does Not Expire"],
-                ["Uploaded By", evidence.uploadedBy ?? evidence.owner?.name ?? "—"],
-                ["Uploaded At", evidence.uploadedAt ?? `${evidence.lastUpdated?.date ?? ""} ${evidence.lastUpdated?.time ?? ""}`],
-                ["Last Updated", `${evidence.lastUpdated?.date ?? "—"} • ${evidence.lastUpdated?.time ?? ""}`],
-                ["Verified By", status === "Verified" ? evidence.verifiedBy ?? "Daniel Miller" : "—"],
-                ["Verified At", status === "Verified" ? evidence.verifiedAt ?? "May 19, 2024 10:24 AM" : "—"],
-                ["Current Version", `v${versions.length}`],
-              ].map(([label, value]) => (
-                <div key={label}>
-                  <span className="text-[10px] font-bold text-light-black tracking-wider uppercase block mb-0.5">{label}</span>
-                  <span className="text-xs sm:text-sm font-semibold text-dark-black/85">{value}</span>
-                </div>
-              ))}
+          <dl className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {[
+              ["Evidence Owner", evidence.owner?.name ?? "—"],
+              ["Evidence Period", evidence.period || "—"],
+              ["Evidence Expiration", evidence.expiresOn ? formatDate(`${evidence.expiresOn}T12:00:00`) : "Does Not Expire"],
+              ["Uploaded By", evidence.uploadedBy ?? "—"],
+              ["Uploaded At", formatDateTime(evidence.uploadedAt)],
+              ["Last Updated", formatDateTime(evidence.updatedAt)],
+              ["Verified By", evidence.verifiedBy ?? "—"],
+              ["Verified At", evidence.verifiedAt ? formatDateTime(evidence.verifiedAt) : "—"],
+              ["File", evidence.file ? `${evidence.file.type.toUpperCase()} · ${evidence.file.size}` : "No file yet"],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <dt className="text-light-black">{label}</dt>
+                <dd className="font-semibold text-dark-black mt-0.5">{value}</dd>
+              </div>
+            ))}
+          </dl>
+
+          <div>
+            <h4 className="font-bold text-dark-black/85 mb-1">Description / Supporting Notes</h4>
+            <p className="text-medium-black leading-relaxed whitespace-pre-line">{evidence.description || "—"}</p>
+          </div>
+          <div>
+            <h4 className="font-bold text-dark-black/85 mb-1">Verification Note</h4>
+            <p className="text-medium-black">{evidence.verificationNote || "Not reviewed yet."}</p>
+          </div>
+
+          {canManage && ["Under Review", "Verified", "Expired", "Needs Changes"].includes(status) && (
+            <div>
+              <label htmlFor="evidence-note" className="font-bold text-dark-black/85 mb-1 block">{status === "Under Review" ? "Reviewer note" : "Note for the new version"}</label>
+              <input id="evidence-note" value={note} maxLength={1000} onChange={(event) => setNote(event.target.value)} placeholder={status === "Under Review" ? "Required when requesting changes; optional when verifying" : "Optional"} className="w-full px-3.5 py-2.5 rounded-xl border border-light-gray text-xs focus:outline-none focus:border-primary" />
             </div>
+          )}
 
-            {/* ── Description ── */}
-            <div className="space-y-1.5">
-              <h4 className="text-xs sm:text-sm font-bold text-dark-black/85 font-secondary">
-                Description / Supporting Notes
-              </h4>
-              <p className="text-xs text-dark-black/75 leading-relaxed font-normal">
-                {evidence.description || "Quarterly attestation confirming that user access rights have been reviewed, validated, and approved in accordance with company policy and SOC 2 control requirements."}
-              </p>
-            </div>
-
-            {/* ── Verification Note (written by the reviewer) ── */}
-            <div className="space-y-1.5">
-              <h4 className="text-xs sm:text-sm font-bold text-dark-black/85 font-secondary">Verification Note</h4>
-              <p className="text-xs text-dark-black/75 leading-relaxed font-normal">
-                {evidence.verificationNote ?? (status === "Verified" ? "Reviewed and verified against approved user access review process and supporting documentation." : "Not reviewed yet.")}
-              </p>
-            </div>
-
-            {/* ── Attached File ── */}
-            <div className="space-y-1.5">
-              <h4 className="text-xs sm:text-sm font-bold text-dark-black/85 font-secondary">
-                Attached File
-              </h4>
-
-              <div className="border border-light-gray rounded-2xl p-3 sm:p-3.5 flex items-center justify-between gap-3 bg-white">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-8 h-8 rounded-lg bg-red-50 text-red-500 flex items-center justify-center shrink-0">
-                    <FileText className="w-4 h-4" />
-                  </div>
+          <div>
+            <h4 className="font-bold text-dark-black/85 mb-2">Files ({evidence.versions.length})</h4>
+            <ul className="divide-y divide-light-gray/70 rounded-xl border border-light-gray">
+              {evidence.versions.length === 0 && <li className="p-3 text-light-black">No file uploaded yet.</li>}
+              {evidence.versions.map((version, index) => (
+                <li key={version.id} className="p-3 flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold text-dark-black/85 truncate">
-                      {evidence.name.replace(/\s+/g, "-")}.pdf
-                    </p>
-                    <p className="text-[11px] text-light-black">2.4 MB • PDF</p>
+                    <p className="font-semibold text-dark-black truncate">v{version.version} · {version.name} {index === 0 && <span className="text-[10px] text-primary">(current)</span>}</p>
+                    <p className="text-[11px] text-light-black">{version.size} · {version.uploadedBy ?? "—"} · {formatDateTime(version.uploadedAt)}{version.note ? ` · ${version.note}` : ""}</p>
                   </div>
-                </div>
-
-                <div className="flex items-center gap-4 shrink-0">
-                  <button
-                    type="button"
-                    onClick={handleView}
-                    className="text-primary hover:text-[#0c9593] flex items-center gap-1 text-xs font-semibold transition-colors cursor-pointer"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    <span>View</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleDownload}
-                    className="text-primary hover:text-[#0c9593] flex items-center gap-1 text-xs font-semibold transition-colors cursor-pointer"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Download</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* ── Footer Actions (depend on the evidence status) ── */}
-            <div className="flex flex-wrap items-center justify-end gap-2.5 pt-4 border-t border-light-gray/70">
-              {status === "Draft" && (
-                <button type="button" onClick={handleDelete} className="mr-auto px-3.5 py-2 rounded-xl text-xs font-semibold text-red-500 border border-red-200/90 hover:bg-red-50 transition-colors flex items-center gap-1.5 cursor-pointer">
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Delete Draft</span>
-                </button>
-              )}
-              {["Verified", "Expired", "Under Review", "Needs Changes"].includes(status) && (
-                <button
-                  type="button"
-                  onClick={() => changeStatus("Archived", `Archived "${evidence.name}". It stays in the audit history.`)}
-                  className="mr-auto px-3.5 py-2 rounded-xl text-xs font-semibold text-medium-black border border-light-gray hover:bg-light-gray/60 transition-colors cursor-pointer"
-                >
-                  Archive Evidence
-                </button>
-              )}
-              <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-xs font-semibold text-dark-black/80 hover:bg-light-gray/60 border border-light-gray transition-colors cursor-pointer">
-                Close
-              </button>
-              {["Draft", "Needs Changes"].includes(status) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose();
-                    onEdit?.(evidence);
-                  }}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-primary border border-primary hover:bg-primary/5 transition-colors flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>Edit</span>
-                </button>
-              )}
-              {status === "Draft" && (
-                <button type="button" onClick={() => changeStatus("Under Review", "Sent for review.")} className="px-4 py-2 bg-primary hover:bg-[#0c9593] text-white rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer">
-                  Submit for Review
-                </button>
-              )}
-              {status === "Needs Changes" && (
-                <button type="button" onClick={() => changeStatus("Under Review", "Resubmitted for review.")} className="px-4 py-2 bg-primary hover:bg-[#0c9593] text-white rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer">
-                  Resubmit for Review
-                </button>
-              )}
-              {status === "Under Review" && (
-                <>
-                  <button type="button" onClick={() => changeStatus("Needs Changes", "Returned to the owner for changes.", { verificationNote: "Please update and resubmit." })} className="px-4 py-2 rounded-xl text-xs font-semibold text-amber-700 border border-amber-300 hover:bg-amber-50 transition-colors cursor-pointer">
-                    Request Changes
-                  </button>
-                  <button type="button" onClick={() => changeStatus("Verified", "Evidence verified.", { verifiedBy: "Daniel Miller", verifiedAt: stamp(), verificationNote: "Verified against the associated controls." })} className="px-4 py-2 bg-primary hover:bg-[#0c9593] text-white rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer">
-                    Verify Evidence
-                  </button>
-                </>
-              )}
-              {["Verified", "Expired"].includes(status) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose();
-                    onEdit?.(evidence);
-                  }}
-                  className="px-4 py-2 bg-primary hover:bg-[#0c9593] text-white rounded-xl text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>Create New Version</span>
-                </button>
-              )}
-            </div>
+                  <div className="flex items-center gap-3 shrink-0 font-semibold">
+                    {/\.(pdf|png|jpe?g)$/i.test(version.name) && <a href={`${base}/file?version=${version.id}&inline=1`} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-dark-black/70 hover:text-primary"><Eye className="w-3.5 h-3.5" /> View</a>}
+                    <a href={`${base}/file?version=${version.id}`} className="flex items-center gap-1 text-dark-black/70 hover:text-primary"><Download className="w-3.5 h-3.5" /> Download</a>
+                  </div>
+                </li>
+              ))}
+            </ul>
           </div>
-        </motion.div>
-      </div>
-    </AnimatePresence>
+        </div>
+      )}
+    </DialogModal>
   );
 }

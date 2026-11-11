@@ -12,6 +12,7 @@ import {
   ChevronRight,
   ArrowLeft,
 } from "lucide-react";
+import { confirmReset } from "@/lib/alerts";
 import toast from "react-hot-toast";
 
 export const DEFAULT_GUARDRAILS = [
@@ -76,7 +77,8 @@ export default function AiSafetyGuardrailsSection({
     toast.success(`${target.title} is now ${target.enabled ? "Enabled" : "Disabled"}`);
   };
 
-  const handleResetToDefault = () => {
+  const handleResetToDefault = async () => {
+    if (!(await confirmReset("Safety Guardrails"))) return;
     setGuardrails(DEFAULT_GUARDRAILS);
     onChange("guardrails", DEFAULT_GUARDRAILS);
     toast.success("Safety guardrails reset to default!");

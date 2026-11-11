@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import AddPromptRuleModal from "./add-prompt-rule-modal";
 import AddCoachingPillarModal from "./add-coaching-pillar-modal";
+import { confirmReset } from "@/lib/alerts";
 import toast from "react-hot-toast";
 
 export const DEFAULT_DISCOVERY_STYLE = {
@@ -99,7 +100,7 @@ const DISCOVERY_FLOW_STEPS = [
 const DiscoveryStyleSection = ({
   data = {},
   onChange = () => {},
-  onResetDefaults = () => {},
+  onResetDefaults,
 }) => {
   const [uncoverModalOpen, setUncoverModalOpen] = useState(false);
   const [charModalOpen, setCharModalOpen] = useState(false);
@@ -146,7 +147,8 @@ const DiscoveryStyleSection = ({
     handleFieldChange("selectedCharacteristics", [...sel, item]);
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
+    if (!(await confirmReset("Discovery Style"))) return;
     if (onResetDefaults) {
       onResetDefaults();
     } else {
@@ -195,16 +197,16 @@ const DiscoveryStyleSection = ({
           <textarea
             value={currentData.goal}
             onChange={(e) => {
-              if (e.target.value.length <= 300) {
+              if (e.target.value.length <= 500) {
                 handleFieldChange("goal", e.target.value);
               }
             }}
             rows={2}
-            maxLength={300}
+            maxLength={500}
             className="w-full px-3.5 py-2.5 pb-6 rounded-xl border border-light-gray bg-white text-xs sm:text-[13px] text-dark-black focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none font-normal leading-relaxed"
           />
           <div className="absolute right-3 bottom-2 text-[10px] sm:text-[11px] font-medium text-medium-black/70 pointer-events-none">
-            {(currentData.goal || "").length}/300
+            {(currentData.goal || "").length}/500
           </div>
         </div>
       </div>
@@ -218,16 +220,16 @@ const DiscoveryStyleSection = ({
           <textarea
             value={currentData.questionAskingGuidance}
             onChange={(e) => {
-              if (e.target.value.length <= 300) {
+              if (e.target.value.length <= 500) {
                 handleFieldChange("questionAskingGuidance", e.target.value);
               }
             }}
             rows={2}
-            maxLength={300}
+            maxLength={500}
             className="w-full px-3.5 py-2.5 pb-6 rounded-xl border border-light-gray bg-white text-xs sm:text-[13px] text-dark-black focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none font-normal leading-relaxed"
           />
           <div className="absolute right-3 bottom-2 text-[10px] sm:text-[11px] font-medium text-medium-black/70 pointer-events-none">
-            {(currentData.questionAskingGuidance || "").length}/300
+            {(currentData.questionAskingGuidance || "").length}/500
           </div>
         </div>
       </div>
@@ -278,7 +280,7 @@ const DiscoveryStyleSection = ({
           How should the AI guide the flow of discovery?
         </label>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {DISCOVERY_FLOW_STEPS.map((s, idx) => {
             const Icon = s.icon;
             return (

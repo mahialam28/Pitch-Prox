@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import AddStrategicWordModal from "./add-strategic-word-modal";
 import AddStrategicPrincipleModal from "./add-strategic-principle-modal";
+import { confirmReset } from "@/lib/alerts";
 import toast from "react-hot-toast";
 
 export const DEFAULT_STRATEGIC_FRAMING = {
@@ -77,7 +78,7 @@ export const DEFAULT_STRATEGIC_FRAMING = {
 const StrategicFramingSection = ({
   data = {},
   onChange = () => {},
-  onResetDefaults = () => {},
+  onResetDefaults,
 }) => {
   const [wordModalOpen, setWordModalOpen] = useState(false);
   const [wordModalType, setWordModalType] = useState("encourage"); // "encourage" | "avoid"
@@ -168,7 +169,8 @@ const StrategicFramingSection = ({
     }
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
+    if (!(await confirmReset("Strategic Framing"))) return;
     if (onResetDefaults) {
       onResetDefaults();
     } else {
@@ -217,17 +219,17 @@ const StrategicFramingSection = ({
           <textarea
             value={currentData.emphasis}
             onChange={(e) => {
-              if (e.target.value.length <= 300) {
+              if (e.target.value.length <= 500) {
                 handleFieldChange("emphasis", e.target.value);
               }
             }}
             rows={2}
-            maxLength={300}
+            maxLength={500}
             placeholder="Define the primary strategic emphasis of every interaction..."
             className="w-full px-3.5 py-2.5 pb-6 rounded-xl border border-light-gray bg-white text-xs sm:text-[13px] text-dark-black focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none font-normal leading-relaxed"
           />
           <div className="absolute right-3 bottom-2 text-[10px] sm:text-[11px] font-medium text-medium-black/70 pointer-events-none">
-            {(currentData.emphasis || "").length}/300
+            {(currentData.emphasis || "").length}/500
           </div>
         </div>
       </div>
@@ -241,17 +243,17 @@ const StrategicFramingSection = ({
           <textarea
             value={currentData.guidance}
             onChange={(e) => {
-              if (e.target.value.length <= 300) {
+              if (e.target.value.length <= 500) {
                 handleFieldChange("guidance", e.target.value);
               }
             }}
             rows={2}
-            maxLength={300}
+            maxLength={500}
             placeholder="Describe how the AI provides guidance and cues to the agent..."
             className="w-full px-3.5 py-2.5 pb-6 rounded-xl border border-light-gray bg-white text-xs sm:text-[13px] text-dark-black focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none font-normal leading-relaxed"
           />
           <div className="absolute right-3 bottom-2 text-[10px] sm:text-[11px] font-medium text-medium-black/70 pointer-events-none">
-            {(currentData.guidance || "").length}/300
+            {(currentData.guidance || "").length}/500
           </div>
         </div>
       </div>

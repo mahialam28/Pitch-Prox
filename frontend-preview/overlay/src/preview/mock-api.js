@@ -7,6 +7,8 @@
 // can be reset by signing out.
 import FIXTURES from "./fixtures.json";
 import { PERSONAS, personaFromCookie, previewIdentity } from "./personas";
+import QRCode from "qrcode";
+import { checkPlaybook } from "@/lib/playbook-compile";
 
 const STORE_PREFIX = "pitchprox_preview_data_";
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -24,6 +26,12 @@ const COLLECTIONS = [
   { base: "/api/v1/support/tickets", key: "ticket", prefix: "ticket" },
   { base: "/api/v1/staff/tickets", key: "ticket", prefix: "ticket" },
   { base: "/api/v1/admin/employees", key: "employee", prefix: "user" },
+  { base: "/api/v1/campaigns/templates", key: "template", prefix: "tpl" },
+  { base: "/api/v1/campaigns/journeys", key: "journey", prefix: "jrny" },
+  { base: "/api/v1/campaigns/broadcasts", key: "campaign", prefix: "camp" },
+  { base: "/api/v1/mail/templates", key: "template", prefix: "mailtpl" },
+  { base: "/api/v1/announcements", key: "announcement", prefix: "ann" },
+  { base: "/api/v1/admin/playbook-resources", key: "resource", prefix: "plres" },
 ];
 
 function loadStore(persona) {
@@ -163,6 +171,8 @@ async function route(method, url, init) {
   }
 
   // ── Changes ──
+  const special = await previewFeatures(method, path, body, store, save, persona);
+  if (special) return special;
   if (path === "/api/v1/playbooks/active") {
     const playbooks = listOf(store["/api/v1/playbooks"]);
     playbooks.forEach((playbook) => { playbook.isActive = playbook.id === body.playbookId; });
@@ -257,6 +267,146 @@ async function route(method, url, init) {
 
   // Anything else (onboarding steps, invites, offboarding steps…) succeeds without changes
   return ok({ success: true });
+}
+
+// ── Phases 6-11 in the preview: calibration gate, Playbook Builder, follow-up emails,
+// notifications, Mail drafts, two-step login ──
+const placeholderLine = /\{([^{}]{1,60})\}/g;
+async function previewFeatures(method, path, body, store, save, persona) {
+  const user = PERSONAS[persona].user;
+
+  // Calibration: one saved session unlocks calling
+  if (path === "/api/v1/calibration/sessions" && method === "POST" && store["/api/v1/calibration/status"]) {
+    Object.assign(store["/api/v1/calibration/status"].json, { completed: true });
+  }
+  if (path === "/api/v1/calibration/defer") {
+    const status = (store["/api/v1/calibration/status"] ??= { status: 200, json: { required: true, completed: false, deferredAt: null, sessions: 0 } });
+    status.json.deferredAt = now();
+    save();
+    return ok(status.json);
+  }
+
+  // Playbook Builder: drafts saved in this browser; the real publish checks run here too
+  const BUILDS = "/api/v1/admin/playbook-builds";
+  if (path === `${BUILDS}/files`) return ok({ file: { id: newId("file"), name: body.file?.name ?? "file", size: "1 KB", type: (body.file?.name ?? "").split(".").pop(), url: "/api/v1/admin/playbook-builds/files/preview" } });
+  if (path === BUILDS && method === "POST") {
+    const build = { id: newId("build"), playbookId: body.playbookId ?? null, content: body.content ?? {}, currentStep: body.currentStep ?? 1, revision: 1, updatedAt: now(), createdAt: now() };
+    store[`${BUILDS}/${build.id}`] = { status: 200, json: { build } };
+    const list = (store[BUILDS] ??= { status: 200, json: { drafts: [], playbooks: [] } });
+    (list.json.drafts ??= []).unshift({ id: build.id, title: build.content.playbookName || "Untitled playbook", playbookId: build.playbookId, currentStep: build.currentStep, updatedAt: build.updatedAt, updatedBy: user.name });
+    save();
+    return json(201, { build });
+  }
+  const buildMatch = path.match(/^\/api\/v1\/admin\/playbook-builds\/([^/]+)(?:\/(check|publish))?$/);
+  if (buildMatch) {
+    const [, id, action] = buildMatch;
+    const entry = store[`${BUILDS}/${id}`];
+    const build = entry?.json?.build;
+    if (!build) return json(404, { error: "Draft not found." });
+    if (method === "DELETE") {
+      delete store[`${BUILDS}/${id}`];
+      if (store[BUILDS]?.json?.drafts) store[BUILDS].json.drafts = store[BUILDS].json.drafts.filter((draft) => draft.id !== id);
+      save();
+      return ok({ deleted: true });
+    }
+    if (action === "check") return ok({ ...checkPlaybook(build.content), revision: build.revision, nextVersion: 1, changedSections: null, releaseNotesRequired: false });
+    if (action === "publish") {
+      const check = checkPlaybook(build.content);
+      if (check.errors.length) return json(422, { ok: false, ...check });
+      if (check.warnings.length && !body.acknowledgeWarnings) return json(422, { ok: false, ...check, needsAcknowledgement: true });
+      return ok({ ok: true, playbookId: build.playbookId ?? newId("published"), version: 1 });
+    }
+    if (method === "PATCH" || method === "PUT") {
+      Object.assign(build, { content: body.content ?? build.content, currentStep: body.currentStep ?? build.currentStep, revision: build.revision + 1, updatedAt: now() });
+      const draft = store[BUILDS]?.json?.drafts?.find((item) => item.id === id);
+      if (draft) Object.assign(draft, { title: build.content.playbookName || draft.title, currentStep: build.currentStep, updatedAt: build.updatedAt, updatedBy: user.name });
+      save();
+      return ok({ build });
+    }
+  }
+
+  // After-call "Send an email": a draft from the active playbook's template, known facts only
+  if (path === "/api/v1/follow-up/draft") {
+    const template = store["/api/v1/follow-up"]?.json?.templates?.find((item) => item.id === body.templateId);
+    if (!template) return json(404, { error: "This email template isn't part of your active playbook." });
+    const name = String(body.leadName || "").trim();
+    const values = { "Prospect Name": name, "Prospect First Name": name.split(" ")[0], "Your Name": user.name, "Your First Name": user.name.split(" ")[0], "Your Email": user.email, "Your Company": user.organizationName ?? "PitchProX" };
+    const facts = body.facts ?? {};
+    const when = (value) => { const date = value ? new Date(value) : null; return date && !Number.isNaN(date.getTime()) ? { date: date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }), time: date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) } : null; };
+    const appointment = when(facts.appointmentAt);
+    const followUp = when(facts.followUpAt);
+    Object.assign(values, { "Appointment Date": appointment?.date, "Appointment Time": appointment?.time, "Follow-Up Date": followUp?.date, "Follow-Up Time": followUp?.time, "Agreed Channel": facts.channel?.toLowerCase(), "Requested Information": facts.requestedInformation, Concern: facts.concern, "Meeting Topic": facts.meetingTopic });
+    const left = new Set();
+    const lines = [];
+    for (const line of template.body.split("\n")) {
+      const missing = [...line.matchAll(placeholderLine)].map((match) => match[1]).filter((key) => !values[key]);
+      if (missing.length) { missing.forEach((key) => left.add(key)); if (/^\s*(Hi|Hello|Dear)\s+\{/.test(line)) lines.push("Hi,"); continue; }
+      lines.push(line.replace(placeholderLine, (_, key) => values[key]));
+    }
+    const subject = template.subject.replace(/\s*(?:\b(?:on|at|for|about)\s+)?\{([^{}]{1,60})\}/g, (whole, key) => (values[key] ? whole.replace(`{${key}}`, values[key]) : (left.add(key), ""))).trim();
+    return ok({ to: "", subject: subject || template.name, body: lines.join("\n").replace(/\n{3,}/g, "\n\n").trim(), templateName: template.name, playbook: store["/api/v1/follow-up"].json.playbook, contact: null, leftOut: [...left] });
+  }
+
+  // Notifications: read, unread, delete, read all
+  const NOTIFICATIONS = "/api/v1/notifications";
+  if (path.startsWith(NOTIFICATIONS)) {
+    const list = (store[NOTIFICATIONS] ??= { status: 200, json: { results: [], hasMore: false, unreadCount: 0 } });
+    const results = (list.json.results ??= []);
+    const recount = () => { list.json.unreadCount = results.filter((item) => item.isUnread).length; save(); return list.json.unreadCount; };
+    if (path === `${NOTIFICATIONS}/read-all`) { results.forEach((item) => { item.isUnread = false; }); return ok({ marked: 1, unreadCount: recount() }); }
+    const id = path.slice(NOTIFICATIONS.length + 1);
+    const item = results.find((row) => row.id === id);
+    if (!item) return json(404, { error: "Notification not found." });
+    if (method === "DELETE") { list.json.results = results.filter((row) => row.id !== id); return ok({ deleted: true, unreadCount: (list.json.unreadCount = list.json.results.filter((row) => row.isUnread).length, save(), list.json.unreadCount) }); }
+    item.isUnread = body.read === false;
+    return ok({ notification: item, unreadCount: recount() });
+  }
+
+  // Mail: drafts and sending (nothing leaves the preview)
+  if (path === "/api/v1/mail/messages" && method === "POST") {
+    const message = { id: newId("mail"), toEmail: body.to ?? "", cc: body.cc || null, bcc: body.bcc || null, subject: body.subject ?? "", body: body.body ?? "", trackOpens: body.trackOpens !== false, status: body.draft ? "draft" : "waiting", senderName: user.name, senderEmail: user.email, createdAt: now(), updatedAt: body.draft ? now() : null };
+    const list = (store[path] ??= { status: 200, json: { results: [], count: 0 } });
+    list.json.results = [message, ...(list.json.results ?? [])];
+    list.json.count = list.json.results.length;
+    store[`${path}/${message.id}`] = { status: 200, json: { message } };
+    save();
+    return json(201, { message });
+  }
+  const mailMatch = path.match(/^\/api\/v1\/mail\/messages\/([^/]+)$/);
+  if (mailMatch && method !== "GET") {
+    const id = mailMatch[1];
+    const list = store["/api/v1/mail/messages"];
+    const message = list?.json?.results?.find((item) => item.id === id);
+    if (!message) return json(404, { error: "Email not found." });
+    if (message.status !== "draft") return json(409, { error: "This email was already sent, so it can't be changed." });
+    if (method === "DELETE") { list.json.results = list.json.results.filter((item) => item.id !== id); delete store[path]; save(); return ok({ deleted: true }); }
+    Object.assign(message, { toEmail: body.to ?? message.toEmail, cc: body.cc || null, bcc: body.bcc || null, subject: body.subject ?? message.subject, body: body.body ?? message.body, trackOpens: body.trackOpens !== false, updatedAt: now() });
+    if (body.send) Object.assign(message, { status: "waiting", createdAt: now(), updatedAt: null });
+    store[path] = { status: 200, json: { message } };
+    save();
+    return ok({ message });
+  }
+
+  // Two-step login: a real QR code; any 6 digits confirm it in the preview
+  if (path.startsWith("/api/v1/me/mfa/")) {
+    const status = (store["/api/v1/me/mfa"] ??= { status: 200, json: { enabled: false, enabledAt: null, recoveryCodesLeft: 0 } });
+    const action = path.split("/").pop();
+    const codes = () => Array.from({ length: 10 }, () => Math.random().toString(36).slice(2, 14).replace(/(.{4})(.{4})(.{4})/, "$1-$2-$3"));
+    if (action === "setup") {
+      const secret = Array.from({ length: 32 }, () => "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"[Math.floor(Math.random() * 32)]).join("");
+      const otpauthUrl = `otpauth://totp/PitchProX:${encodeURIComponent(user.email)}?secret=${secret}&issuer=PitchProX`;
+      return ok({ secret: secret.match(/.{1,4}/g).join(" "), otpauthUrl, qrCode: await QRCode.toDataURL(otpauthUrl, { margin: 1, width: 220 }) });
+    }
+    if (action === "confirm") {
+      if (!/^\d{6}$/.test(String(body.code ?? ""))) return json(400, { error: "Enter the 6-digit code from your authenticator app." });
+      Object.assign(status.json, { enabled: true, enabledAt: now(), recoveryCodesLeft: 10 });
+      save();
+      return ok({ ...status.json, recoveryCodes: codes() });
+    }
+    if (action === "disable") { Object.assign(status.json, { enabled: false, enabledAt: null, recoveryCodesLeft: 0 }); save(); return ok(status.json); }
+    if (action === "recovery-codes") { status.json.recoveryCodesLeft = 10; save(); return ok({ ...status.json, recoveryCodes: codes() }); }
+  }
+  return null;
 }
 
 function to24(value = "09:00 AM") {

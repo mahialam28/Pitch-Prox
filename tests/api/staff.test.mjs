@@ -99,7 +99,7 @@ test("onboarding: steps in order, signatures, password rules, then the employee 
 });
 
 test("team onboarding has no voice step", needsAdmin, async () => {
-  const { employee } = await acceptedEmployee("team", "Support Manager");
+  const { employee } = await acceptedEmployee("team", "Support");
   const { json } = await employee.get("/api/v1/onboarding");
   assert.equal(json.variant, "team");
   assert.ok(!json.steps.some((step) => step.id === "voice"));
@@ -117,7 +117,7 @@ test("role changes, deactivation and reactivation", needsAdmin, async () => {
 });
 
 test("offboarding: ordered checklist, revoking access ends sessions, completion deactivates", needsAdmin, async () => {
-  const { employee, email, name } = await acceptedEmployee("off", "Support Manager");
+  const { employee, email, name } = await acceptedEmployee("off", "Support");
   // Finish onboarding quickly so the employee is active
   let { json: state } = await employee.get("/api/v1/onboarding");
   for (const policy of [...state.policies, ...state.aiPolicies]) await employee.post(`/api/v1/onboarding/policies/${policy.id}/acknowledge`, { signature: name });

@@ -110,7 +110,8 @@ test("Mail: saved as waiting, listed, private", async () => {
   const res = await a.post("/api/v1/mail/messages", { to: "sarah@example.com", cc: "boss@example.com; team@example.com", subject: "Hello", body: "Hi Sarah\n\nThanks!" });
   assert.equal(res.status, 201);
   const message = res.json.message;
-  assert.deepEqual([message.status, message.cc, message.senderName], ["queued", "boss@example.com, team@example.com", "Mods Admin"]);
+  assert.deepEqual([message.cc, message.senderName], ["boss@example.com, team@example.com", "Mods Admin"]);
+  assert.ok(["waiting", "sending"].includes(message.status), message.status);
   assert.equal((await a.get("/api/v1/mail/messages")).json.count, 1);
   assert.equal((await a.get(`/api/v1/mail/messages/${message.id}`)).json.message.subject, "Hello");
   assert.equal((await b.get(`/api/v1/mail/messages/${message.id}`)).status, 404);
@@ -196,6 +197,33 @@ test("Calibration: sessions are saved per user", async () => {
   assert.deepEqual([res.status, res.json.total, res.json.session.durationSeconds, res.json.session.roundsCompleted], [201, 1, 120, null]);
   assert.equal((await a.get("/api/v1/calibration/sessions")).json.total, 1);
   assert.equal((await b.get("/api/v1/calibration/sessions")).json.total, 0);
+});
+
+test("Calibration gate: new customers start there, can do it later, calling unlocks after one session", async () => {
+  const email = `gate-${RUN}@test.dev`;
+  const user = actor();
+  const signUp = await user.post("/api/v1/auth/sign-up", { name: "Gate Tester", email, password: "password-123" });
+  assert.equal(signUp.json.user.needsCalibration, true, "sign-up sends new customers to calibration");
+  assert.deepEqual((await user.get("/api/v1/calibration/status")).json, { required: true, completed: false, deferredAt: null, sessions: 0 });
+  assert.equal((await actor().post("/api/v1/auth/sign-in", { email, password: "password-123" })).json.user.needsCalibration, true, "and every sign-in until they choose");
+
+  const deferred = await user.post("/api/v1/calibration/defer");
+  assert.equal(deferred.status, 200);
+  assert.ok(deferred.json.deferredAt, "Do it later is remembered");
+  assert.equal(deferred.json.completed, false, "calling stays locked");
+  assert.equal((await actor().post("/api/v1/auth/sign-in", { email, password: "password-123" })).json.user.needsCalibration, false, "no more automatic trip to calibration");
+
+  await user.post("/api/v1/calibration/sessions", { durationSeconds: 300 });
+  const done = (await user.get("/api/v1/calibration/status")).json;
+  assert.deepEqual([done.completed, done.sessions], [true, 1], "one session unlocks calling");
+
+  const rep = await signIn("ryan.anderson@pitchprox.test", "password-123").catch(() => null);
+  if (rep) {
+    assert.equal((await rep.get("/api/v1/calibration/status")).json.required, false, "employees aren't gated");
+    assert.equal((await rep.post("/api/v1/calibration/defer")).status, 403);
+    assert.equal((await actor().post("/api/v1/auth/sign-in", { email: "ryan.anderson@pitchprox.test", password: "password-123" })).json.user.needsCalibration, false);
+  }
+  assert.equal((await actor().get("/api/v1/calibration/status")).status, 401);
 });
 
 // ── 1.9 Team member ──

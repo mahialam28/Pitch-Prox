@@ -21,7 +21,8 @@ import {
 import { RiArrowLeftLongLine, RiArrowRightLongLine } from "react-icons/ri";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { PENDING_CALL_KEY } from "@/utils.js/call-constants";
+import { queueCall } from "@/utils.js/start-call";
+import ChooseNumberDialog from "@/components/contacts/choose-number-dialog";
 import Dropdown from "@/components/shared/dropdown/dropdown";
 import AlertModal from "@/components/modals/alert-modal";
 import ImportProspectsModal from "./import-prospects-modal";
@@ -208,9 +209,12 @@ const followUpStatusOptions = [
 ];
 
 // Build relative mock dates so the Date Range filter demo works
+// Sample calls (until calling is connected). A fixed time of day keeps the server's and the
+// browser's rendering identical (the server works these out once, when it starts).
 const daysFromNow = (days) => {
   const d = new Date();
   d.setDate(d.getDate() - days);
+  d.setHours(9, 47, 0, 0);
   return d;
 };
 
@@ -438,27 +442,21 @@ export const CrmHistory = ({ onSelectProspect, prospects, onUpdateProspect, onDe
 
   // Hand the prospect over to the live-calling page (same bridge the header
   // uses: sessionStorage + navigate). The call auto-starts there with this info.
+  // Hand the prospect to Live Calling on its first callable number; the call remembers which one
   const handleStartCall = (prospect) => {
-    try {
-      sessionStorage.setItem(
-        PENDING_CALL_KEY,
-        JSON.stringify({
-          leadName: prospect.name || "",
-          phoneNumber: prospect.phoneNumber || "",
-          leadType: prospect.leadType || "",
-          address: prospect.propertyAddress || "",
-          playbook: "PitchProx Standard",
-        })
-      );
-    } catch {
-      /* sessionStorage unavailable — continue without prefill */
-    }
+    queueCall(prospect, "prospect");
     router.push(`${portal.base}/live-calling`);
   };
 
   const handleStageChange = (prospectId, newStage) => onUpdateProspect?.(prospectId, { stage: newStage });
   const handleStatusChange = (prospectId, newStatus) => onUpdateProspect?.(prospectId, { status: newStatus });
-  const handleOutcomeChange = (prospectId, newOutcome) => onUpdateProspect?.(prospectId, { outcome: newOutcome });
+  // "Wrong Number" is about one number: with several, ask which (the others stay callable)
+  const [wrongNumberFor, setWrongNumberFor] = useState(null);
+  const handleOutcomeChange = (prospectId, newOutcome) => {
+    const contact = (prospects ?? []).find((item) => item.id === prospectId);
+    if (newOutcome === "Wrong Number" && contact?.phones?.length > 1) return setWrongNumberFor(contact);
+    return onUpdateProspect?.(prospectId, { outcome: newOutcome });
+  };
 
   const tabScrollRef = useRef(null);
   const activeTabIndex = TABS.findIndex((t) => t.key === activeTab);
@@ -645,6 +643,16 @@ export const CrmHistory = ({ onSelectProspect, prospects, onUpdateProspect, onDe
 
   return (
     <div className="bg-white rounded-2xl border border-light-gray shadow-sm w-full p-4 sm:p-6">
+      {wrongNumberFor && (
+        <ChooseNumberDialog
+          contact={wrongNumberFor}
+          onClose={() => setWrongNumberFor(null)}
+          onChoose={(phoneId) => {
+            onUpdateProspect?.(wrongNumberFor.id, { outcome: "Wrong Number", phoneId });
+            setWrongNumberFor(null);
+          }}
+        />
+      )}
       {/* Top Navigation & Actions Bar */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6 border-b border-light-gray pb-4">
         {/* Navigation Tabs */}

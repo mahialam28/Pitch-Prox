@@ -1,87 +1,82 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
 import {
   MoreVertical,
-  DollarSign,
-  Mail,
   ShieldCheck,
-  Zap,
-  UserPlus,
   AlertTriangle,
-  Calendar,
+  GraduationCap,
+  MessageSquare,
+  LifeBuoy,
+  CheckCircle2,
+  UserPlus,
+  Bell,
   Check,
   Trash2,
 } from "lucide-react";
+import { apiRequest } from "@/lib/client-api";
 import { motion, AnimatePresence } from "framer-motion";
 import Title from "@/components/texts/title";
 import Text from "@/components/texts/text";
 
-const initialNotifications = [
-  {
-    id: "1",
-    title: "Failed payment detected",
-    description: "3 failed retry attempts detected on account ACC-2031.",
-    time: "2m ago",
-    isUnread: true,
-    type: "payment",
-  },
-  {
-    id: "2",
-    title: "Campaign delivery completed",
-    description: '"Product Update - May" was sent successfully to 4,685 recipients.',
-    time: "15m ago",
-    isUnread: true,
-    type: "campaign",
-  },
-  {
-    id: "3",
-    title: "Compliance acknowledgment pending",
-    description: "New SOC 2 policy acknowledgment is awaiting your review.",
-    time: "1h ago",
-    isUnread: true,
-    type: "compliance",
-  },
-  {
-    id: "4",
-    title: "AI guidance latency spike",
-    description: "High latency detected in prompt responses for last 30 minutes.",
-    time: "2h ago",
-    isUnread: true,
-    type: "latency",
-  },
-  {
-    id: "5",
-    title: "New user signed up",
-    description: "John Smith just signed up for a ProX plan.",
-    time: "3h ago",
-    isUnread: true,
-    type: "user",
-  },
-  {
-    id: "6",
-    title: "Suspicious login detected",
-    description: "New login from unknown device in Chicago, IL.",
-    time: "Yesterday",
-    isUnread: false,
-    type: "security",
-  },
-  {
-    id: "7",
-    title: "Scheduled maintenance",
-    description: "System maintenance scheduled for May 22, 2:00 - 4:00 AM UTC.",
-    time: "Yesterday",
-    isUnread: false,
-    type: "maintenance",
-  },
-];
+// "2m ago", "3h ago", "Yesterday", "Nov 3"; `now` is when the list was loaded
+const timeAgo = (value, now) => {
+  const minutes = Math.max(0, Math.round((now - new Date(value).getTime()) / 60000));
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  if (hours < 48) return "Yesterday";
+  return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+};
 
-const NotificationsDropdown = ({ isOpen, onClose }) => {
-  const [notifications, setNotifications] = useState(initialNotifications);
+// Real notifications (GET /api/v1/notifications). onUnreadChange keeps the bell's badge in step.
+const NotificationsDropdown = ({ isOpen, onClose, onUnreadChange = () => {} }) => {
+  const router = useRouter();
+  const [notifications, setNotifications] = useState([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [loadedAt, setLoadedAt] = useState(0);
   const [activeMenuId, setActiveMenuId] = useState(null);
   const menuRef = useRef(null);
   const panelRef = useRef(null);
 
+  // Load the latest each time the panel opens (state updates happen after the request, not in the effect body)
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    let cancelled = false;
+    const timer = setTimeout(() => !cancelled && setLoading(true), 0);
+    apiRequest("/api/v1/notifications?limit=20")
+      .then((result) => {
+        if (cancelled) return;
+        setNotifications(result.results);
+        setHasMore(result.hasMore);
+        setLoadedAt(Date.now());
+        setLoadError("");
+        onUnreadChange(result.unreadCount);
+      })
+      .catch((error) => !cancelled && setLoadError(error.message))
+      .finally(() => !cancelled && setLoading(false));
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [isOpen, onUnreadChange]);
+
+  const loadOlder = async () => {
+    const last = notifications[notifications.length - 1];
+    if (!last) return;
+    try {
+      const result = await apiRequest(`/api/v1/notifications?limit=20&before=${encodeURIComponent(last.createdAt)}`);
+      setNotifications((prev) => [...prev, ...result.results.filter((item) => !prev.some((existing) => existing.id === item.id))]);
+      setHasMore(result.hasMore);
+    } catch (error) {
+      toast.error(error.message);
+    }
+  };
 
   // Close panel when clicking outside
   useEffect(() => {
@@ -120,40 +115,67 @@ const NotificationsDropdown = ({ isOpen, onClose }) => {
     };
   }, [activeMenuId]);
 
-  const handleMarkAllAsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, isUnread: false })));
+  const handleMarkAllAsRead = async () => {
+    try {
+      await apiRequest("/api/v1/notifications/read-all", { method: "POST" });
+      setNotifications((prev) => prev.map((n) => ({ ...n, isUnread: false })));
+      onUnreadChange(0);
+    } catch (error) {
+      toast.error(error.message);
+    }
   };
 
-  const handleMarkAsRead = (id) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, isUnread: false } : n))
-    );
+  const handleMarkAsRead = async (id, read = true) => {
     setActiveMenuId(null);
+    try {
+      const result = await apiRequest(`/api/v1/notifications/${id}`, { method: "PATCH", body: { read } });
+      setNotifications((prev) => prev.map((n) => (n.id === id ? result.notification : n)));
+      onUnreadChange(result.unreadCount);
+    } catch (error) {
+      toast.error(error.message);
+    }
   };
 
-  const handleDelete = (id) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  const handleDelete = async (id) => {
     setActiveMenuId(null);
+    try {
+      const result = await apiRequest(`/api/v1/notifications/${id}`, { method: "DELETE" });
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+      onUnreadChange(result.unreadCount);
+    } catch (error) {
+      toast.error(error.message);
+    }
+  };
+
+  // Opening a notification marks it read and goes to the page it's about
+  const handleOpen = (item) => {
+    if (item.isUnread) handleMarkAsRead(item.id);
+    if (item.link) {
+      onClose();
+      router.push(item.link);
+    }
   };
 
   const getIconConfig = (type) => {
     switch (type) {
-      case "payment":
-        return { icon: DollarSign, bg: "bg-light-teal", text: "text-primary" };
-      case "campaign":
-        return { icon: Mail, bg: "bg-blue-100", text: "text-blue-600" };
-      case "compliance":
+      case "policy":
         return { icon: ShieldCheck, bg: "bg-orange-100", text: "text-orange-600" };
-      case "latency":
-        return { icon: Zap, bg: "bg-purple-100", text: "text-purple-600" };
-      case "user":
-        return { icon: UserPlus, bg: "bg-blue-100", text: "text-indigo-600" };
-      case "security":
+      case "training":
+        return { icon: GraduationCap, bg: "bg-blue-100", text: "text-blue-600" };
+      case "incident":
         return { icon: AlertTriangle, bg: "bg-red/10", text: "text-red" };
-      case "maintenance":
-        return { icon: Calendar, bg: "bg-light-teal", text: "text-primary" };
+      case "coaching":
+        return { icon: MessageSquare, bg: "bg-purple-100", text: "text-purple-600" };
+      case "ticket":
+        return { icon: LifeBuoy, bg: "bg-light-teal", text: "text-primary" };
+      case "approval":
+        return { icon: CheckCircle2, bg: "bg-emerald-50", text: "text-emerald-600" };
+      case "lead":
+        return { icon: UserPlus, bg: "bg-blue-100", text: "text-blue-600" };
+      case "privacy":
+        return { icon: ShieldCheck, bg: "bg-red/10", text: "text-red" };
       default:
-        return { icon: Mail, bg: "bg-light-gray", text: "text-medium-black" };
+        return { icon: Bell, bg: "bg-light-gray", text: "text-medium-black" };
     }
   };
 
@@ -186,6 +208,7 @@ const NotificationsDropdown = ({ isOpen, onClose }) => {
               </div>
               <button
                 onClick={handleMarkAllAsRead}
+                disabled={unreadCount === 0}
                 className="text-[11px] font-medium text-primary hover:text-medium-teal transition-colors cursor-pointer shrink-0"
               >
                 Mark all read
@@ -194,10 +217,16 @@ const NotificationsDropdown = ({ isOpen, onClose }) => {
 
             {/* Notification List */}
             <div className="flex-1 overflow-y-auto divide-y divide-light-gray/60">
-              {notifications.length === 0 ? (
+              {loadError ? (
+                <div className="p-8 text-center">
+                  <Text variant="small" className="!font-normal !text-red">
+                    {loadError}
+                  </Text>
+                </div>
+              ) : notifications.length === 0 ? (
                 <div className="p-8 text-center">
                   <Text variant="small" className="!font-normal">
-                    No notifications available
+                    {loading ? "Loading…" : "You're all caught up. Nothing new."}
                   </Text>
                 </div>
               ) : (
@@ -223,24 +252,33 @@ const NotificationsDropdown = ({ isOpen, onClose }) => {
                         <IconComponent className="h-4 w-4 sm:h-5 sm:w-5 stroke-[2.25]" />
                       </div>
 
-                      {/* Content */}
-                      <div className="flex-1 min-w-0">
+                      {/* Content: opens the page it's about (and marks it read) */}
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => handleOpen(item)}
+                        onKeyDown={(event) => (event.key === "Enter" || event.key === " ") && (event.preventDefault(), handleOpen(item))}
+                        className="flex-1 min-w-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-md"
+                      >
                         <div className="flex items-baseline justify-between gap-1.5 sm:gap-2">
-                          <Title variant="small" className="!text-sm !text-dark-black/80 !font-bold truncate">
+                          <Title variant="small" className="!text-sm !text-dark-black/80 !font-bold line-clamp-2 break-words">
                             {item.title}
                           </Title>
                           <Text variant="smaller" className="!font-normal !text-light-black flex-shrink-0 whitespace-nowrap">
-                            {item.time}
+                            {timeAgo(item.createdAt, loadedAt)}
                           </Text>
                         </div>
-                        <Text variant="smaller" className="!font-normal leading-relaxed mt-0.5">
-                          {item.description}
-                        </Text>
+                        {item.body && (
+                          <Text variant="smaller" className="!font-normal leading-relaxed mt-0.5 line-clamp-2">
+                            {item.body}
+                          </Text>
+                        )}
                       </div>
 
                       {/* Three dots menu */}
                       <div className="relative flex-shrink-0 self-start pt-0.5">
                         <button
+                          aria-label="Notification options"
                           onClick={() => setActiveMenuId(activeMenuId === item.id ? null : item.id)}
                           className="p-1 rounded-md text-light-black hover:text-medium-black hover:bg-light-gray transition-all cursor-pointer"
                         >
@@ -251,14 +289,13 @@ const NotificationsDropdown = ({ isOpen, onClose }) => {
                             ref={menuRef}
                             className="absolute right-0 mt-1 w-40 bg-white rounded-xl border border-light-gray shadow-xl py-1.5 z-10"
                           >
-                            {item.isUnread && (
-                              <button
-                                onClick={() => handleMarkAsRead(item.id)}className="w-full px-3 py-2 text-left text-xs font-medium text-medium-black hover:bg-light-gray flex items-center gap-2 transition-colors cursor-pointer"
-                                >
-                                  <Check className="h-3.5 w-3.5 text-primary" />
-                                  Mark as read
-                              </button>
-                            )}
+                            <button
+                              onClick={() => handleMarkAsRead(item.id, item.isUnread)}
+                              className="w-full px-3 py-2 text-left text-xs font-medium text-medium-black hover:bg-light-gray flex items-center gap-2 transition-colors cursor-pointer"
+                            >
+                              <Check className="h-3.5 w-3.5 text-primary" />
+                              {item.isUnread ? "Mark as read" : "Mark as unread"}
+                            </button>
                             <button
                               onClick={() => handleDelete(item.id)}className="w-full px-3 py-2 text-left text-xs font-medium text-red hover:bg-red/5 flex items-center gap-2 transition-colors cursor-pointer"
                               >
@@ -274,12 +311,14 @@ const NotificationsDropdown = ({ isOpen, onClose }) => {
               )}
             </div>
 
-            {/* Footer */}
-            <div className="border-t border-light-gray/60 p-3 sm:p-4 text-center bg-white">
-              <button className="text-xs font-bold text-primary hover:text-medium-teal transition-colors w-full py-1 cursor-pointer">
-                View all notifications
-              </button>
-            </div>
+            {/* Footer: older notifications (kept 90 days once read) */}
+            {hasMore && (
+              <div className="border-t border-light-gray/60 p-3 sm:p-4 text-center bg-white">
+                <button onClick={loadOlder} className="text-xs font-bold text-primary hover:text-medium-teal transition-colors w-full py-1 cursor-pointer">
+                  Show older notifications
+                </button>
+              </div>
+            )}
           </div>
         </motion.div>
       )}

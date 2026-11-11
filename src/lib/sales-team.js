@@ -1,6 +1,7 @@
 import { createId, query } from "@/lib/db";
 import { ApiError } from "@/lib/api";
 import { recordAudit } from "@/lib/audit";
+import { notify } from "@/lib/notifications";
 import { requireSection } from "@/lib/permissions";
 import { getEmployee, updateEmployee } from "@/lib/staff";
 import { paged } from "@/lib/listing";
@@ -538,6 +539,8 @@ export async function addRepNote(actor, id, body) {
     [note.id, id, actor.id, actor.name, kind, note.type ?? null, note.title ?? null, note.body, note.relatedTo ?? null, note.priority ?? null, note.dueDate ?? null]
   );
   const [rep] = await query("SELECT name FROM users WHERE id = ?", [id]);
+  // Coaching notes are for the rep; private manager notes never notify them
+  if (kind === "coaching") await notify([id], { type: "coaching", title: `New coaching note: ${note.title}`, body: `${actor.name}${note.priority ? ` · ${note.priority} priority` : ""}${note.dueDate ? ` · due ${note.dueDate}` : ""}`, link: "/internal-sales-representative/dashboard", entityType: "rep_note", entityId: note.id, actor });
   await recordAudit(actor, { action: kind === "coaching" ? "team.coaching_note_added" : "team.manager_note_added", entityType: "user", entityId: id, summary: kind === "coaching" ? `Added a coaching note for ${rep.name}: ${note.title}` : `Added a private manager note for ${rep.name}` });
   const [saved] = await query(`SELECT ${NOTE_COLUMNS} FROM rep_notes WHERE id = ?`, [note.id]);
   return saved;

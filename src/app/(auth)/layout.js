@@ -94,8 +94,8 @@ const DEFAULT_RIGHT_CONTENT = RIGHT_CONTENT["/sign-in"];
 const BRANDING = {
   logoText: "PitchProX",
   logoSrc: logo,
-  logoWidth: 200,
-  logoHeight: 200,
+  logoWidth: 280,
+  logoHeight: 60,
 };
 
 const AuthLayout = ({ children }) => {

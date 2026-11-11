@@ -53,7 +53,7 @@ export default function CalibrationPage() {
           <CalibrationHeader />
 
           {/* Main Workspace Grid split into Action Center and Side Trackers */}
-          <div className="w-full flex flex-col lg:flex-row gap-6 items-start">
+          <div className="w-full flex flex-col xl:flex-row gap-6 items-start">
             {/* Left Interaction Workspace Column */}
             <div className="flex-1 flex flex-col gap-6 w-full">
               {/* Wraps SimulationHeader to listen for 'End Calibration' click events */}
@@ -67,7 +67,7 @@ export default function CalibrationPage() {
             </div>
 
             {/* Right Side Panel / Metrics Insights Column */}
-            <div className="w-full lg:w-[380px] shrink-0 flex flex-col gap-6">
+            <div className="w-full xl:w-[380px] shrink-0 flex flex-col gap-6">
               <SimulationSidePanel />
               <ScoreMetricsCard />
             </div>
@@ -92,14 +92,14 @@ export default function CalibrationPage() {
           <RoundPerformanceTimeline />
 
           {/* Bottom layout split block */}
-          <div className="w-full flex flex-col lg:flex-row gap-6 items-stretch">
+          <div className="w-full flex flex-col xl:flex-row gap-6 items-stretch">
             {/* Left Grid Bar Breakdown */}
             <div className="flex-1 w-full">
               <ScoreBreakdownGrid />
             </div>
             
             {/* Right Quick Action steps column container */}
-            <div className="w-full lg:w-[380px] shrink-0">
+            <div className="w-full xl:w-[380px] shrink-0">
               <WhatsNextCard />
             </div>
           </div>

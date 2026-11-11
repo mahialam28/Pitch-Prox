@@ -2,9 +2,11 @@
 
 import React from "react";
 import { FileText, FileSpreadsheet } from "lucide-react";
-import { recentUploadsData } from "../evidence-data";
+import { formatDate } from "@/lib/client-api";
 
-export default function RecentUploads() {
+// recent: the latest uploads (archived left out); onSelect opens the item
+export default function RecentUploads({ recent, onSelect }) {
+  const recentUploadsData = (recent ?? []).map((item) => ({ id: item.id, name: item.name, owner: `${item.uploadedBy ?? "—"} · ${item.file.name}`, date: formatDate(item.uploadedAt), fileType: item.file.type }));
   return (
     <div className="bg-white rounded-2xl border border-light-gray shadow-xs p-5 sm:p-6 w-full space-y-4">
       <h3 className="text-sm sm:text-base font-bold text-dark-black/85 font-secondary">
@@ -12,9 +14,14 @@ export default function RecentUploads() {
       </h3>
 
       <div className="space-y-3.5 divide-y divide-light-gray/40">
+        {recent && recentUploadsData.length === 0 && <p className="text-xs text-light-black">Nothing uploaded yet.</p>}
         {recentUploadsData.map((item, idx) => (
           <div
             key={item.id || idx}
+            role="button"
+            tabIndex={0}
+            onClick={() => onSelect?.(item.id)}
+            onKeyDown={(event) => event.key === "Enter" && onSelect?.(item.id)}
             className={`flex items-center justify-between gap-3 ${
               idx > 0 ? "pt-3.5" : ""
             } hover:opacity-80 transition-opacity cursor-pointer`}

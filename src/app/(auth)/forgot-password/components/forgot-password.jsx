@@ -24,18 +24,19 @@ const ForgotPasswordForm = () => {
     },
   });
 
+  const [error, setError] = useState("");
+
+  // Same answer whether or not the address has an account
   const onSubmit = async (data) => {
     setLoading(true);
+    setError("");
     try {
-      console.log("Forgot Password Data submitted:", data);
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Show success message
+      const response = await fetch("/api/v1/auth/forgot-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: data.email }) });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "We couldn't send the link. Please try again.");
       setEmailSent(true);
-    } catch (error) {
-      console.error("Forgot Password Error:", error);
+    } catch (submitError) {
+      setError(submitError.message);
     } finally {
       setLoading(false);
     }
@@ -67,8 +68,8 @@ const ForgotPasswordForm = () => {
             Check Your Email
           </Text>
           <Text variant="small" className="max-w-sm mx-auto mb-6">
-            We&apos;ve sent a password reset link to your email address. 
-            Please check your inbox and follow the instructions.
+            If an account uses this email, we&apos;ve sent it a password reset link.
+            It expires in 1 hour. Check your inbox (and spam folder).
           </Text>
           
           <Link
@@ -112,6 +113,12 @@ const ForgotPasswordForm = () => {
             },
           }}
         />
+
+        {error && (
+          <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+            {error}
+          </p>
+        )}
 
         {/* Action Button with Loading State */}
         <ActionButton

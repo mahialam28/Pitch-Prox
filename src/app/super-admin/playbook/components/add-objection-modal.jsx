@@ -14,11 +14,11 @@ import {
   Sparkles,
 } from "lucide-react";
 import { userLeadTypeOptions } from "@/utils.js/lead-options";
+import { OBJECTION_ROOTS, OBJECTION_SUBTYPES, normalizeObjection } from "@/lib/playbook-compile";
 
-// Objection categories (an objection can belong to up to two)
-export const OBJECTION_CATEGORIES = ["Risk", "Financial", "Relationship", "Logistics", "Identity / Emotional"].map((value) => ({ value, label: value }));
-// Older sample categories map onto the new ones
-const LEGACY_CATEGORY = { Pricing: "Financial", Timing: "Logistics", Competition: "Relationship", Privacy: "Risk", Disinterest: "Identity / Emotional", Information: "Logistics", Authority: "Relationship" };
+// Spec 12 §6.4: one root category (Financial, Risk, Logistics, Relationship) plus a subtype for
+// anything more specific. Older labels (Pricing, Identity / Emotional…) are converted on open.
+export const OBJECTION_CATEGORIES = OBJECTION_ROOTS.map((value) => ({ value, label: value }));
 const ALL_LEAD_TYPES = "All Lead Types";
 const ANY_STAGE = "Any Stage";
 
@@ -54,10 +54,9 @@ const AddObjectionModal = ({
   // The parent remounts this modal (key) per objection, so state starts from it
   const [title, setTitle] = useState(editObjection?.title || "");
   const [subtitle, setSubtitle] = useState(editObjection?.subtitle || "");
-  const [categories, setCategories] = useState(() => {
-    const list = editObjection?.categories ?? (editObjection?.category ? [editObjection.category] : ["Financial"]);
-    return list.map((category) => LEGACY_CATEGORY[category] ?? category).slice(0, 2);
-  });
+  const normalized = editObjection ? normalizeObjection(editObjection) : null;
+  const [rootCategory, setRootCategory] = useState(normalized?.rootCategory ?? "Financial");
+  const [subtype, setSubtype] = useState(normalized?.subtype ?? "");
   const [stagesSelected, setStagesSelected] = useState(() => {
     const list = editObjection?.stages ?? (editObjection?.stage ? [editObjection.stage] : [ANY_STAGE]);
     return list;
@@ -72,8 +71,6 @@ const AddObjectionModal = ({
   const [goal, setGoal] = useState(editObjection?.goal || "");
   const [selectedIconIdx, setSelectedIconIdx] = useState(() => Math.max(0, OBJECTION_ICONS.findIndex((icon) => icon.id === editObjection?.iconType)));
 
-  const toggleCategory = (value) =>
-    setCategories((current) => (current.includes(value) ? (current.length > 1 ? current.filter((item) => item !== value) : current) : [...current, value].slice(-2)));
   const toggleStage = (value) =>
     setStagesSelected((current) => {
       if (value === ANY_STAGE) return [ANY_STAGE];
@@ -99,9 +96,10 @@ const AddObjectionModal = ({
     const objectionData = {
       ...(editObjection ? { id: editObjection.id } : {}),
       title: title.trim(),
-      subtitle: subtitle.trim() || `${categories[0]} Objection`,
-      category: categories[0],
-      categories,
+      subtitle: subtitle.trim() || `${subtype.trim() || rootCategory} Objection`,
+      category: rootCategory,
+      rootCategory,
+      subtype: subtype.trim() || null,
       stage: stagesSelected[0],
       stages: stagesSelected,
       leadTypes,
@@ -179,20 +177,35 @@ const AddObjectionModal = ({
               />
             </div>
 
-            {/* Objection Category: up to two */}
-            <div>
-              <label className="block text-xs font-medium text-medium-black mb-1.5">
-                Objection Category <span className="font-normal text-light-black">(choose up to 2)</span>
-              </label>
-              <div className="flex flex-wrap gap-1.5">
-                {OBJECTION_CATEGORIES.map((option) => {
-                  const active = categories.includes(option.value);
-                  return (
-                    <button key={option.value} type="button" aria-pressed={active} onClick={() => toggleCategory(option.value)} className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-colors cursor-pointer ${active ? "bg-primary/10 border-primary text-primary" : "bg-white border-light-gray text-medium-black hover:border-primary/40"}`}>
-                      {option.label}
-                    </button>
-                  );
-                })}
+            {/* Root Category (one of four) + Subtype (Spec 12 §6.4) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div>
+                <span className="block text-xs font-medium text-medium-black mb-1.5">Root Category</span>
+                <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Root category">
+                  {OBJECTION_CATEGORIES.map((option) => {
+                    const active = rootCategory === option.value;
+                    return (
+                      <button key={option.value} type="button" role="radio" aria-checked={active} onClick={() => setRootCategory(option.value)} className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-colors cursor-pointer ${active ? "bg-primary/10 border-primary text-primary" : "bg-white border-light-gray text-medium-black hover:border-primary/40"}`}>
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <label htmlFor="objection-subtype" className="block text-xs font-medium text-medium-black mb-1.5">Subtype</label>
+                <input
+                  id="objection-subtype"
+                  list="objection-subtypes"
+                  value={subtype}
+                  maxLength={60}
+                  onChange={(e) => setSubtype(e.target.value)}
+                  placeholder="e.g. Affordability, Timing, Loyalty"
+                  className="w-full px-3.5 py-2 rounded-xl border border-light-gray text-xs sm:text-sm font-normal focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 text-dark-black/80 placeholder:text-light-black"
+                />
+                <datalist id="objection-subtypes">
+                  {OBJECTION_SUBTYPES.map((item) => <option key={item} value={item} />)}
+                </datalist>
               </div>
             </div>
 

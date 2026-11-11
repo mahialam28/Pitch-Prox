@@ -13,7 +13,11 @@ import {
 } from "lucide-react";
 import AddPromptRuleModal from "./add-prompt-rule-modal";
 import AddCoachingPillarModal from "./add-coaching-pillar-modal";
+import { confirmReset } from "@/lib/alerts";
 import toast from "react-hot-toast";
+
+// Kept outside the component: impure calls aren't allowed during render
+const newItemId = () => Date.now();
 
 export const DEFAULT_TRUST_BUILDING_STYLE = {
   whatBuildsTrust:
@@ -59,7 +63,7 @@ export const DEFAULT_TRUST_BUILDING_STYLE = {
 const TrustBuildingStyleSection = ({
   data = {},
   onChange = () => {},
-  onResetDefaults = () => {},
+  onResetDefaults,
 }) => {
   const [avoidModalOpen, setAvoidModalOpen] = useState(false);
   const [signalModalOpen, setSignalModalOpen] = useState(false);
@@ -103,11 +107,12 @@ const TrustBuildingStyleSection = ({
     const principles = currentData.trustPrinciples || [];
     handleFieldChange("trustPrinciples", [
       ...principles,
-      { id: Date.now(), text },
+      { id: newItemId(), text },
     ]);
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
+    if (!(await confirmReset("Trust-Building Style"))) return;
     if (onResetDefaults) {
       onResetDefaults();
     } else {
@@ -156,16 +161,16 @@ const TrustBuildingStyleSection = ({
           <textarea
             value={currentData.whatBuildsTrust}
             onChange={(e) => {
-              if (e.target.value.length <= 300) {
+              if (e.target.value.length <= 500) {
                 handleFieldChange("whatBuildsTrust", e.target.value);
               }
             }}
             rows={2}
-            maxLength={300}
+            maxLength={500}
             className="w-full px-3.5 py-2.5 pb-6 rounded-xl border border-light-gray bg-white text-xs sm:text-[13px] text-dark-black focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none font-normal leading-relaxed"
           />
           <div className="absolute right-3 bottom-2 text-[10px] sm:text-[11px] font-medium text-medium-black/70 pointer-events-none">
-            {(currentData.whatBuildsTrust || "").length}/300
+            {(currentData.whatBuildsTrust || "").length}/500
           </div>
         </div>
       </div>
@@ -179,16 +184,16 @@ const TrustBuildingStyleSection = ({
           <textarea
             value={currentData.howEstablishCredibility}
             onChange={(e) => {
-              if (e.target.value.length <= 300) {
+              if (e.target.value.length <= 500) {
                 handleFieldChange("howEstablishCredibility", e.target.value);
               }
             }}
             rows={2}
-            maxLength={300}
+            maxLength={500}
             className="w-full px-3.5 py-2.5 pb-6 rounded-xl border border-light-gray bg-white text-xs sm:text-[13px] text-dark-black focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none font-normal leading-relaxed"
           />
           <div className="absolute right-3 bottom-2 text-[10px] sm:text-[11px] font-medium text-medium-black/70 pointer-events-none">
-            {(currentData.howEstablishCredibility || "").length}/300
+            {(currentData.howEstablishCredibility || "").length}/500
           </div>
         </div>
       </div>
@@ -202,16 +207,16 @@ const TrustBuildingStyleSection = ({
           <textarea
             value={currentData.howShowEmpathy}
             onChange={(e) => {
-              if (e.target.value.length <= 300) {
+              if (e.target.value.length <= 500) {
                 handleFieldChange("howShowEmpathy", e.target.value);
               }
             }}
             rows={2}
-            maxLength={300}
+            maxLength={500}
             className="w-full px-3.5 py-2.5 pb-6 rounded-xl border border-light-gray bg-white text-xs sm:text-[13px] text-dark-black focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none font-normal leading-relaxed"
           />
           <div className="absolute right-3 bottom-2 text-[10px] sm:text-[11px] font-medium text-medium-black/70 pointer-events-none">
-            {(currentData.howShowEmpathy || "").length}/300
+            {(currentData.howShowEmpathy || "").length}/500
           </div>
         </div>
       </div>

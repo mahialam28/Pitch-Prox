@@ -16,9 +16,12 @@ import {
 } from "@/utils.js/lead-options";
 
 // ── Relative mock dates so filters demo correctly ──
+// Sample calls (until calling is connected). A fixed time of day keeps the server's and the
+// browser's rendering identical (the server works these out once, when it starts).
 const daysFromNow = (days) => {
   const d = new Date();
   d.setDate(d.getDate() - days);
+  d.setHours(9, 47, 0, 0);
   return d;
 };
 
@@ -28,7 +31,8 @@ const formatDate = (d) =>
 const formatTime = (d) =>
   d.toLocaleString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
 
-const initialCallsData = [
+// Built per visit (a function), so the sample dates are always relative to today
+const initialCallsData = () => [
   {
     id: "1",
     date: formatDate(daysFromNow(0)),
@@ -706,10 +710,10 @@ const CallHistory = () => {
                   {/* Date & Time */}
                   <td className="p-4 pl-6 align-middle w-[130px]">
                     <div className="flex flex-col">
-                      <span className="text-sm font-bold text-dark-black/90">
+                      <span className="text-sm font-bold text-dark-black/90" suppressHydrationWarning>
                         {call.date}
                       </span>
-                      <span className="text-[11px] font-semibold text-light-black mt-0.5">
+                      <span className="text-[11px] font-semibold text-light-black mt-0.5" suppressHydrationWarning>
                         {call.time}
                       </span>
                       {activeTab === "followUpQueue" && call.followUpDate && (

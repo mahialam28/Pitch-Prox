@@ -1,33 +1,14 @@
 "use client";
 
 import React from "react";
-import { Download, FileText, FileSpreadsheet, FileCode } from "lucide-react";
+import { Download, FileSpreadsheet } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-export default function FileFormatCard({
-  selectedFormat = "excel",
-  setSelectedFormat,
-  onExport,
-}) {
+export default function FileFormatCard({ selectedFormat = "csv", setSelectedFormat, onExport, disabled = false }) {
   const router = useRouter();
 
-  const formats = [
-    {
-      id: "csv",
-      label: "CSV",
-      icon: FileText,
-    },
-    {
-      id: "excel",
-      label: "Excel (.xlsx)",
-      icon: FileSpreadsheet,
-    },
-    {
-      id: "pdf",
-      label: "PDF",
-      icon: FileCode,
-    },
-  ];
+  // CSV opens in Excel, Numbers and Google Sheets
+  const formats = [{ id: "csv", label: "CSV (opens in Excel)", icon: FileSpreadsheet }];
 
   return (
     <div className="bg-white rounded-2xl border border-light-gray p-5 sm:p-6 shadow-xs flex flex-col justify-between gap-8 h-full min-h-[420px]">
@@ -37,7 +18,7 @@ export default function FileFormatCard({
         </h3>
 
         {/* 3 format selector cards */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           {formats.map((fmt) => {
             const Icon = fmt.icon;
             const isSelected = selectedFormat === fmt.id;
@@ -75,7 +56,8 @@ export default function FileFormatCard({
         <button
           type="button"
           onClick={onExport}
-          className="px-5 py-2.5 rounded-xl bg-primary hover:bg-[#0ca09e] text-white text-xs sm:text-sm font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+          disabled={disabled}
+          className="disabled:opacity-50 disabled:cursor-not-allowed px-5 py-2.5 rounded-xl bg-primary hover:bg-[#0ca09e] text-white text-xs sm:text-sm font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
         >
           <Download className="w-4 h-4 stroke-[2.5]" />
           <span>Export Report</span>

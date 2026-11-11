@@ -23,12 +23,12 @@ const Footer = () => {
         <div className="container grid xl:grid-cols-4 lg:grid-cols-3 sm:grid-cols-2 grid-cols-1 sm:gap-20 gap-12">
           {/* First Column - Logo, Description, Socials */}
           <div className="w-full flex flex-col gap-4 justify-start items-start">
-            <div className="w-[160px] h-14 -mt-3 overflow-hidden">
+            <div className="w-[240px] h-14 -mt-3 overflow-hidden">
               <Image
-                className="w-full h-full object-contain"
+                className="w-full h-full object-contain object-left"
                 src={whiteLogo}
                 alt="PitchProX"
-                width={160}
+                width={240}
                 height={56}
               />
             </div>
@@ -105,14 +105,17 @@ const Footer = () => {
           {/* Fourth Column - Resources (Company) + Email Input */}
           <div className="w-full flex flex-col gap-4 justify-start items-start">
             <h3 className={commonText}>Resources</h3>
-            <Link href="/" className="text-white/60 hover:text-primary transition-colors duration-300 text-sm sm:text-base">
+            <a href="mailto:support@pitchprox.com" className="text-white/80 hover:text-primary transition-colors duration-300 text-sm sm:text-base">
               Contact
-            </Link>
-            <Link href="/" className="text-white/60 hover:text-primary transition-colors duration-300 text-sm sm:text-base">
+            </a>
+            <Link href="/terms" className="text-white/80 hover:text-primary transition-colors duration-300 text-sm sm:text-base">
               Terms of Service
             </Link>
-            <Link href="/" className="text-white/60 hover:text-primary transition-colors duration-300 text-sm sm:text-base">
+            <Link href="/privacy" className="text-white/80 hover:text-primary transition-colors duration-300 text-sm sm:text-base">
               Privacy Policy
+            </Link>
+            <Link href="/data-deletion" className="text-white/80 hover:text-primary transition-colors duration-300 text-sm sm:text-base">
+              Data Deletion
             </Link>
             <form className="relative w-full mt-5 p-1.5 rounded-[40px] bg-white flex gap-3 justify-between items-center">
               <input

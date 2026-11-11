@@ -22,24 +22,24 @@ import { showError } from "@/lib/alerts";
 const systemRoles = [
   {
     id: "admin",
-    name: "Admin",
+    name: "Super Admin",
     icon: Shield,
     iconColor: "text-blue-500",
     iconBg: "bg-blue-50",
   },
   {
     id: "manager",
-    name: "Manager",
+    name: "Admin Manager",
     icon: Smartphone,
     iconColor: "text-primary",
     iconBg: "bg-primary/10",
   },
   {
-    id: "sales-rep",
-    name: "Sales Rep",
-    icon: PhoneCall,
-    iconColor: "text-emerald-500",
-    iconBg: "bg-emerald-50",
+    id: "support-manager",
+    name: "Support",
+    icon: Headphones,
+    iconColor: "text-teal-500",
+    iconBg: "bg-teal-50",
   },
   {
     id: "auditor",
@@ -49,11 +49,11 @@ const systemRoles = [
     iconBg: "bg-purple-50",
   },
   {
-    id: "support-manager",
-    name: "Support Manager",
-    icon: Headphones,
-    iconColor: "text-teal-500",
-    iconBg: "bg-teal-50",
+    id: "sales-rep",
+    name: "Sales Rep",
+    icon: PhoneCall,
+    iconColor: "text-emerald-500",
+    iconBg: "bg-emerald-50",
   },
 ];
 
@@ -79,7 +79,7 @@ export default function AddUserModal({ isOpen, onClose, onUserCreated }) {
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
-    role: "Manager",
+    role: "Admin Manager",
     timezone: "EST (UTC-5)",
     language: "English US",
     governingManager: "",
@@ -145,7 +145,7 @@ export default function AddUserModal({ isOpen, onClose, onUserCreated }) {
     setFormData({
       fullName: "",
       email: "",
-      role: "Manager",
+      role: "Admin Manager",
       timezone: "EST (UTC-5)",
       language: "English US",
       governingManager: "",

@@ -21,19 +21,21 @@ import Tooltip from "@/components/modals/tooltip";
 import { apiRequest } from "@/lib/client-api";
 import { MAIL_CHANGED } from "../mail-view";
 
+// initialTemplate: a template, an after-call draft, or a saved draft (draftId) being edited
 export default function SendEmailForm({ initialTemplate }) {
-  const [toEmail, setToEmail] = useState("");
+  const [draftId, setDraftId] = useState(initialTemplate?.draftId ?? null);
+  const [toEmail, setToEmail] = useState(initialTemplate?.to || "");
   const [subject, setSubject] = useState(
     initialTemplate?.subject || initialTemplate?.title || ""
   );
   const [message, setMessage] = useState(
     initialTemplate?.body || initialTemplate?.content || initialTemplate?.preview || ""
   );
-  const [showCC, setShowCC] = useState(false);
-  const [showBCC, setShowBCC] = useState(false);
-  const [ccEmail, setCcEmail] = useState("");
-  const [bccEmail, setBccEmail] = useState("");
-  const [trackEmail, setTrackEmail] = useState(true);
+  const [showCC, setShowCC] = useState(Boolean(initialTemplate?.cc));
+  const [showBCC, setShowBCC] = useState(Boolean(initialTemplate?.bcc));
+  const [ccEmail, setCcEmail] = useState(initialTemplate?.cc || "");
+  const [bccEmail, setBccEmail] = useState(initialTemplate?.bcc || "");
+  const [trackEmail, setTrackEmail] = useState(initialTemplate?.trackOpens ?? true);
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [saving, setSaving] = useState(false);
@@ -51,27 +53,10 @@ export default function SendEmailForm({ initialTemplate }) {
     toast.success("AI draft generated and inserted!");
   };
 
-  // Saved to the outbox; delivery starts once an email service is connected
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!toEmail.trim()) {
-      toast.error("Please enter a recipient email.");
-      return;
-    }
-    setSaving(true);
-    try {
-      await apiRequest("/api/v1/mail/messages", {
-        method: "POST",
-        body: { to: toEmail, cc: showCC ? ccEmail : "", bcc: showBCC ? bccEmail : "", subject, body: message, trackOpens: trackEmail },
-      });
-      window.dispatchEvent(new Event(MAIL_CHANGED));
-    } catch (error) {
-      toast.error(error.message);
-      return;
-    } finally {
-      setSaving(false);
-    }
-    toast.success(`Saved. It will be sent to ${toEmail} once email sending is connected.`, { duration: 5000 });
+  const fields = () => ({ to: toEmail, cc: showCC ? ccEmail : "", bcc: showBCC ? bccEmail : "", subject, body: message, trackOpens: trackEmail });
+
+  const reset = () => {
+    setDraftId(null);
     setToEmail("");
     setSubject("");
     setMessage("");
@@ -81,14 +66,73 @@ export default function SendEmailForm({ initialTemplate }) {
     setShowBCC(false);
   };
 
+  // Sent through PitchProX's email service (Postmark) as "Your Name via PitchProX"; replies come to you
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!toEmail.trim()) {
+      toast.error("Please enter a recipient email.");
+      return;
+    }
+    setSaving(true);
+    let sent;
+    try {
+      sent = draftId
+        ? await apiRequest(`/api/v1/mail/messages/${draftId}`, { method: "PATCH", body: { ...fields(), send: true } })
+        : await apiRequest("/api/v1/mail/messages", { method: "POST", body: fields() });
+      window.dispatchEvent(new Event(MAIL_CHANGED));
+    } catch (error) {
+      toast.error(error.message);
+      return;
+    } finally {
+      setSaving(false);
+    }
+    toast.success(
+      sent.message.status === "waiting" ? `Saved. It goes to ${toEmail} as soon as email sending is switched on.` : `Sending to ${toEmail}.`,
+      { duration: 5000 }
+    );
+    reset();
+  };
+
+  // Drafts can be incomplete; they stay private to you until sent
+  const saveDraft = async () => {
+    setSaving(true);
+    try {
+      const result = draftId
+        ? await apiRequest(`/api/v1/mail/messages/${draftId}`, { method: "PATCH", body: fields() })
+        : await apiRequest("/api/v1/mail/messages", { method: "POST", body: { ...fields(), draft: true } });
+      setDraftId(result.message.id);
+      window.dispatchEvent(new Event(MAIL_CHANGED));
+      toast.success("Draft saved. Open it from your emails to finish it later.");
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteDraft = async () => {
+    if (!draftId || !window.confirm("Delete this draft?")) return;
+    setSaving(true);
+    try {
+      await apiRequest(`/api/v1/mail/messages/${draftId}`, { method: "DELETE" });
+      window.dispatchEvent(new Event(MAIL_CHANGED));
+      toast.success("Draft deleted.");
+      reset();
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="flex h-full flex-col gap-4">
       {/* Form Container */}
       <div className="grow bg-white rounded-2xl border border-light-gray p-6 shadow-sm">
         <div className="mb-5">
-          <h2 className="text-lg font-bold text-dark-black">Send email to a prospect</h2>
+          <h2 className="text-lg font-bold text-dark-black">{draftId ? "Finish your draft" : "Send email to a prospect"}</h2>
           <p className="text-xs text-light-black mt-0.5">
-            Email will be sent from your connected mailbox.
+            Sent by PitchProX as &quot;Your Name via PitchProX&quot;. Replies come straight to your own email.
           </p>
         </div>
 
@@ -269,13 +313,32 @@ export default function SendEmailForm({ initialTemplate }) {
                 </Tooltip>
               </div>
 
+              {draftId && (
+                <button
+                  type="button"
+                  onClick={deleteDraft}
+                  disabled={saving}
+                  className="text-xs font-semibold text-red hover:underline cursor-pointer disabled:opacity-50"
+                >
+                  Delete draft
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={saveDraft}
+                disabled={saving}
+                className="px-4 py-2.5 text-sm font-semibold text-dark-black/80 bg-white border border-light-gray hover:border-primary/40 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Save draft
+              </button>
+
               {/* Submit Button */}
               <button
                 type="submit"
                 disabled={saving}
                 className="flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-primary hover:bg-medium-teal rounded-xl shadow-sm transition-colors cursor-pointer disabled:opacity-50"
               >
-                <span>{saving ? "Saving…" : "Send email"}</span>
+                <span>{saving ? "Working…" : "Send email"}</span>
                 <Send className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -289,8 +352,8 @@ export default function SendEmailForm({ initialTemplate }) {
           <ShieldCheck className="w-4 h-4" />
         </div>
         <div className="text-xs text-medium-black leading-relaxed">
-          <p className="font-semibold text-dark-black/70">Emails are sent securely through your own email provider.</p>
-          <p>PitchProX does not store, host, or access your email account.</p>
+          <p className="font-semibold text-dark-black/70">Emails are sent securely through PitchProX&apos;s email service.</p>
+          <p>Replies go straight to your own inbox. PitchProX never signs in to your email account.</p>
         </div>
       </div>
 

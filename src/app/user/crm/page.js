@@ -57,10 +57,11 @@ export default function CrmPage() {
     const followUpAt = new Date();
     followUpAt.setDate(followUpAt.getDate() + 1);
     followUpAt.setHours(9, 0, 0, 0);
-    const results = await Promise.allSettled(rows.map(async ({ name, phoneNumber, email, propertyAddress, city, state, zipCode, stage, status, leadType, outcome }) => {
+    const results = await Promise.allSettled(rows.map(async ({ name, phoneNumber, phones, email, propertyAddress, city, state, zipCode, stage, status, leadType, outcome }) => {
       const { prospect } = await apiRequest("/api/v1/crm/prospects", {
         method: "POST",
-        body: { name, phoneNumber, email, propertyAddress, city, state, zipCode, stage, status, leadType: leadType || null, outcome: outcome || null },
+        // Every phone column of the file is kept (Phone 1-4, Mobile / Home / Work)
+        body: { name, ...(phones?.length ? { phones } : { phoneNumber }), email, propertyAddress, city, state, zipCode, stage, status, leadType: leadType || null, outcome: outcome || null },
       });
       if (addToFollowUp) {
         await apiRequest(`/api/v1/crm/prospects/${prospect.id}/follow-ups`, { method: "POST", body: { followUpAt: followUpAt.toISOString() } });

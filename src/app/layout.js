@@ -2,6 +2,7 @@ import { Inter, Poppins } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import DevelopmentNotice from "@/components/shared/development-notice";
+import TableScrollHints from "@/components/shared/table-scroll-hints";
 
 // Inter — used for titles (matches --font-secondary in globals.css @theme)
 const inter = Inter({
@@ -39,6 +40,7 @@ export default function RootLayout({ children }) {
         {/* Shows the toast() messages used across the app (none appeared before this was mounted) */}
         <Toaster position="top-right" />
         <DevelopmentNotice />
+        <TableScrollHints />
       </body>
     </html>
   );

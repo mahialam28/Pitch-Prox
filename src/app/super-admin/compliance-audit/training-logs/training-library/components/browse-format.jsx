@@ -3,28 +3,30 @@
 import React from "react";
 import { FileText, FileCode, Video, ChevronRight } from "lucide-react";
 
-export default function BrowseFormat({ onSelectFormat, activeFormat }) {
+// counts: { PDF, Doc, Video }; selecting a card filters the grid (again to clear)
+export default function BrowseFormat({ onSelectFormat, activeFormat, counts }) {
+  const files = (key, noun) => (counts ? `${counts[key] ?? 0} ${noun}${counts[key] === 1 ? "" : "s"}` : "—");
   const formats = [
     {
-      id: "pdf",
+      id: "PDF",
       title: "PDF",
-      count: "22 files",
+      count: files("PDF", "file"),
       icon: FileText,
       iconBg: "bg-[#FEE4E2]",
       iconColor: "text-[#D92D20]",
     },
     {
-      id: "doc",
-      title: "Document",
-      count: "10 files",
+      id: "Doc",
+      title: "Doc",
+      count: files("Doc", "file"),
       icon: FileCode,
       iconBg: "bg-[#EFF8FF]",
       iconColor: "text-[#175CD3]",
     },
     {
-      id: "video",
-      title: "Training Videos",
-      count: "16 videos",
+      id: "Video",
+      title: "Video",
+      count: files("Video", "video"),
       icon: Video,
       iconBg: "bg-[#EEF2FF]",
       iconColor: "text-[#4F46E5]",
@@ -42,10 +44,12 @@ export default function BrowseFormat({ onSelectFormat, activeFormat }) {
           const Icon = fmt.icon;
           const isActive = activeFormat === fmt.id;
           return (
-            <div
+            <button
+              type="button"
               key={fmt.id}
+              aria-pressed={isActive}
               onClick={() => onSelectFormat?.(fmt.id)}
-              className={`bg-white rounded-2xl border p-4 sm:p-5 shadow-xs flex items-center justify-between gap-3 cursor-pointer transition-all hover:shadow-sm ${
+              className={`bg-white rounded-2xl border p-4 sm:p-5 shadow-xs flex items-center justify-between gap-3 cursor-pointer transition-all text-left w-full hover:shadow-sm ${
                 isActive
                   ? "border-primary ring-2 ring-primary/20"
                   : "border-light-gray hover:border-light-black/40"
@@ -68,7 +72,7 @@ export default function BrowseFormat({ onSelectFormat, activeFormat }) {
               </div>
 
               <ChevronRight className="w-4 h-4 text-light-black shrink-0" />
-            </div>
+            </button>
           );
         })}
       </div>

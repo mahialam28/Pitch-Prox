@@ -1,5 +1,8 @@
 "use client";
 
+import toast from "react-hot-toast";
+import { uploadBuilderFile } from "../builder-files";
+
 import React, { useState, useRef } from "react";
 import {
   FileText,
@@ -91,6 +94,7 @@ const CustomRadio = ({ label, value, selected, onChange, name }) => {
 const PlaybookDetailsSection = ({
   formData,
   onChange = () => {},
+  currentUserName = "",
 }) => {
   const fileInputRef = useRef(null);
   const [coverPreview, setCoverPreview] = useState(formData.coverImage || null);
@@ -100,12 +104,17 @@ const PlaybookDetailsSection = ({
   const [leadDropdownOpen, setLeadDropdownOpen] = useState(false);
   const [newLeadInput, setNewLeadInput] = useState("");
 
-  const handleFileChange = (e) => {
+  // The cover is uploaded straight away so the saved playbook keeps a real link to it
+  const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const url = URL.createObjectURL(file);
-      setCoverPreview(url);
-      onChange("coverImage", url);
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const saved = await uploadBuilderFile(file, "cover");
+      setCoverPreview(saved.url);
+      onChange("coverImage", saved.url);
+    } catch (error) {
+      toast.error(error.message);
     }
   };
 
@@ -286,7 +295,7 @@ const PlaybookDetailsSection = ({
             type="text"
             value={formData.author ?? ""}
             onChange={(e) => onChange("author", e.target.value)}
-            placeholder="Daniel Miller (you)"
+            placeholder={currentUserName ? `${currentUserName} (you)` : "You"}
             className="w-full px-4 py-2.5 rounded-xl border border-light-gray bg-white text-dark-black/80 text-xs sm:text-sm font-normal focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-light-black"
           />
         </div>

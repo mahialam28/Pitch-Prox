@@ -1,46 +1,18 @@
 "use client";
 
-import React, { useState } from "react";
-import { Lock, UserX, CreditCard, ChevronDown } from "lucide-react";
+import React from "react";
+import { Lock, UserX, CreditCard, ShieldAlert, FileWarning, ServerCrash, HelpCircle } from "lucide-react";
 
-export default function IncidentsByCategory() {
-  const [timeframe, setTimeframe] = useState("This Month");
-  const [isTimeframeOpen, setIsTimeframeOpen] = useState(false);
+// top: [{ category, count }] most frequent first; total = all incidents
+const ICONS = { "Security Incident": [Lock, "text-purple-600", "bg-purple-500"], "Unauthorized Access": [UserX, "text-orange-500", "bg-orange-500"], "Payment / Billing Abuse": [CreditCard, "text-emerald-500", "bg-emerald-500"], "Data Privacy / Exposure": [ShieldAlert, "text-blue-500", "bg-blue-500"], "Compliance / Policy Violation": [FileWarning, "text-amber-500", "bg-amber-500"], "System / Service Outage": [ServerCrash, "text-rose-500", "bg-rose-500"], Other: [HelpCircle, "text-gray-500", "bg-gray-400"] };
 
-  const timeframeOptions = ["This Month", "Last 30 Days", "This Quarter", "This Year"];
+export default function IncidentsByCategory({ top, total = 0 }) {
 
-  const categories = [
-    {
-      id: "security",
-      label: "Security Incident",
-      count: 12,
-      percentage: "31%",
-      barWidth: "31%",
-      icon: Lock,
-      iconColor: "text-purple-600",
-      barColor: "bg-purple-500",
-    },
-    {
-      id: "unauthorized",
-      label: "Unauthorized Access",
-      count: 9,
-      percentage: "24%",
-      barWidth: "24%",
-      icon: UserX,
-      iconColor: "text-orange-500",
-      barColor: "bg-orange-500",
-    },
-    {
-      id: "payment",
-      label: "Payment / Billing Abuse",
-      count: 5,
-      percentage: "13%",
-      barWidth: "13%",
-      icon: CreditCard,
-      iconColor: "text-emerald-500",
-      barColor: "bg-emerald-500",
-    },
-  ];
+  const categories = (top ?? []).map((item) => {
+    const [icon, iconColor, barColor] = ICONS[item.category] ?? ICONS.Other;
+    const percentage = `${total ? Math.round((item.count / total) * 100) : 0}%`;
+    return { id: item.category, label: item.category, count: item.count, percentage, barWidth: percentage, icon, iconColor, barColor };
+  });
 
   return (
     <div className="bg-white rounded-2xl border border-light-gray/80 p-5 shadow-xs flex flex-col justify-between">
@@ -50,43 +22,12 @@ export default function IncidentsByCategory() {
           Top Incident Categories
         </h3>
 
-        {/* Timeframe selector */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setIsTimeframeOpen(!isTimeframeOpen)}
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-medium-black hover:text-dark-black rounded-lg border border-light-gray bg-light-gray/30 hover:bg-light-gray/60 transition-colors cursor-pointer"
-          >
-            <span>{timeframe}</span>
-            <ChevronDown className="w-3.5 h-3.5 text-light-black" />
-          </button>
-
-          {isTimeframeOpen && (
-            <div className="absolute right-0 top-full mt-1 w-32 bg-white border border-light-gray rounded-xl shadow-lg py-1 z-20">
-              {timeframeOptions.map((opt) => (
-                <button
-                  key={opt}
-                  type="button"
-                  onClick={() => {
-                    setTimeframe(opt);
-                    setIsTimeframeOpen(false);
-                  }}
-                  className={`w-full px-3 py-1.5 text-left text-xs transition-colors cursor-pointer ${
-                    timeframe === opt
-                      ? "text-primary font-semibold bg-primary/5"
-                      : "text-dark-black/80 hover:bg-light-gray/50"
-                  }`}
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <span className="text-xs text-light-black">All time</span>
       </div>
 
       {/* Category Rows */}
       <div className="flex flex-col gap-3.5 mt-2">
+        {top && categories.length === 0 && <p className="text-xs text-light-black">No incidents reported yet.</p>}
         {categories.map((cat) => {
           const IconComp = cat.icon;
           return (

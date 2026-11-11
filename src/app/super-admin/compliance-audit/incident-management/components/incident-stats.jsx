@@ -1,77 +1,45 @@
 "use client";
 
 import React from "react";
-import {
-  ClipboardList,
-  AlertCircle,
-  ShieldAlert,
-  CheckCircle2,
-  Clock,
-  TrendingUp,
-  TrendingDown,
-} from "lucide-react";
+import { ClipboardList, AlertCircle, ShieldAlert, CheckCircle2, Clock } from "lucide-react";
+
+// stats: /api/v1/compliance/incidents → stats (definitions from client items 133–135)
+export function formatHours(hours) {
+  if (hours == null) return "—";
+  if (hours < 1) return `${Math.max(1, Math.round(hours * 60))}m`;
+  if (hours < 48) return `${Math.floor(hours)}h ${Math.round((hours % 1) * 60)}m`;
+  return `${Math.round(hours / 24)} days`;
+}
 
 export default function IncidentStats({ stats }) {
+  const values = {
+    total: stats ? stats.total : "—",
+    active: stats ? stats.active : "—",
+    criticalHigh: stats ? stats.criticalHigh : "—",
+    resolved: stats ? stats.resolvedThisMonth : "—",
+    avg: formatHours(stats?.avgResolutionHours),
+  };
+  const notes = {
+    total: "All time",
+    active: "Open + Investigating",
+    criticalHigh: "Active, Critical or High",
+    resolved: "Resolved or closed",
+    avg: "Reported to resolved",
+  };
   const defaultStats = [
-    {
-      id: "total",
-      label: "Total Incidents",
-      value: "38",
-      trend: "12% vs last 30 days",
-      trendDirection: "up",
-      icon: ClipboardList,
-      iconBg: "bg-[#E6F7F7]",
-      iconColor: "text-[#0EADAB]",
-    },
-    {
-      id: "open",
-      label: "Active Incidents",
-      value: "7",
-      trend: "12% vs last 30 days",
-      trendDirection: "up",
-      icon: AlertCircle,
-      iconBg: "bg-[#FEE2E2]",
-      iconColor: "text-[#EF4444]",
-    },
-    {
-      id: "critical",
-      label: "Critical / High",
-      value: "2",
-      trend: "12% vs last 30 days",
-      trendDirection: "up",
-      icon: ShieldAlert,
-      iconBg: "bg-[#FEF3EB]",
-      iconColor: "text-[#F97316]",
-    },
-    {
-      id: "resolved",
-      label: "Resolved This Month",
-      value: "24",
-      trend: "12% vs last 30 days",
-      trendDirection: "up",
-      icon: CheckCircle2,
-      iconBg: "bg-[#ECFDF5]",
-      iconColor: "text-[#10B981]",
-    },
-    {
-      id: "resolution_time",
-      label: "Avg. Resolution Time",
-      value: "18h 42m",
-      trend: "22% vs last 30 days",
-      trendDirection: "down",
-      icon: Clock,
-      iconBg: "bg-[#EFF6FF]",
-      iconColor: "text-[#3B82F6]",
-    },
+    { id: "total", label: "Total Incidents", value: values.total, note: notes.total, icon: ClipboardList, iconBg: "bg-[#E6F7F7]", iconColor: "text-[#0EADAB]" },
+    { id: "active", label: "Active Incidents", value: values.active, note: notes.active, icon: AlertCircle, iconBg: "bg-[#FEE2E2]", iconColor: "text-[#EF4444]" },
+    { id: "criticalHigh", label: "Critical / High", value: values.criticalHigh, note: notes.criticalHigh, icon: ShieldAlert, iconBg: "bg-[#FEF3EB]", iconColor: "text-[#F97316]" },
+    { id: "resolved", label: "Resolved This Month", value: values.resolved, note: notes.resolved, icon: CheckCircle2, iconBg: "bg-[#ECFDF5]", iconColor: "text-[#10B981]" },
+    { id: "avg", label: "Avg. Resolution Time", value: values.avg, note: notes.avg, icon: Clock, iconBg: "bg-[#EFF6FF]", iconColor: "text-[#3B82F6]" },
   ];
 
-  const statItems = stats || defaultStats;
+  const statItems = defaultStats;
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-5 w-full">
       {statItems.map((item) => {
         const IconComponent = item.icon;
-        const isUp = item.trendDirection === "up";
 
         return (
           <div
@@ -96,16 +64,7 @@ export default function IncidentStats({ stats }) {
                 {item.value}
               </span>
 
-              <div className="flex items-center gap-1 text-[11px] font-medium text-emerald-600">
-                {isUp ? (
-                  <TrendingUp className="w-3.5 h-3.5 stroke-[2.5]" />
-                ) : (
-                  <TrendingDown className="w-3.5 h-3.5 stroke-[2.5]" />
-                )}
-                <span>
-                  {isUp ? "↑" : "↓"} {item.trend}
-                </span>
-              </div>
+              <div className="text-[11px] font-medium text-light-black">{item.note}</div>
             </div>
           </div>
         );

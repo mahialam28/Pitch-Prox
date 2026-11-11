@@ -1,15 +1,15 @@
 "use client";
 
 import { usePortal } from "@/components/shared/use-portal";
+import PhoneNumbersEditor, { phoneRowsFrom, phonesPayload } from "@/components/contacts/phone-numbers-editor";
 import React, { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Trash2, Check, Plus, User, Mail, MapPin, Home, FileText } from "lucide-react";
+import { Check, User, Mail, MapPin, Home, FileText } from "lucide-react";
 import Title from "@/components/texts/title";
 import Text from "@/components/texts/text";
 import SettingsDropdown from "@/components/shared/dropdown/settings-dropdown";
 import DashboardButton from "@/components/buttons/dashboardButton";
-import { formatPhoneNumber } from "@/utils.js/phone";
 import { leadStageOptions, leadStatusOptions, leadTypeOptions, userOutcomeOptions } from "@/utils.js/lead-options";
 import { apiRequest } from "@/lib/client-api";
 import { showError, showSuccess } from "@/lib/alerts";
@@ -25,7 +25,6 @@ const leadStageOptionsList = leadStageOptions;
 const statusOptions = leadStatusOptions;
 const outcomeOptions = userOutcomeOptions.map(({ value, label }) => ({ value, label }));
 
-const MAX_PHONE_NUMBERS = 6;
 
 function EditLeadForm() {
   const portal = usePortal();
@@ -36,7 +35,7 @@ function EditLeadForm() {
   const [loadState, setLoadState] = useState("loading");
   const [saving, setSaving] = useState(false);
   const [fullName, setFullName] = useState("");
-  const [phoneNumbers, setPhoneNumbers] = useState(["", "", "", ""]);
+  const [phones, setPhones] = useState([{ number: "", label: "Mobile" }]);
   const [email, setEmail] = useState("");
   const [propertyAddress, setPropertyAddress] = useState("");
   const [city, setCity] = useState("");
@@ -56,7 +55,7 @@ function EditLeadForm() {
       .then(({ lead }) => {
         if (!active) return;
         setFullName(lead.name || "");
-        setPhoneNumbers([lead.phoneNumber || "", "", "", ""]);
+        setPhones(phoneRowsFrom(lead));
         setEmail(lead.email || "");
         setPropertyAddress(lead.propertyAddress || "");
         setCity(lead.city || "");
@@ -74,23 +73,6 @@ function EditLeadForm() {
   }, [leadId]);
 
   // ── Handlers ──
-  const handlePhoneChange = (index, value) => {
-    const updated = [...phoneNumbers];
-    updated[index] = formatPhoneNumber(value);
-    setPhoneNumbers(updated);
-  };
-
-  const handleRemovePhone = (index) => {
-    if (phoneNumbers.length > 1) {
-      setPhoneNumbers(phoneNumbers.filter((_, i) => i !== index));
-    }
-  };
-
-  const handleAddPhone = () => {
-    if (phoneNumbers.length >= MAX_PHONE_NUMBERS) return;
-    setPhoneNumbers([...phoneNumbers, ""]);
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -99,7 +81,7 @@ function EditLeadForm() {
         method: "PATCH",
         body: {
           name: fullName,
-          phoneNumber: phoneNumbers.find((phone) => phone.trim()) || null,
+          phones: phonesPayload(phones),
           email, propertyAddress, city, state, zipCode,
           leadType: leadType || null,
           stage: leadStage,
@@ -179,52 +161,8 @@ function EditLeadForm() {
             />
           </div>
 
-          {/* Phone Numbers */}
-          <div className="space-y-1.5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
-              {phoneNumbers.map((phone, idx) => (
-                <div key={idx} className="space-y-1.5 w-full">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-semibold text-medium-black">
-                      Phone Number {idx + 1}
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => handleRemovePhone(idx)}
-                      className="text-light-black hover:text-red-500 transition-colors cursor-pointer"
-                      title="Remove phone"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="(213) 555-1234"
-                    value={phone}
-                    onChange={(e) => handlePhoneChange(idx, e.target.value)}
-                    className="w-full px-4 py-2.5 text-sm bg-white border border-light-gray rounded-xl focus:outline-none focus:border-primary transition-colors text-dark-black placeholder-light-black"
-                  />
-                </div>
-              ))}
-
-              <div className="w-full">
-                <button
-                  type="button"
-                  onClick={handleAddPhone}
-                  disabled={phoneNumbers.length >= MAX_PHONE_NUMBERS}
-                  className="flex items-center justify-center gap-1.5 w-full sm:w-auto px-5 py-2.5 text-sm font-semibold bg-primary/10 text-primary hover:bg-primary/20 rounded-xl transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-primary/10"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add more
-                </button>
-                {phoneNumbers.length >= MAX_PHONE_NUMBERS && (
-                  <p className="mt-2 text-[10px] font-medium text-light-black/70">
-                    Maximum {MAX_PHONE_NUMBERS} phone numbers
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
+          {/* Phone Numbers: each with a type, and the status it got after calls */}
+          <PhoneNumbersEditor value={phones} onChange={setPhones} />
 
           {/* Email */}
           <div className="space-y-1.5 pt-2">

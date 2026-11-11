@@ -4,7 +4,8 @@ import React, { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { apiRequest } from "@/lib/client-api";
 // Simulator View Components
-import Calibration from "./components/calibration";
+import CalibrationWelcome from "./components/calibration-welcome";
+import { useCalibrationStatus } from "./use-calibration-status";
 import CalibrationHeader from "./components/calibration-header";
 import SimulationHeader from "./components/simulator-header";
 import RoundTracker from "./components/round-tracker";
@@ -23,6 +24,10 @@ import WhatsNextCard from "./components/what-next";
 
 export default function CalibrationPage() {
   const [isCompleted, setIsCompleted] = useState(false);
+  // Welcome card until the first calibration ("Start" hides it, "Do it later" goes to the dashboard)
+  const { status, setStatus } = useCalibrationStatus();
+  const [welcomeHidden, setWelcomeHidden] = useState(false);
+  const showWelcome = status?.required && !status.completed && !welcomeHidden;
   const startedAtRef = useRef(null);
 
   useEffect(() => {
@@ -36,7 +41,10 @@ export default function CalibrationPage() {
     setIsCompleted(true);
     const durationSeconds = Math.round((Date.now() - (startedAtRef.current ?? Date.now())) / 1000);
     apiRequest("/api/v1/calibration/sessions", { method: "POST", body: { durationSeconds } })
-      .then(({ total }) => toast.success(`Calibration saved. You've completed ${total} session${total === 1 ? "" : "s"}.`))
+      .then(({ total }) => {
+        setStatus((current) => (current ? { ...current, completed: true, sessions: total } : current));
+        toast.success(total === 1 ? "Calibration complete. Calling is now unlocked." : `Calibration saved. You've completed ${total} sessions.`);
+      })
       .catch((error) => toast.error(`Calibration not saved: ${error.message}`));
   };
   const handleReset = () => setIsCompleted(false);
@@ -46,14 +54,14 @@ export default function CalibrationPage() {
       {!isCompleted ? (
         /* ================= SIMULATION LIVE SCREEN VIEW ================= */
         <>
-          {/* Top Banner Alert notification */}
-          <Calibration />
+          {/* First visit: start now or "Do it later" */}
+          {showWelcome && <CalibrationWelcome onStart={() => setWelcomeHidden(true)} />}
 
           {/* Main Page Header Overview Text */}
           <CalibrationHeader />
 
           {/* Main Workspace Grid split into Action Center and Side Trackers */}
-          <div className="w-full flex flex-col lg:flex-row gap-6 items-start">
+          <div className="w-full flex flex-col xl:flex-row gap-6 items-start">
             {/* Left Interaction Workspace Column */}
             <div className="flex-1 flex flex-col gap-6 w-full">
               {/* Wraps SimulationHeader to listen for 'End Calibration' click events */}
@@ -67,7 +75,7 @@ export default function CalibrationPage() {
             </div>
 
             {/* Right Side Panel / Metrics Insights Column */}
-            <div className="w-full lg:w-[380px] shrink-0 flex flex-col gap-6">
+            <div className="w-full xl:w-[380px] shrink-0 flex flex-col gap-6">
               <SimulationSidePanel />
               <ScoreMetricsCard />
             </div>
@@ -92,14 +100,14 @@ export default function CalibrationPage() {
           <RoundPerformanceTimeline />
 
           {/* Bottom layout split block */}
-          <div className="w-full flex flex-col lg:flex-row gap-6 items-stretch">
+          <div className="w-full flex flex-col xl:flex-row gap-6 items-stretch">
             {/* Left Grid Bar Breakdown */}
             <div className="flex-1 w-full">
               <ScoreBreakdownGrid />
             </div>
             
             {/* Right Quick Action steps column container */}
-            <div className="w-full lg:w-[380px] shrink-0">
+            <div className="w-full xl:w-[380px] shrink-0">
               <WhatsNextCard />
             </div>
           </div>

@@ -1,595 +1,229 @@
 "use client";
 
-import React, { useState } from "react";
-import { motion } from "framer-motion";
-import {
-  BookOpen,
-  Edit3,
-  FileText,
-  Mic,
-  MessageSquare,
-  ShieldAlert,
-  Folder,
-  Cpu,
-  Sliders,
-  ChevronRight,
-  CheckCircle2,
-  Check,
-  TrendingUp,
-  Target,
-  Zap,
-  ChevronDown,
-  Lock,
-  ArrowLeft,
-} from "lucide-react";
-import PublishedSuccessModal from "./published-success-modal";
+import React, { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { BookOpen, FileText, MessageSquare, ShieldAlert, Folder, Sliders, ChevronRight, Check, AlertTriangle, XCircle, RefreshCw, Rocket, Lock, CheckCircle2 } from "lucide-react";
 import toast from "react-hot-toast";
-import { useRouter } from "next/navigation";
+import { VISIBILITIES, visibilityKey } from "@/lib/playbook-compile";
 
-// Who can use the playbook once published
-const VISIBILITY_OPTIONS = [
-  "Private — creator only",
-  "Team Only — internal staff team",
-  "Organization — whole company / brokerage",
-  "Marketplace / Published — approved PitchProX playbooks",
-];
+// Review & Publish (Spec 12 §6.12, §9): everything here comes from the saved draft. The checks run
+// on the server; errors block publishing, warnings need a reviewer to confirm the intended behavior.
+// Publishing freezes an immutable version (v1, v2…); later edits start a new draft.
+// flush(): saves pending changes and returns { buildId, revision }.
+export default function ReviewPublishSection({ formData = {}, onChange, onJumpToStep, flush, onPublished }) {
+  const [check, setCheck] = useState(null);
+  const [checking, setChecking] = useState(false);
+  const [releaseNotes, setReleaseNotes] = useState("");
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [published, setPublished] = useState(null);
 
-export default function ReviewPublishSection({
-  formData = {},
-  onChange = () => {},
-  onJumpToStep = () => {},
-  onBack = () => {},
-}) {
-  const [modalOpen, setModalOpen] = useState(false);
-  const [selectedVisibility, setSelectedVisibility] = useState(
-    formData.visibility || VISIBILITY_OPTIONS[1]
-  );
-  const [visibilityDropdownOpen, setVisibilityDropdownOpen] = useState(false);
+  const runChecks = useCallback(async () => {
+    setChecking(true);
+    try {
+      const { buildId } = await flush();
+      if (!buildId) {
+        setCheck({ ok: false, errors: [{ step: 1, section: "Basic Info", message: "Fill in the playbook details first." }], warnings: [], nextVersion: 1 });
+        return;
+      }
+      const response = await fetch(`/api/v1/admin/playbook-builds/${buildId}/check`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Checks didn't run.");
+      setCheck(data);
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setChecking(false);
+    }
+  }, [flush]);
 
-  const playbookName = formData.playbookName || "FSBO Playbook";
-  const leadTypesCount = formData.leadTypes?.length || 16;
-  const stagesCount = formData.stages?.length || 7;
-  const objectionsCount = formData.objections?.length || 16;
-  const resourcesCount = formData.resources?.length || 12;
-  const scriptsCount = (formData.resources || []).filter(
-    (r) =>
-      r.type === "Script" ||
-      r.type === "Call Openers" ||
-      r.type === "Objection Script"
-  ).length || 8;
+  useEffect(() => {
+    // Run once when the step opens (after the latest edits are saved)
+    const timer = setTimeout(runChecks, 0);
+    return () => clearTimeout(timer);
+  }, [runChecks]);
 
-  const handleSelectVisibility = (option) => {
-    setSelectedVisibility(option);
-    onChange("visibility", option);
-    setVisibilityDropdownOpen(false);
+  const publish = async () => {
+    setPublishing(true);
+    try {
+      const { buildId, revision } = await flush();
+      const response = await fetch(`/api/v1/admin/playbook-builds/${buildId}/publish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ revision, releaseNotes, acknowledgeWarnings: acknowledged }),
+      });
+      const data = await response.json();
+      if (response.ok && data.ok) {
+        setPublished(data);
+        onPublished?.(data);
+        toast.success(`Published v${data.version}.`);
+      } else if (data.errors || data.warnings) {
+        setCheck((current) => ({ ...current, ok: !data.errors?.length, errors: data.errors ?? [], warnings: data.warnings ?? [] }));
+        toast.error(data.errors?.length ? "Fix the items marked below first." : "Confirm you reviewed the warnings.");
+      } else {
+        throw new Error(data.error || "Not published.");
+      }
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setPublishing(false);
+    }
   };
 
-  const router = useRouter();
-  // Publishing returns to the playbook library
-  const handlePublishClick = () => {
-    toast.success("Playbook published successfully!");
-    router.push("/super-admin/playbook");
-  };
+  const stages = formData.stages ?? [];
+  const objections = formData.objections ?? [];
+  const resources = formData.resources ?? [];
+  const ai = formData.aiFramework ?? {};
+  const visibility = visibilityKey(formData.visibility) ?? "marketplace";
+  const errorsFor = (step) => check?.errors.filter((item) => item.step === step).length ?? 0;
+  const warningsFor = (step) => check?.warnings.filter((item) => item.step === step).length ?? 0;
 
-  // Quality check (out of 100) from how complete the playbook is
-  const checks = [
-    { label: "Lead types selected", ok: leadTypesCount >= 3, tip: "Select at least 3 lead types this playbook is best for." },
-    { label: "Conversation stages", ok: stagesCount >= 5, tip: "Add the key stages from opening to close (5 or more)." },
-    { label: "Objection coverage", ok: objectionsCount >= 10, tip: "Cover at least 10 common objections." },
-    { label: "Resources & scripts", ok: resourcesCount >= 5 && scriptsCount >= 3, tip: "Attach scripts and resources reps can use mid-call." },
-    { label: "Description & author", ok: Boolean(formData.shortDescription?.trim()), tip: "Write a clear short description." },
+  const SUMMARY = [
+    { step: 1, icon: BookOpen, title: "Basic Info", detail: `${formData.playbookName || "Untitled"} · ${(formData.leadTypes ?? []).length} lead type${(formData.leadTypes ?? []).length === 1 ? "" : "s"} · ${formData.accessType === "free" ? "Free" : `$${formData.price || "0.00"}`}` },
+    { step: 2, icon: MessageSquare, title: "Style & Voice", detail: `${(formData.tones ?? []).join(", ") || "No tone"} · ${formData.communicationStyle ?? "—"} · ${(formData.voicePhrases ?? []).length} voice phrases` },
+    { step: 3, icon: FileText, title: "Conversation Flow", detail: `${stages.length} stage${stages.length === 1 ? "" : "s"}: ${stages.map((stage) => stage.title).filter(Boolean).slice(0, 4).join(" → ")}${stages.length > 4 ? " …" : ""}` },
+    { step: 4, icon: ShieldAlert, title: "Objection Handling", detail: `${objections.length} objection${objections.length === 1 ? "" : "s"}` },
+    { step: 5, icon: Folder, title: "Resources & Scripts", detail: `${resources.length} resource${resources.length === 1 ? "" : "s"}` },
+    { step: 6, icon: Sliders, title: "AI Prompt Framework", detail: `${(ai.logicRules ?? []).filter((rule) => rule.enabled !== false).length} active logic rules · ${(ai.prohibitedTerms ?? []).length} prohibited terms` },
   ];
-  const qualityScore = Math.round(60 + (checks.filter((check) => check.ok).length / checks.length) * 40) - (objectionsCount < 16 ? 4 : 0);
-  const recommendations = [
-    ...checks.filter((check) => !check.ok).map((check) => check.tip),
-    "Add a closing script for the most common lead type to raise prompt adherence.",
-    "Review objection responses for tone consistency with the selected style.",
-  ].slice(0, 4);
+
+  if (published) {
+    return (
+      <div className="bg-white rounded-2xl border border-light-gray p-8 shadow-sm text-center space-y-4 max-w-xl mx-auto">
+        <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto" />
+        <h2 className="text-xl font-bold text-dark-black font-secondary">{formData.playbookName} v{published.version} is published</h2>
+        <p className="text-sm text-medium-black">
+          This version is now fixed. Edits you make from here start a new draft and don&apos;t change it until you publish again.
+          {` Visible to: ${VISIBILITIES[visibility]}.`}
+        </p>
+        <Link href="/super-admin/playbook" className="inline-block px-5 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-medium-teal">Back to the Playbook Library</Link>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      {/* ── 1. Top Banner: Playbook Ready for Review ── */}
-      <div className="bg-white rounded-2xl border border-light-gray p-4 sm:p-5 shadow-sm flex items-center gap-3.5">
-        <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0 shadow-2xs">
-          <BookOpen className="w-5 h-5 stroke-[2.2]" />
-        </div>
-        <div className="min-w-0">
-          <h3 className="text-xs sm:text-sm font-bold text-dark-black font-secondary">
-            Playbook Ready for Review
-          </h3>
-          <p className="text-xs text-medium-black mt-0.5 font-normal">
-            You&apos;ve completed all steps. Review the summary below before publishing.
-          </p>
-        </div>
-      </div>
-
-      {/* ── 2. Main Content Grid (Left 8 cols, Right 4 cols) ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* ── LEFT COLUMN: Playbook Summary ── */}
-        <div className="lg:col-span-8">
-          <div className="bg-white rounded-2xl border border-light-gray p-5 sm:p-7 shadow-sm space-y-4">
-            {/* Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-light-gray/60">
-              <h2 className="text-base sm:text-lg font-bold text-dark-black font-secondary">
-                Playbook Summary
-              </h2>
-              <button
-                type="button"
-                onClick={() => onJumpToStep(1)}
-                className="px-3.5 py-1.5 rounded-xl border border-light-gray hover:border-medium-black/30 bg-white text-medium-black hover:text-dark-black text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer select-none"
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-                <span>Edit Playbook</span>
-              </button>
+    <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+      {/* Left: summary and checks */}
+      <div className="xl:col-span-8 space-y-6">
+        <div className="bg-white rounded-2xl border border-light-gray p-5 sm:p-6 shadow-sm">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-base sm:text-lg font-bold text-dark-black font-secondary">Playbook Summary</h2>
+              <p className="text-xs text-light-black">From the saved draft. Open a section to change it.</p>
             </div>
-
-            {/* List of 7 Section Summaries */}
-            <div className="space-y-1.5">
-              {/* Row 1: Basic Info */}
-              <div
-                onClick={() => onJumpToStep(1)}
-                className="p-3.5 sm:p-4 rounded-xl border border-transparent hover:border-light-gray hover:bg-light-gray/30 flex items-center justify-between gap-3 transition-all cursor-pointer group"
-              >
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
-                    <FileText className="w-4 h-4 stroke-[2.2]" />
-                  </div>
-                  <div className="min-w-0">
-                    <h4 className="text-xs sm:text-[13px] font-bold text-dark-black font-secondary group-hover:text-primary transition-colors">
-                      Basic Info
-                    </h4>
-                    <p className="text-[11px] text-medium-black font-normal truncate mt-0.5">
-                      Playbook name, audience, and description.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 shrink-0">
-                  <div className="text-right">
-                    <div className="text-xs font-bold text-dark-black font-secondary">
-                      {playbookName}
-                    </div>
-                    <div className="text-[11px] text-medium-black">
-                      {leadTypesCount} Lead Type{leadTypesCount > 1 ? "s" : ""}
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-light-black group-hover:text-medium-black group-hover:translate-x-0.5 transition-transform" />
-                </div>
-              </div>
-
-              {/* Row 2: Style & Voice */}
-              <div
-                onClick={() => onJumpToStep(2)}
-                className="p-3.5 sm:p-4 rounded-xl border border-transparent hover:border-light-gray hover:bg-light-gray/30 flex items-center justify-between gap-3 transition-all cursor-pointer group"
-              >
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 border border-purple-100 flex items-center justify-center shrink-0">
-                    <Mic className="w-4 h-4 stroke-[2.2]" />
-                  </div>
-                  <div className="min-w-0">
-                    <h4 className="text-xs sm:text-[13px] font-bold text-dark-black font-secondary group-hover:text-primary transition-colors">
-                      Style &amp; Voice
-                    </h4>
-                    <p className="text-[11px] text-medium-black font-normal truncate mt-0.5">
-                      Tone, personality, and communication style.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 shrink-0">
-                  <div className="text-right">
-                    <div className="text-xs font-bold text-dark-black font-secondary">
-                      Confident, Conversational
-                    </div>
-                    <div className="text-[11px] text-medium-black">
-                      Professional
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-light-black group-hover:text-medium-black group-hover:translate-x-0.5 transition-transform" />
-                </div>
-              </div>
-
-              {/* Row 3: Conversation Flow */}
-              <div
-                onClick={() => onJumpToStep(3)}
-                className="p-3.5 sm:p-4 rounded-xl border border-transparent hover:border-light-gray hover:bg-light-gray/30 flex items-center justify-between gap-3 transition-all cursor-pointer group"
-              >
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
-                    <MessageSquare className="w-4 h-4 stroke-[2.2]" />
-                  </div>
-                  <div className="min-w-0">
-                    <h4 className="text-xs sm:text-[13px] font-bold text-dark-black font-secondary group-hover:text-primary transition-colors">
-                      Conversation Flow
-                    </h4>
-                    <p className="text-[11px] text-medium-black font-normal truncate mt-0.5">
-                      Call stages and key conversation goals.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 shrink-0">
-                  <div className="text-right">
-                    <div className="text-xs font-bold text-dark-black font-secondary">
-                      {stagesCount} Stages
-                    </div>
-                    <div className="text-[11px] text-medium-black">
-                      Goal-Oriented
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-light-black group-hover:text-medium-black group-hover:translate-x-0.5 transition-transform" />
-                </div>
-              </div>
-
-              {/* Row 4: Objection Handling */}
-              <div
-                onClick={() => onJumpToStep(4)}
-                className="p-3.5 sm:p-4 rounded-xl border border-transparent hover:border-light-gray hover:bg-light-gray/30 flex items-center justify-between gap-3 transition-all cursor-pointer group"
-              >
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 border border-amber-100 flex items-center justify-center shrink-0">
-                    <ShieldAlert className="w-4 h-4 stroke-[2.2]" />
-                  </div>
-                  <div className="min-w-0">
-                    <h4 className="text-xs sm:text-[13px] font-bold text-dark-black font-secondary group-hover:text-primary transition-colors">
-                      Objection Handling
-                    </h4>
-                    <p className="text-[11px] text-medium-black font-normal truncate mt-0.5">
-                      Objection tree and response variations.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 shrink-0">
-                  <div className="text-right">
-                    <div className="text-xs font-bold text-dark-black font-secondary">
-                      {objectionsCount} Lead Types
-                    </div>
-                    <div className="text-[11px] text-medium-black">
-                      20+ Variations Each
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-light-black group-hover:text-medium-black group-hover:translate-x-0.5 transition-transform" />
-                </div>
-              </div>
-
-              {/* Row 5: Resources & Scripts */}
-              <div
-                onClick={() => onJumpToStep(5)}
-                className="p-3.5 sm:p-4 rounded-xl border border-transparent hover:border-light-gray hover:bg-light-gray/30 flex items-center justify-between gap-3 transition-all cursor-pointer group"
-              >
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0">
-                    <Folder className="w-4 h-4 stroke-[2.2]" />
-                  </div>
-                  <div className="min-w-0">
-                    <h4 className="text-xs sm:text-[13px] font-bold text-dark-black font-secondary group-hover:text-primary transition-colors">
-                      Resources &amp; Scripts
-                    </h4>
-                    <p className="text-[11px] text-medium-black font-normal truncate mt-0.5">
-                      Approved resources and scripts.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 shrink-0">
-                  <div className="text-right">
-                    <div className="text-xs font-bold text-dark-black font-secondary">
-                      {resourcesCount} Resources
-                    </div>
-                    <div className="text-[11px] text-medium-black">
-                      {scriptsCount} Scripts
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-light-black group-hover:text-medium-black group-hover:translate-x-0.5 transition-transform" />
-                </div>
-              </div>
-
-              {/* Row 6: AI Prompt Framework */}
-              <div
-                onClick={() => onJumpToStep(6)}
-                className="p-3.5 sm:p-4 rounded-xl border border-transparent hover:border-light-gray hover:bg-light-gray/30 flex items-center justify-between gap-3 transition-all cursor-pointer group"
-              >
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="w-9 h-9 rounded-xl bg-teal-50 text-primary border border-teal-100 flex items-center justify-center shrink-0">
-                    <Cpu className="w-4 h-4 stroke-[2.2]" />
-                  </div>
-                  <div className="min-w-0">
-                    <h4 className="text-xs sm:text-[13px] font-bold text-dark-black font-secondary group-hover:text-primary transition-colors">
-                      AI Prompt Framework
-                    </h4>
-                    <p className="text-[11px] text-medium-black font-normal truncate mt-0.5">
-                      Logic, rules, prompt length, and guardrails.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 shrink-0">
-                  <div className="text-right">
-                    <div className="text-xs font-bold text-dark-black font-secondary">
-                      Configured
-                    </div>
-                    <div className="text-[11px] text-medium-black">
-                      All Settings Applied
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-light-black group-hover:text-medium-black group-hover:translate-x-0.5 transition-transform" />
-                </div>
-              </div>
-
-              {/* Row 7: Advanced Settings */}
-              <div
-                onClick={() => onJumpToStep(6)}
-                className="p-3.5 sm:p-4 rounded-xl border border-transparent hover:border-light-gray hover:bg-light-gray/30 flex items-center justify-between gap-3 transition-all cursor-pointer group"
-              >
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="w-9 h-9 rounded-xl bg-orange-50 text-orange-600 border border-orange-100 flex items-center justify-center shrink-0">
-                    <Sliders className="w-4 h-4 stroke-[2.2]" />
-                  </div>
-                  <div className="min-w-0">
-                    <h4 className="text-xs sm:text-[13px] font-bold text-dark-black font-secondary group-hover:text-primary transition-colors">
-                      Advanced Settings
-                    </h4>
-                    <p className="text-[11px] text-medium-black font-normal truncate mt-0.5">
-                      Fine-tuned behaviors and thresholds.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 shrink-0">
-                  <div className="text-right">
-                    <div className="text-xs font-bold text-dark-black font-secondary">
-                      6 Settings
-                    </div>
-                    <div className="text-[11px] text-medium-black">
-                      Optimized
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-light-black group-hover:text-medium-black group-hover:translate-x-0.5 transition-transform" />
-                </div>
-              </div>
-            </div>
+          </div>
+          <div className="divide-y divide-light-gray/70">
+            {SUMMARY.map((item) => {
+              const errors = errorsFor(item.step);
+              const warnings = warningsFor(item.step);
+              return (
+                <button key={item.step} type="button" onClick={() => onJumpToStep(item.step)} className="w-full py-3 flex items-center gap-3 text-left group cursor-pointer">
+                  <span className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0"><item.icon className="w-4 h-4" /></span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-semibold text-dark-black group-hover:text-primary">{item.title}</span>
+                    <span className="block text-xs text-light-black truncate">{item.detail}</span>
+                  </span>
+                  {errors > 0 && <span className="text-[11px] font-semibold text-red-600 flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> {errors} to fix</span>}
+                  {!errors && warnings > 0 && <span className="text-[11px] font-semibold text-amber-600 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> {warnings} to review</span>}
+                  {check && !errors && !warnings && <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Ready</span>}
+                  <ChevronRight className="w-4 h-4 text-light-black" />
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* ── Quality Check & AI recommendations (under the summary) ── */}
-        <div className="lg:col-span-8 lg:row-start-2">
-          <div className="bg-white rounded-2xl border border-light-gray p-5 sm:p-7 shadow-sm space-y-4">
-            <div className="flex items-center justify-between gap-3 pb-3 border-b border-light-gray/60">
-              <h2 className="text-base sm:text-lg font-bold text-dark-black font-secondary">Quality Check</h2>
-              <span className="text-2xl font-bold text-primary font-secondary">{qualityScore}<span className="text-sm text-light-black font-semibold">/100</span></span>
+        <div className="bg-white rounded-2xl border border-light-gray p-5 sm:p-6 shadow-sm space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base sm:text-lg font-bold text-dark-black font-secondary">Publish Checks</h2>
+              <p className="text-xs text-light-black">Required fields, allowed values, lengths, duplicates and contradictions (Spec 12 §9).</p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {checks.map((check) => (
-                <div key={check.label} className="flex items-center gap-2 text-xs font-medium text-dark-black/80">
-                  <span className={`w-2 h-2 rounded-full ${check.ok ? "bg-emerald-500" : "bg-amber-500"}`} />
-                  {check.label}
+            <button type="button" onClick={runChecks} disabled={checking} className="px-3 py-2 rounded-xl border border-light-gray text-xs font-semibold flex items-center gap-1.5 hover:bg-light-gray/50 cursor-pointer disabled:opacity-50">
+              <RefreshCw className={`w-3.5 h-3.5 ${checking ? "animate-spin" : ""}`} /> {checking ? "Checking..." : "Run checks again"}
+            </button>
+          </div>
+
+          {!check && <p className="text-xs text-light-black">Running checks...</p>}
+          {check && check.ok && !check.warnings.length && <p className="text-sm text-emerald-600 font-semibold flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> Everything checks out.</p>}
+
+          {check?.errors.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-bold text-red-600">Must fix before publishing ({check.errors.length})</p>
+              {check.errors.map((item, index) => (
+                <div key={`e-${index}`} className="flex items-start justify-between gap-3 p-3 rounded-xl bg-red-50/60 border border-red-100 text-xs">
+                  <span className="flex items-start gap-2 text-dark-black"><XCircle className="w-4 h-4 text-red-500 shrink-0" /> {item.message}</span>
+                  <button type="button" onClick={() => onJumpToStep(item.step)} className="text-primary font-semibold whitespace-nowrap cursor-pointer">Fix in {item.section}</button>
                 </div>
               ))}
             </div>
-            <div>
-              <h3 className="text-sm font-bold text-dark-black mb-2">AI Recommendations</h3>
-              <ul className="space-y-1.5 text-xs text-medium-black list-disc pl-4">
-                {recommendations.map((tip) => <li key={tip}>{tip}</li>)}
-              </ul>
-            </div>
-          </div>
-        </div>
+          )}
 
-        {/* ── RIGHT COLUMN: Review Checklist, Impact Preview, Publish Card ── */}
-        <div className="lg:col-span-4 lg:row-start-1 lg:row-span-2 lg:col-start-9 space-y-6">
-          {/* Card 1: Review Checklist */}
-          <div className="bg-white rounded-2xl border border-light-gray p-5 sm:p-6 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 stroke-[2.2]" />
-                <h3 className="text-xs sm:text-sm font-bold text-dark-black font-secondary">
-                  Review Checklist
-                </h3>
-              </div>
-              <span className="text-xs font-bold text-dark-black font-secondary">
-                7/7
-              </span>
-            </div>
-
-            <div className="space-y-2.5 text-xs">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-dark-black font-medium">
-                  <div className="w-4 h-4 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                    <Check className="w-3 h-3 stroke-[3]" />
-                  </div>
-                  <span>All sections completed</span>
-                </div>
-                <span className="text-[11px] text-medium-black shrink-0">
-                  Completed
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-dark-black font-medium">
-                  <div className="w-4 h-4 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                    <Check className="w-3 h-3 stroke-[3]" />
-                  </div>
-                  <span>Playbook preview tested</span>
-                </div>
-                <span className="text-[11px] text-medium-black shrink-0">
-                  Completed
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-dark-black font-medium">
-                  <div className="w-4 h-4 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                    <Check className="w-3 h-3 stroke-[3]" />
-                  </div>
-                  <span>Logic and rules configured</span>
-                </div>
-                <span className="text-[11px] text-medium-black shrink-0">
-                  Completed
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-dark-black font-medium">
-                  <div className="w-4 h-4 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                    <Check className="w-3 h-3 stroke-[3]" />
-                  </div>
-                  <span>Guardrails and safety set</span>
-                </div>
-                <span className="text-[11px] text-medium-black shrink-0">
-                  Completed
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-dark-black font-medium">
-                  <div className="w-4 h-4 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                    <Check className="w-3 h-3 stroke-[3]" />
-                  </div>
-                  <span>Advanced settings reviewed</span>
-                </div>
-                <span className="text-[11px] text-medium-black shrink-0">
-                  Completed
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 2: Playbook Impact Preview */}
-          <div className="bg-white rounded-2xl border border-light-gray p-5 sm:p-6 shadow-sm space-y-3.5">
-            <h3 className="text-xs sm:text-sm font-bold text-dark-black font-secondary">
-              Playbook Impact Preview
-            </h3>
-
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="p-3 rounded-xl bg-emerald-50/70 border border-emerald-100 space-y-1">
-                <div className="flex items-center justify-center gap-1 text-emerald-700 font-bold text-sm font-secondary">
-                  <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>+35%</span>
-                </div>
-                <div className="text-[10px] text-emerald-700/80 leading-tight">
-                  Expected Trust Gain
-                </div>
-              </div>
-
-              <div className="p-3 rounded-xl bg-purple-50/70 border border-purple-100 space-y-1">
-                <div className="flex items-center justify-center gap-1 text-purple-700 font-bold text-sm font-secondary">
-                  <Target className="w-3.5 h-3.5 text-purple-600" />
-                  <span>+28%</span>
-                </div>
-                <div className="text-[10px] text-purple-700/80 leading-tight">
-                  Objection Conversion
-                </div>
-              </div>
-
-              <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-100 space-y-1">
-                <div className="flex items-center justify-center gap-1 text-amber-700 font-bold text-sm font-secondary">
-                  <Zap className="w-3.5 h-3.5 text-amber-600" />
-                  <span>+40%</span>
-                </div>
-                <div className="text-[10px] text-amber-700/80 leading-tight">
-                  Prompt Effectiveness
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 3: Publish Playbook Card */}
-          <div className="bg-white rounded-2xl border border-light-gray p-5 sm:p-6 shadow-sm space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-teal-50 text-primary border border-teal-200/70 flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
-                <span className="text-sm font-secondary">A</span>
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-xs sm:text-sm font-bold text-dark-black font-secondary">
-                  Publish Playbook
-                </h3>
-                <p className="text-[11px] text-medium-black mt-0.5 truncate">
-                  Make this playbook available to your team.
-                </p>
-              </div>
-            </div>
-
-            {/* Visibility Selector */}
-            <div className="space-y-1.5 relative">
-              <label className="block text-xs font-semibold text-dark-black">
-                Visibility
-              </label>
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setVisibilityDropdownOpen(!visibilityDropdownOpen)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-light-gray hover:border-medium-black/30 bg-white text-xs font-medium text-dark-black flex items-center justify-between cursor-pointer shadow-2xs transition-all"
-                >
-                  <span className="flex items-center gap-2">
-                    <span className="text-medium-black font-normal">👥</span>
-                    <span>{selectedVisibility}</span>
+          {check?.warnings.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-bold text-amber-700">Needs a reviewer&apos;s decision ({check.warnings.length})</p>
+              {check.warnings.map((item, index) => (
+                <div key={`w-${index}`} className="flex items-start justify-between gap-3 p-3 rounded-xl bg-amber-50/60 border border-amber-100 text-xs">
+                  <span className="flex items-start gap-2 text-dark-black">
+                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                    <span><span className="font-semibold">{item.kind === "contradiction" ? "Contradiction: " : ""}</span>{item.message}</span>
                   </span>
-                  <ChevronDown className="w-4 h-4 text-medium-black" />
-                </button>
-
-                {visibilityDropdownOpen && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-light-gray rounded-xl shadow-lg z-20 py-1.5 space-y-0.5">
-                    {VISIBILITY_OPTIONS.map((opt) => (
-                      <button
-                        key={opt}
-                        type="button"
-                        onClick={() => handleSelectVisibility(opt)}
-                        className={`w-full text-left px-3.5 py-2 text-xs transition-colors flex items-center justify-between cursor-pointer ${
-                          selectedVisibility === opt
-                            ? "bg-teal-50 text-primary font-semibold"
-                            : "text-dark-black hover:bg-light-gray/50"
-                        }`}
-                      >
-                        <span>{opt}</span>
-                        {selectedVisibility === opt && (
-                          <Check className="w-3.5 h-3.5 text-primary" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+                  <button type="button" onClick={() => onJumpToStep(item.step)} className="text-primary font-semibold whitespace-nowrap cursor-pointer">Open {item.section}</button>
+                </div>
+              ))}
             </div>
-
-            {/* Main Action Button */}
-            <button
-              type="button"
-              onClick={handlePublishClick}
-              className="w-full py-3 px-4 rounded-xl bg-primary hover:bg-medium-teal text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-sm hover:shadow-md cursor-pointer select-none"
-            >
-              <span className="text-[10px]">▲</span>
-              <span>Publish Playbook</span>
-            </button>
-
-            {/* Footer note */}
-            <div className="text-center text-[11px] text-medium-black flex items-center justify-center gap-1.5 pt-0.5">
-              <Lock className="w-3 h-3 text-medium-black/70" />
-              <span>You can always edit and republish later.</span>
-            </div>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* ── Published Success Modal ── */}
-      <PublishedSuccessModal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        formData={{
-          ...formData,
-          visibility: selectedVisibility,
-        }}
-        onPreview={() => {
-          setModalOpen(false);
-          toast.success("Opening live simulator preview...");
-        }}
-        onManageAccess={() => {
-          toast.success("Opening access permissions...");
-        }}
-        onViewDetails={() => {
-          toast.success("Viewing publication audit logs...");
-        }}
-      />
+      {/* Right: version and publish */}
+      <div id="publish-card" className="xl:col-span-4 space-y-6">
+        <div className="bg-white rounded-2xl border border-light-gray p-5 sm:p-6 shadow-sm space-y-4">
+          <div className="flex items-center gap-2">
+            <Rocket className="w-5 h-5 text-primary" />
+            <h2 className="text-base font-bold text-dark-black font-secondary">Publish Playbook</h2>
+          </div>
+          <p className="text-xs text-medium-black flex items-start gap-1.5">
+            <Lock className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            <span>
+              Publishes as <span className="font-semibold">v{check?.nextVersion ?? "…"}</span>. A published version never changes; later edits become a new draft.
+            </span>
+          </p>
+          {check?.changedSections?.length > 0 && <p className="text-xs text-light-black">Changed since the version in force: {check.changedSections.join(", ")}.</p>}
+
+          <div className="space-y-1.5">
+            <label htmlFor="playbook-visibility" className="text-xs font-semibold text-dark-black block">Visibility</label>
+            <select id="playbook-visibility" value={visibility} onChange={(event) => onChange("visibility", event.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-light-gray text-xs bg-white focus:outline-none focus:border-primary cursor-pointer">
+              {Object.entries(VISIBILITIES).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            </select>
+            <p className="text-[11px] text-light-black">Who can see and use it. This doesn&apos;t change how the AI coaches.</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="release-notes" className="text-xs font-semibold text-dark-black block">
+              Release notes {check?.releaseNotesRequired ? <span className="text-red-500">*</span> : <span className="font-normal text-light-black">(optional for the first version)</span>}
+            </label>
+            <textarea id="release-notes" rows={3} maxLength={2000} value={releaseNotes} onChange={(event) => setReleaseNotes(event.target.value)} placeholder="What changed in the methodology, and how it affects live coaching" className="w-full px-3 py-2.5 rounded-xl border border-light-gray text-xs resize-none focus:outline-none focus:border-primary" />
+          </div>
+
+          {check?.warnings.length > 0 && (
+            <label className="flex items-start gap-2 text-xs text-dark-black cursor-pointer">
+              <input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} className="mt-0.5 accent-primary" />
+              I reviewed the {check.warnings.length} warning{check.warnings.length === 1 ? "" : "s"} and confirm this is the intended behavior.
+            </label>
+          )}
+
+          <button
+            type="button"
+            onClick={publish}
+            disabled={publishing || checking || !check?.ok || (check.warnings.length > 0 && !acknowledged) || (check.releaseNotesRequired && releaseNotes.trim().length < 10)}
+            className="w-full py-3 rounded-xl bg-primary hover:bg-medium-teal text-white text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Rocket className="w-4 h-4" /> {publishing ? "Publishing..." : `Publish v${check?.nextVersion ?? ""}`}
+          </button>
+          {check && !check.ok && <p className="text-[11px] text-red-600 text-center">Fix the {check.errors.length} item{check.errors.length === 1 ? "" : "s"} on the left first.</p>}
+        </div>
+      </div>
     </div>
   );
 }

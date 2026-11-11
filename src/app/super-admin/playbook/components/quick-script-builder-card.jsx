@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import {
   Code2,
   Phone,
@@ -9,7 +9,6 @@ import {
   BookOpen,
   PlusCircle,
 } from "lucide-react";
-import AddResourceModal from "./add-resource-modal";
 
 const BUILDER_ITEMS = [
   {
@@ -49,20 +48,9 @@ const BUILDER_ITEMS = [
   },
 ];
 
-const QuickScriptBuilderCard = ({
-  onAddResource = () => {},
-}) => {
-  const [selectedType, setSelectedType] = useState(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-
-  const handleCardClick = (type) => {
-    setSelectedType(type);
-    setIsModalOpen(true);
-  };
-
-  const handleSave = (newResource) => {
-    onAddResource(newResource);
-  };
+// Each card opens the Resources & Scripts "Add Resource" window with that type (onCreate(type))
+const QuickScriptBuilderCard = ({ onCreate = () => {} }) => {
+  const handleCardClick = (type) => onCreate(type);
 
   return (
     <div className="bg-white rounded-2xl border border-light-gray p-6 sm:p-7 shadow-sm space-y-5">
@@ -111,13 +99,6 @@ const QuickScriptBuilderCard = ({
         })}
       </div>
 
-      {/* Modal */}
-      <AddResourceModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSave={handleSave}
-        initialType={selectedType}
-      />
     </div>
   );
 };

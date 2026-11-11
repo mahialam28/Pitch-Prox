@@ -9,11 +9,15 @@ import PerformanceTrend from "./components/performance-trend";
 import LeadPipeline from "./components/lead-pipeline";
 import RecentCalls from "./components/recent-calls";
 import DashboardLoading from "./loading";
+import CalibrationReminder from "../calibration/components/calibration";
+import { useCalibrationStatus } from "../calibration/use-calibration-status";
 
 const DashboardPage = () => {
   const [dashboard, setDashboard] = useState(null);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
+  // Reminder until the user has calibrated (calling stays locked until then)
+  const { locked: calibrationPending } = useCalibrationStatus();
 
   useEffect(() => {
     let active = true;
@@ -46,6 +50,8 @@ const DashboardPage = () => {
 
   return (
     <div className="w-full flex flex-col gap-4 sm:gap-6">
+      {calibrationPending && <CalibrationReminder />}
+
       {/* Top Welcome Title Overview Block */}
       <PerformanceHeader userName={dashboard.user?.name} />
 

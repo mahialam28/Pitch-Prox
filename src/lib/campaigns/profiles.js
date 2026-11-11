@@ -5,7 +5,7 @@ import { CUSTOMER_ROLES } from "@/utils.js/roles";
 // ── Customer profiles for Campaigns & Journeys ──
 // One row per PitchProX customer user (account owners and team members), with every field
 // segment rules and journey conditions can test (lib/campaigns/rules).
-//   • Call usage: 0% / the plan's full allowance until calling is connected (phase 7).
+//   • Call usage: live calls this billing period against the plan's allowance + bonus calls.
 //   • Payment status: from the subscription state until Stripe reports real payments.
 //   • Email engagement: from opens in the outbox (once an email service reports them).
 
@@ -42,7 +42,8 @@ export async function loadProfiles({ userIds = null, now = new Date() } = {}) {
       subscriptions.current_period_start AS periodStart, subscriptions.current_period_end AS periodEnd,
       (SELECT MAX(created_at) FROM login_events WHERE login_events.user_id = users.id AND login_events.success = 1) AS lastLoginAt,
       (SELECT COUNT(*) FROM calibration_sessions WHERE calibration_sessions.user_id = users.id) AS calibrations,
-      (SELECT COALESCE(SUM(quantity), 0) FROM account_adjustments WHERE account_adjustments.organization_id = users.organization_id AND account_adjustments.kind = 'calls' AND account_adjustments.status = 'applied' AND account_adjustments.decided_at >= COALESCE(subscriptions.current_period_start, '1970-01-01')) AS bonusCalls
+      (SELECT COALESCE(SUM(quantity), 0) FROM account_adjustments WHERE account_adjustments.organization_id = users.organization_id AND account_adjustments.kind = 'calls' AND account_adjustments.status = 'applied' AND account_adjustments.decided_at >= COALESCE(subscriptions.current_period_start, '1970-01-01')) AS bonusCalls,
+      (SELECT COUNT(*) FROM calls WHERE calls.organization_id = users.organization_id AND calls.mode = 'live' AND calls.status = 'completed' AND calls.started_at >= COALESCE(subscriptions.current_period_start, '1970-01-01')) AS callsUsed
      FROM users
      JOIN organizations ON organizations.id = users.organization_id
      LEFT JOIN customer_accounts ON customer_accounts.organization_id = users.organization_id
@@ -108,7 +109,7 @@ export async function loadProfiles({ userIds = null, now = new Date() } = {}) {
     let subscriptionStatus = SUBSCRIPTION_LABELS[row.subscriptionStatus] ?? "Canceled";
     if (row.subscriptionStatus === "active" && Number(row.cancelScheduled)) subscriptionStatus = "Cancellation Scheduled";
     const callsIncluded = Number(row.callsIncluded ?? 0) + Number(row.bonusCalls ?? 0);
-    const callsUsed = 0; // live call counts arrive with calling (phase 7)
+    const callsUsed = Number(row.callsUsed ?? 0); // live calls this period (practice calls don't count)
 
     const org = featuresBy.get(row.organizationId) ?? {};
     const featureUsage = [

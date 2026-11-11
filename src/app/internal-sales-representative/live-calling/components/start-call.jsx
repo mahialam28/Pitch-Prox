@@ -213,7 +213,8 @@ export const StartCall = ({ onCallEnded, setup = {}, onSetupChange = () => { } }
     try {
       const saved = JSON.parse(raw);
       sessionStorage.removeItem(PENDING_CALL_KEY);
-      onSetupChange({ ...setup, ...saved });
+      // Header calls carry no contact; CRM / Leads calls bring contactKind, contactId and phoneId
+      onSetupChange({ ...setup, contactKind: null, contactId: null, phoneId: null, ...saved });
       setIsSetupOpen(false);
       return true;
     } catch {

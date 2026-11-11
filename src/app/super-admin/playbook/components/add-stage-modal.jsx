@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X,
@@ -72,7 +72,11 @@ const AddStageModal = ({
   const [goal, setGoal] = useState("");
   const [selectedIconIdx, setSelectedIconIdx] = useState(0);
 
-  useEffect(() => {
+  // Reset the form whenever the modal opens (or switches item) — synced during render, not in an effect
+  const [syncedFor, setSyncedFor] = useState(null);
+  const syncKey = isOpen ? editStage ?? "new" : null;
+  if (syncedFor !== syncKey) {
+    setSyncedFor(syncKey);
     if (editStage) {
       setTitle(editStage.title || "");
       setDescription(editStage.description || "");
@@ -87,7 +91,7 @@ const AddStageModal = ({
       setGoal("");
       setSelectedIconIdx(0);
     }
-  }, [editStage, isOpen]);
+  }
 
   if (!isOpen) return null;
 

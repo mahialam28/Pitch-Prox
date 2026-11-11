@@ -1,5 +1,8 @@
 "use client";
 
+import toast from "react-hot-toast";
+import { uploadBuilderFile } from "../builder-files";
+
 import React, { useState, useRef } from "react";
 import {
   Mic,
@@ -81,13 +84,18 @@ const LanguageVoiceGuidance = ({
     onWordsToAvoidChange(updated);
   };
 
-  const handleAudioUpload = (e) => {
+  // Uploaded straight away so the saved playbook keeps the recording
+  const handleAudioUpload = async (e) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const mb = (file.size / (1024 * 1024)).toFixed(1);
-      const newAudio = { name: file.name, size: `${mb} MB` };
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const saved = await uploadBuilderFile(file, "audio");
+      const newAudio = { name: saved.name, size: saved.size, url: saved.url };
       setAudio(newAudio);
       onAudioChange(newAudio);
+    } catch (error) {
+      toast.error(error.message);
     }
   };
 

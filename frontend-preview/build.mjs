@@ -9,8 +9,8 @@ import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
-const out = path.join(root, "Frontend");
-const keep = new Set(["node_modules", ".next", ".vercel", "package-lock.json", "docs"]); // docs: client documents (e.g. the page list)
+const out = path.resolve(root, "..", "Frontend"); // Code/Frontend, next to this app
+const keep = new Set([".git", "node_modules", ".next", ".vercel", "package-lock.json", "docs"]); // .git: the Pitch-Prox-Frontend repo (Vercel deploys from it); docs: client documents
 
 mkdirSync(out, { recursive: true });
 for (const entry of readdirSync(out)) if (!keep.has(entry)) rmSync(path.join(out, entry), { recursive: true, force: true });
@@ -25,13 +25,18 @@ cpSync(path.join(root, "src"), path.join(out, "src"), {
   },
 });
 // Server modules that talk to the database (nothing in the UI imports them)
+// (lib/ and its subfolders, e.g. lib/campaigns: the job runner, outbox and segment queries)
 const libDir = path.join(out, "src", "lib");
-for (const file of readdirSync(libDir)) {
-  const full = path.join(libDir, file);
-  if (!statSync(full).isFile()) continue;
-  const text = readFileSync(full, "utf8");
-  if (/from "@\/lib\/db"|from "\.\/db(\.js)?"|mysql2|next\/headers/.test(text) || file === "db.js" || file === "demo.js") rmSync(full);
-}
+const serverOnly = /from "@\/lib\/db"|from "\.\.?\/db(\.js)?"|mysql2|next\/headers/;
+(function strip(dir) {
+  for (const file of readdirSync(dir)) {
+    const full = path.join(dir, file);
+    if (statSync(full).isDirectory()) { strip(full); continue; }
+    if (serverOnly.test(readFileSync(full, "utf8")) || (dir === libDir && (file === "db.js" || file === "demo.js"))) rmSync(full);
+  }
+})(libDir);
+// Email sending (Postmark, system emails) runs on the server only
+rmSync(path.join(libDir, "email"), { recursive: true, force: true });
 // API-route helpers, now unused
 for (const file of ["api.js", "leads.js", "listing.js", "permissions.js", "pipeline.js", "storage.js"]) rmSync(path.join(libDir, file), { force: true });
 
@@ -67,12 +72,12 @@ writeFileSync(path.join(out, ".gitignore"), "/node_modules\n/.next/\n/out/\n.ver
 writeFileSync(path.join(out, "README.md"), `# PitchProX — design preview
 
 Front-end only build of PitchProX for client review. **Generated — don't edit here.**
-Make design changes in the main app (\`../src\`) and run \`node frontend-preview/build.mjs\` from the main app folder.
+Make design changes in the main app (\`../Full Code With Backend Main/src\`) and run \`node frontend-preview/build.mjs\` from the main app folder.
 
 - No server or database: every \`/api/\` call is answered in the browser from sample data (\`src/preview/\`).
 - Sign in with **any email and password** (opens the User portal), or use the role buttons on the sign-in page.
 - Changes made while previewing stay in that browser until "Switch role" / Logout.
 
-Run locally: \`npm install && npm run dev\`. Deploy on Vercel: import the repo and set **Root Directory** to \`Frontend\`. No environment variables are needed.
+Run locally: \`npm install && npm run dev\`. Deploy on Vercel: import the repo (the app is at the repo root). No environment variables are needed.
 `);
 console.log(`Frontend preview written to ${out}`);

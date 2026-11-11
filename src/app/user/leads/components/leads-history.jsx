@@ -23,7 +23,8 @@ import "swiper/css";
 import "swiper/css/free-mode";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { PENDING_CALL_KEY } from "@/utils.js/call-constants";
+import { queueCall } from "@/utils.js/start-call";
+import ChooseNumberDialog from "@/components/contacts/choose-number-dialog";
 import Dropdown from "@/components/shared/dropdown/dropdown";
 import AlertModal from "@/components/modals/alert-modal";
 import BadgeSelect from "@/components/shared/dropdown/badge-select";
@@ -397,21 +398,9 @@ const LeadsHistory = ({ onSelectLead, leads, onUpdateLead, onDeleteLead }) => {
 
   // Hand the lead over to the live-calling page (same bridge the CRM table and
   // app header use: sessionStorage + navigate). The call auto-starts there.
+  // Hand the lead to Live Calling on its first callable number; the call remembers which one
   const handleStartCall = (lead) => {
-    try {
-      sessionStorage.setItem(
-        PENDING_CALL_KEY,
-        JSON.stringify({
-          leadName: lead.name || "",
-          phoneNumber: lead.phoneNumber || "",
-          leadType: lead.leadType || "",
-          address: lead.propertyAddress || "",
-          playbook: "PitchProx Standard",
-        })
-      );
-    } catch {
-      /* sessionStorage unavailable — continue without prefill */
-    }
+    queueCall(lead, "lead");
     router.push(`${portal.base}/live-calling`);
   };
 
@@ -441,7 +430,13 @@ const LeadsHistory = ({ onSelectLead, leads, onUpdateLead, onDeleteLead }) => {
   // Functions without parameter types
   const handleStageChange = (leadId, newStage) => onUpdateLead?.(leadId, { stage: newStage });
   const handleStatusChange = (leadId, newStatus) => onUpdateLead?.(leadId, { status: newStatus });
-  const handleOutcomeChange = (leadId, newOutcome) => onUpdateLead?.(leadId, { outcome: newOutcome });
+  // "Wrong Number" is about one number: with several, ask which (the others stay callable)
+  const [wrongNumberFor, setWrongNumberFor] = useState(null);
+  const handleOutcomeChange = (leadId, newOutcome) => {
+    const contact = (leads ?? []).find((item) => item.id === leadId);
+    if (newOutcome === "Wrong Number" && contact?.phones?.length > 1) return setWrongNumberFor(contact);
+    return onUpdateLead?.(leadId, { outcome: newOutcome });
+  };
 
   const activeTabIndex = TABS.findIndex((t) => t.key === activeTab);
 
@@ -560,6 +555,16 @@ const LeadsHistory = ({ onSelectLead, leads, onUpdateLead, onDeleteLead }) => {
 
   return (
     <div className="bg-white rounded-2xl border border-light-gray shadow-sm w-full p-4 sm:p-6">
+      {wrongNumberFor && (
+        <ChooseNumberDialog
+          contact={wrongNumberFor}
+          onClose={() => setWrongNumberFor(null)}
+          onChoose={(phoneId) => {
+            onUpdateLead?.(wrongNumberFor.id, { outcome: "Wrong Number", phoneId });
+            setWrongNumberFor(null);
+          }}
+        />
+      )}
       {/* Top Bar with Navigation Tabs and Time Dropdown */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6 border-b border-light-gray">
         {/* Desktop Tabs (>1024px) with Scroll Arrows */}

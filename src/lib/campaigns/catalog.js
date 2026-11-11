@@ -13,7 +13,7 @@ export const USER_EVENTS = [
   { key: "trial_converted", label: "Trial Converted to Paid", source: "app" },
   { key: "calibration_completed", label: "Calibration Completed", source: "app" },
   { key: "calibration_not_completed", label: "Calibration Not Completed", source: "computed", timed: { label: "Not completed within", unit: "hours", default: 24 } },
-  { key: "first_call_completed", label: "First Call Completed", source: "pending" },
+  { key: "first_call_completed", label: "First Call Completed", source: "app" },
   { key: "call_usage_threshold", label: "Call Usage Threshold Reached", source: "computed", usage: true },
   { key: "call_limit_reached", label: "Call Limit Reached", source: "computed" },
   { key: "call_bundle_purchased", label: "Call Bundle Purchased", source: "pending" },

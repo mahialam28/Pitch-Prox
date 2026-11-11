@@ -172,3 +172,21 @@ textarea::placeholder {
   color: #94a3b8;
   opacity: 1;
 }
+/* Wide tables on phones (components/shared/table-scroll-hints.jsx): a fade where more columns are
+   hidden, and the first column (usually the name) pinned while swiping */
+[data-more="right"] { mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent); }
+[data-more="left"] { mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent); }
+[data-more="both"] { mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent); }
+@media (max-width: 639px) {
+  [data-scroll-table] table :is(th, td):first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background-color: #fff;
+    box-shadow: 1px 0 0 rgba(15, 23, 42, 0.06);
+  }
+}
+
+/* Absolutely positioned bits inside a scrolling table (screen-reader labels, badges) must stay inside
+   the scroll box; without a positioned ancestor they escaped it and widened the whole page */
+.overflow-x-auto:has(table) { position: relative; }

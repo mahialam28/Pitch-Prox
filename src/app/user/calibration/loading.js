@@ -36,7 +36,7 @@ const CalibrationLoading = () => {
       </div>
 
       {/* ═══ Main Workspace — Two Columns ═══ */}
-      <div className="w-full flex flex-col lg:flex-row gap-6 items-start">
+      <div className="w-full flex flex-col xl:flex-row gap-6 items-start">
         {/* ═══ Left Column ═══ */}
         <div className="flex-1 flex flex-col gap-6 w-full">
           {/* Simulation Header skeleton */}
@@ -118,7 +118,7 @@ const CalibrationLoading = () => {
         </div>
 
         {/* ═══ Right Column (Side Panel) ═══ */}
-        <div className="w-full lg:w-[380px] shrink-0 flex flex-col gap-6">
+        <div className="w-full xl:w-[380px] shrink-0 flex flex-col gap-6">
           {/* Session Status skeleton */}
           <div className="bg-white/60 p-5 rounded-2xl border border-light-gray/50 shadow-sm flex flex-col gap-3">
             <SkeletonBlock className="h-3 w-24" />

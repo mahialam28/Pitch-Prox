@@ -8,9 +8,11 @@ import {
   Check,
   CheckCircle2,
   Pencil,
+  Trash2,
 } from "lucide-react";
 import AddCoachingPillarModal from "./add-coaching-pillar-modal";
 import AddPromptRuleModal from "./add-prompt-rule-modal";
+import { confirmReset } from "@/lib/alerts";
 import toast from "react-hot-toast";
 
 export const DEFAULT_LANGUAGE_RULES = {
@@ -97,12 +99,41 @@ export const DEFAULT_LANGUAGE_RULES = {
 const LanguageRulesSection = ({
   data = {},
   onChange = () => {},
-  onResetDefaults = () => {},
+  onResetDefaults,
 }) => {
   const [priorityModalOpen, setPriorityModalOpen] = useState(false);
   const [encourageModalOpen, setEncourageModalOpen] = useState(false);
   const [avoidModalOpen, setAvoidModalOpen] = useState(false);
+  // Inline edit of one special instruction: { id, text } (id "new" = adding one)
   const [editingInstruction, setEditingInstruction] = useState(null);
+
+  // The first unused "inst-N" id
+  const freeId = (list) => {
+    let n = list.length + 1;
+    while (list.some((item) => item.id === `inst-${n}`)) n += 1;
+    return `inst-${n}`;
+  };
+
+  const saveInstruction = () => {
+    const text = editingInstruction.text.trim();
+    const list = currentData.specialInstructions || [];
+    if (!text) {
+      setEditingInstruction(null);
+      return;
+    }
+    handleFieldChange(
+      "specialInstructions",
+      editingInstruction.id === "new"
+        ? [...list, { id: freeId(list), text }]
+        : list.map((item) => (item.id === editingInstruction.id ? { ...item, text } : item))
+    );
+    setEditingInstruction(null);
+  };
+
+  const deleteInstruction = (id) => {
+    handleFieldChange("specialInstructions", (currentData.specialInstructions || []).filter((item) => item.id !== id));
+    setEditingInstruction(null);
+  };
 
   const currentData = {
     ...DEFAULT_LANGUAGE_RULES,
@@ -151,7 +182,8 @@ const LanguageRulesSection = ({
     handleFieldChange("avoidWords", [...words, item]);
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
+    if (!(await confirmReset("Language Rules"))) return;
     if (onResetDefaults) {
       onResetDefaults();
     } else {
@@ -358,33 +390,72 @@ const LanguageRulesSection = ({
         </label>
 
         <div className="space-y-2">
-          {(currentData.specialInstructions || []).map((inst) => (
-            <div
-              key={inst.id}
-              className="p-3.5 rounded-xl border border-light-gray bg-white flex items-center justify-between gap-3 shadow-2xs hover:border-medium-black/20 transition-all"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-5 h-5 rounded-full bg-teal-50 text-primary flex items-center justify-center shrink-0">
-                  <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+          {[...(currentData.specialInstructions || []), ...(editingInstruction?.id === "new" ? [{ id: "new", text: "" }] : [])].map((inst) =>
+            editingInstruction?.id === inst.id ? (
+              <div key={inst.id} className="p-3 rounded-xl border border-primary/50 bg-white space-y-2 shadow-2xs">
+                <textarea
+                  autoFocus
+                  rows={2}
+                  maxLength={300}
+                  value={editingInstruction.text}
+                  onChange={(e) => setEditingInstruction({ ...editingInstruction, text: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      saveInstruction();
+                    }
+                    if (e.key === "Escape") setEditingInstruction(null);
+                  }}
+                  aria-label="Special language instruction"
+                  placeholder="e.g. Never quote commission percentages on a first call."
+                  className="w-full px-3 py-2 rounded-lg border border-light-gray text-xs sm:text-[13px] text-dark-black focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 resize-none"
+                />
+                <div className="flex items-center justify-between gap-2">
+                  {inst.id !== "new" ? (
+                    <button type="button" onClick={() => deleteInstruction(inst.id)} className="flex items-center gap-1 text-[11px] text-rose-500 hover:text-rose-600 cursor-pointer">
+                      <Trash2 className="w-3 h-3" /> Delete
+                    </button>
+                  ) : <span />}
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => setEditingInstruction(null)} className="px-3 py-1 rounded-lg border border-light-gray text-[11px] font-semibold text-medium-black hover:bg-light-gray cursor-pointer">Cancel</button>
+                    <button type="button" onClick={saveInstruction} className="px-3 py-1 rounded-lg bg-primary hover:bg-medium-teal text-white text-[11px] font-semibold cursor-pointer">Save</button>
+                  </div>
                 </div>
-                <span className="text-xs sm:text-[13px] text-dark-black font-normal truncate">
-                  {inst.text}
-                </span>
               </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingInstruction(inst);
-                  toast("Edit instruction");
-                }}
-                className="text-light-black hover:text-dark-black p-1 rounded-lg transition-colors cursor-pointer"
-                title="Edit instruction"
+            ) : (
+              <div
+                key={inst.id}
+                className="p-3.5 rounded-xl border border-light-gray bg-white flex items-center justify-between gap-3 shadow-2xs hover:border-medium-black/20 transition-all"
               >
-                <Pencil className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ))}
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-5 h-5 rounded-full bg-teal-50 text-primary flex items-center justify-center shrink-0">
+                    <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                  </div>
+                  <span className="text-xs sm:text-[13px] text-dark-black font-normal">
+                    {inst.text}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setEditingInstruction({ id: inst.id, text: inst.text })}
+                  className="text-light-black hover:text-dark-black p-1 rounded-lg transition-colors cursor-pointer shrink-0"
+                  title="Edit instruction"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )
+          )}
+          {!editingInstruction && (
+            <button
+              type="button"
+              onClick={() => setEditingInstruction({ id: "new", text: "" })}
+              className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-medium-teal cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add instruction
+            </button>
+          )}
         </div>
       </div>
 

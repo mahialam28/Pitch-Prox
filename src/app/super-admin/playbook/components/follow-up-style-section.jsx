@@ -7,10 +7,10 @@ import {
   Plus,
   Check,
   X,
-  ChevronDown,
 } from "lucide-react";
 import AddPromptRuleModal from "./add-prompt-rule-modal";
 import AddCoachingPillarModal from "./add-coaching-pillar-modal";
+import { confirmReset } from "@/lib/alerts";
 import toast from "react-hot-toast";
 
 export const DEFAULT_FOLLOW_UP_STYLE = {
@@ -79,7 +79,7 @@ export const DEFAULT_FOLLOW_UP_STYLE = {
 const FollowUpStyleSection = ({
   data = {},
   onChange = () => {},
-  onResetDefaults = () => {},
+  onResetDefaults,
 }) => {
   const [toneModalOpen, setToneModalOpen] = useState(false);
   const [encourageModalOpen, setEncourageModalOpen] = useState(false);
@@ -134,7 +134,8 @@ const FollowUpStyleSection = ({
     ]);
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
+    if (!(await confirmReset("Follow-Up Style"))) return;
     if (onResetDefaults) {
       onResetDefaults();
     } else {
@@ -183,16 +184,16 @@ const FollowUpStyleSection = ({
           <textarea
             value={currentData.goal}
             onChange={(e) => {
-              if (e.target.value.length <= 300) {
+              if (e.target.value.length <= 500) {
                 handleFieldChange("goal", e.target.value);
               }
             }}
             rows={2}
-            maxLength={300}
+            maxLength={500}
             className="w-full px-3.5 py-2.5 pb-6 rounded-xl border border-light-gray bg-white text-xs sm:text-[13px] text-dark-black focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none font-normal leading-relaxed"
           />
           <div className="absolute right-3 bottom-2 text-[10px] sm:text-[11px] font-medium text-medium-black/70 pointer-events-none">
-            {(currentData.goal || "").length}/300
+            {(currentData.goal || "").length}/500
           </div>
         </div>
       </div>
@@ -206,16 +207,16 @@ const FollowUpStyleSection = ({
           <textarea
             value={currentData.guidance}
             onChange={(e) => {
-              if (e.target.value.length <= 300) {
+              if (e.target.value.length <= 500) {
                 handleFieldChange("guidance", e.target.value);
               }
             }}
             rows={2}
-            maxLength={300}
+            maxLength={500}
             className="w-full px-3.5 py-2.5 pb-6 rounded-xl border border-light-gray bg-white text-xs sm:text-[13px] text-dark-black focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none font-normal leading-relaxed"
           />
           <div className="absolute right-3 bottom-2 text-[10px] sm:text-[11px] font-medium text-medium-black/70 pointer-events-none">
-            {(currentData.guidance || "").length}/300
+            {(currentData.guidance || "").length}/500
           </div>
         </div>
       </div>
@@ -341,11 +342,11 @@ const FollowUpStyleSection = ({
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {(currentData.cadence || DEFAULT_FOLLOW_UP_STYLE.cadence).map((c) => (
             <div
               key={c.step}
-              className="p-3.5 rounded-xl border border-light-gray bg-white space-y-1.5 shadow-2xs"
+              className="p-3.5 rounded-xl border border-light-gray bg-white space-y-1.5 shadow-2xs min-w-0 break-words"
             >
               <div className="w-5 h-5 rounded-full bg-light-gray flex items-center justify-center text-[11px] font-bold text-medium-black">
                 {c.step}
@@ -374,9 +375,6 @@ const FollowUpStyleSection = ({
               className="py-1.5 px-3 rounded-xl border border-light-gray bg-white text-xs font-medium text-dark-black shadow-2xs flex items-center gap-1.5"
             >
               <span>{angle}</span>
-              {(idx === 1 || idx === 2) && (
-                <ChevronDown className="w-3.5 h-3.5 text-medium-black" />
-              )}
             </div>
           ))}
         </div>

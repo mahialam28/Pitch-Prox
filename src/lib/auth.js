@@ -6,10 +6,13 @@ import { PORTAL_ROLES, dashboardPathFor } from "@/utils.js/roles";
 export const SESSION_COOKIE = "pitchprox_session";
 const sessionDurationSeconds = 60 * 60 * 24 * 7;
 
-// The visitor's IP (NGINX passes it in X-Forwarded-For) and browser description
+// The visitor's IP and browser description. NGINX (CloudPanel) sets X-Real-IP to the connecting
+// address, which the visitor can't fake. The first X-Forwarded-For entry is whatever the visitor sent,
+// so only the last one (added by our proxy) is used, and only when X-Real-IP is missing.
 export async function requestClient() {
   const list = await headers();
-  const ip = list.get("x-forwarded-for")?.split(",")[0].trim() || list.get("x-real-ip") || null;
+  const forwarded = list.get("x-forwarded-for")?.split(",").map((part) => part.trim()).filter(Boolean) ?? [];
+  const ip = list.get("x-real-ip")?.trim() || forwarded[forwarded.length - 1] || null;
   return { ip: ip?.slice(0, 64) ?? null, userAgent: list.get("user-agent")?.slice(0, 500) ?? null };
 }
 
@@ -18,7 +21,12 @@ export const STAFF_SESSION_COOKIE = "pitchprox_staff_session";
 
 const cookieOptions = (maxAge) => ({ httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge });
 
+// "Remember me" on the sign-in form keeps the device signed in for 30 days instead of 7
+export const REMEMBER_ME_SECONDS = 60 * 60 * 24 * 30;
+
 export async function createSession(userId, { impersonationId = null, maxAgeSeconds = sessionDurationSeconds } = {}) {
+  // Expired sessions are only clutter (they no longer work): clear this person's while we're here
+  await query("DELETE FROM sessions WHERE user_id = ? AND expires_at < CURRENT_TIMESTAMP", [userId]);
   const token = createId("session");
   const expiresAt = new Date(Date.now() + maxAgeSeconds * 1000);
   const { ip, userAgent } = await requestClient();

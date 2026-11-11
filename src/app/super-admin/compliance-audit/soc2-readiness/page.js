@@ -1,107 +1,46 @@
 "use client";
 
-import React, { useState } from "react";
-import DialogModal, { DialogButton } from "@/components/modals/dialog-modal";
-import { Checkbox, Field, Select, fieldClass } from "@/app/super-admin/users/[id]/components/account-dialogs";
-import { showExportStartedToast, showSavedToast } from "@/lib/toast";
-import { Badge, Card, CardLink, DashboardGrid, DataTable, KpiRow, PageHeader, Person, Progress, StackedList } from "@/components/shared/dashboard-ui";
-
-// Design-only SOC 2 Readiness dashboard: sample data and a local invite dialog.
-
-const KPIS = [
-  { label: "Overall Readiness", value: "87%", note: "5% from last month", trend: "up" },
-  { label: "Controls Implemented", value: "118 / 134", note: "88% complete" },
-  { label: "Evidence Collected", value: "91%", note: "6% from last month", trend: "up" },
-  { label: "Open Gaps", value: "9", note: "3 from last month", trend: "down" },
-  { label: "Audit Window Opens", value: "42 days", note: "Fieldwork starts Jul 14" },
-];
-
-const CRITERIA = [
-  { criteria: "Security", controls: "62 / 64", progress: 98, status: "On track", owner: "Sarah Johnson", role: "Security Lead" },
-  { criteria: "Availability", controls: "18 / 20", progress: 90, status: "On track", owner: "Marcus Lee", role: "Engineering" },
-  { criteria: "Processing Integrity", controls: "14 / 17", progress: 82, status: "At risk", owner: "Priya Shah", role: "Data Science" },
-  { criteria: "Confidentiality", controls: "15 / 17", progress: 88, status: "On track", owner: "Mike Davis", role: "Operations" },
-  { criteria: "Privacy", controls: "9 / 16", progress: 56, status: "Behind", owner: "Jessica Lee", role: "Legal" },
-];
+import React, { useEffect, useState } from "react";
+import Link from "next/link";
+import toast from "react-hot-toast";
+import { Badge, Card, CardLink, DashboardGrid, DataTable, KpiRow, PageHeader, Person, Progress } from "@/components/shared/dashboard-ui";
+import { apiRequest, formatDate } from "@/lib/client-api";
+import { showError } from "@/lib/alerts";
+import { CONTROL_STATUSES, TRUST_SERVICE_CRITERIA } from "@/lib/compliance/evidence-catalog";
 
 const STATUS_TONE = { "On track": "green", "At risk": "amber", Behind: "red" };
-
-const GAPS = [
-  { control: "CC6.1", gap: "Quarterly access review evidence missing for Q1", owner: "Sarah Johnson", due: "May 30, 2025", severity: "High" },
-  { control: "CC7.2", gap: "Incident response tabletop not logged", owner: "Mike Davis", due: "Jun 06, 2025", severity: "Medium" },
-  { control: "A1.2", gap: "Backup restore test not documented", owner: "Emily Brown", due: "Jun 10, 2025", severity: "Medium" },
-  { control: "C1.1", gap: "Data classification policy awaiting approval", owner: "Daniel Miller", due: "Jun 12, 2025", severity: "Low" },
-  { control: "P4.1", gap: "Retention schedule not mapped to systems", owner: "Tom Wilson", due: "Jun 20, 2025", severity: "Medium" },
-];
-
 const SEVERITY_TONE = { High: "red", Medium: "amber", Low: "green" };
+const select = "px-2 py-1.5 rounded-lg border border-light-gray bg-white text-xs text-dark-black focus:outline-none focus:border-primary cursor-pointer";
+const BASE = "/api/v1/compliance/soc2";
 
-const TIMELINE = [
-  { title: "Readiness assessment", subtitle: "Completed May 02, 2025", badge: { tone: "green", label: "Done" } },
-  { title: "Evidence freeze", subtitle: "Jun 15, 2025", badge: { tone: "amber", label: "Upcoming" } },
-  { title: "Auditor fieldwork", subtitle: "Jul 14 - Jul 28, 2025", badge: { tone: "blue", label: "Planned" } },
-  { title: "Report issued", subtitle: "Aug 15, 2025", badge: { tone: "blue", label: "Planned" } },
-];
-
-const SCOPES = ["Controls", "Evidence Repository", "Policy Documents", "Audit Logs"];
-
-const InviteAuditorModal = ({ isOpen, onClose }) => {
-  const [email, setEmail] = useState("");
-  const [firm, setFirm] = useState("");
-  const [expiry, setExpiry] = useState("Until report is issued");
-  const [scopes, setScopes] = useState(SCOPES.slice(0, 2));
-  const validEmail = /^\S+@\S+\.\S+$/.test(email);
-
-  const toggle = (scope, checked) => setScopes((current) => (checked ? [...current, scope] : current.filter((item) => item !== scope)));
-
-  return (
-    <DialogModal
-      isOpen={isOpen}
-      onClose={onClose}
-      title="Invite Auditor"
-      subtitle="Auditors get read-only access to the areas you choose."
-      size="sm"
-      footer={
-        <>
-          <DialogButton onClick={onClose}>Cancel</DialogButton>
-          <DialogButton
-            variant="primary"
-            disabled={!validEmail || !scopes.length}
-            onClick={() => {
-              onClose();
-              showSavedToast("Auditor invited", `${email} will get a read-only access link.`);
-            }}
-          >
-            Send Invite
-          </DialogButton>
-        </>
-      }
-    >
-      <div className="space-y-5">
-        <Field label="Auditor email" htmlFor="auditor-email">
-          <input id="auditor-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="auditor@firm.com" className={fieldClass} />
-        </Field>
-        <Field label="Audit firm (optional)" htmlFor="auditor-firm">
-          <input id="auditor-firm" value={firm} onChange={(event) => setFirm(event.target.value)} placeholder="e.g., Prescient Assurance" className={fieldClass} />
-        </Field>
-        <Field label="Access expires" htmlFor="auditor-expiry">
-          <Select id="auditor-expiry" value={expiry} onChange={setExpiry} options={["Until report is issued", "30 days", "60 days", "90 days"]} />
-        </Field>
-        <div>
-          <p className="block text-xs font-medium leading-4 text-medium-black mb-2">Read-only access to</p>
-          <div className="grid grid-cols-2 gap-3">
-            {SCOPES.map((scope) => (
-              <Checkbox key={scope} checked={scopes.includes(scope)} onChange={(checked) => toggle(scope, checked)}>{scope}</Checkbox>
-            ))}
-          </div>
-        </div>
-      </div>
-    </DialogModal>
-  );
-};
-
+// SOC 2 Readiness: a control is ready when it's Implemented and has verified, unexpired evidence
+// in the Evidence Repository. Status, owner and due date are set per control here.
 export default function Soc2ReadinessPage() {
-  const [inviteOpen, setInviteOpen] = useState(false);
+  const [data, setData] = useState(null);
+  const [criteria, setCriteria] = useState("All");
+  useEffect(() => {
+    apiRequest(BASE).then(setData).catch((error) => showError("SOC 2 not loaded", error.message));
+  }, []);
+
+  const save = async (path, body, message) => {
+    try {
+      setData(await apiRequest(path, { method: "PATCH", body }));
+      toast.success(message);
+    } catch (error) {
+      toast.error(error.message);
+    }
+  };
+
+  const kpis = data?.kpis;
+  const canManage = Boolean(data?.permissions.manage);
+  const KPIS = [
+    { label: "Overall Readiness", value: kpis ? `${kpis.readiness}%` : "—", note: "Controls implemented with verified evidence", good: kpis ? kpis.readiness >= 85 : undefined },
+    { label: "Controls Implemented", value: kpis ? `${kpis.implemented} / ${kpis.total}` : "—", note: kpis?.total ? `${Math.round((kpis.implemented / kpis.total) * 100)}% complete` : "" },
+    { label: "Evidence Collected", value: kpis ? `${kpis.evidenceCollected}%` : "—", note: "Controls with verified evidence", good: kpis ? kpis.evidenceCollected >= 85 : undefined },
+    { label: "Open Gaps", value: kpis ? kpis.openGaps : "—", note: "Controls not ready", good: kpis ? kpis.openGaps === 0 : undefined },
+    { label: "Audit Window Opens", value: kpis?.daysToFieldwork != null ? `${Math.max(0, kpis.daysToFieldwork)} days` : "Not set", note: kpis?.fieldworkStartsOn ? `Fieldwork starts ${formatDate(`${kpis.fieldworkStartsOn}T12:00:00`)}` : "Set the fieldwork date below" },
+  ];
+  const controls = (data?.controls ?? []).filter((control) => criteria === "All" || control.criteria === criteria);
 
   return (
     <div className="w-full flex flex-col gap-5 pb-12 font-secondary">
@@ -110,53 +49,133 @@ export default function Soc2ReadinessPage() {
       <DashboardGrid
         main={
           <>
-            <Card title="Trust Services Criteria" action={<CardLink href="/super-admin/compliance-audit/evidence-repository">View controls</CardLink>}>
+            <Card title="Trust Services Criteria" action={<CardLink href="/super-admin/compliance-audit/evidence-repository">Evidence Repository</CardLink>}>
               <DataTable
                 rowKey={(row) => row.criteria}
-                rows={CRITERIA}
+                rows={data?.criteria ?? []}
                 columns={[
                   { key: "criteria", label: "Criteria" },
-                  { key: "controls", label: "Controls" },
+                  { key: "controls", label: "Controls Ready", render: (row) => `${row.ready} / ${row.total}` },
                   { key: "progress", label: "Progress", render: (row) => <Progress value={row.progress} /> },
                   { key: "status", label: "Status", render: (row) => <Badge tone={STATUS_TONE[row.status]}>{row.status}</Badge> },
-                  { key: "owner", label: "Owner", render: (row) => <Person name={row.owner} role={row.role} /> },
+                  { key: "owner", label: "Owner", render: (row) => (row.owner ? <Person name={row.owner.name} role={row.owner.role} /> : "—") },
                 ]}
               />
             </Card>
-            <Card title="Open Gaps" action={<CardLink onClick={showExportStartedToast}>Export</CardLink>}>
-              <DataTable
-                rowKey={(row) => row.control}
-                rows={GAPS}
-                columns={[
-                  { key: "control", label: "Control" },
-                  { key: "gap", label: "Gap" },
-                  { key: "owner", label: "Owner" },
-                  { key: "due", label: "Due" },
-                  { key: "severity", label: "Severity", render: (row) => <Badge tone={SEVERITY_TONE[row.severity]}>{row.severity}</Badge> },
-                ]}
-              />
+
+            <Card
+              title="Controls"
+              action={
+                <select aria-label="Filter controls by criteria" value={criteria} onChange={(event) => setCriteria(event.target.value)} className={select}>
+                  <option value="All">All criteria</option>
+                  {TRUST_SERVICE_CRITERIA.map((item) => <option key={item}>{item}</option>)}
+                </select>
+              }
+            >
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="text-light-black border-b border-light-gray">
+                      <th className="py-2 pr-3 font-semibold">Control</th>
+                      <th className="py-2 px-3 font-semibold">Status</th>
+                      <th className="py-2 px-3 font-semibold">Owner</th>
+                      <th className="py-2 px-3 font-semibold">Due</th>
+                      <th className="py-2 pl-3 font-semibold">Evidence</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-light-gray/70">
+                    {controls.map((control) => (
+                      <tr key={control.id} className="align-top">
+                        <td className="py-2.5 pr-3">
+                          <p className="font-semibold text-dark-black">{control.id} · {control.name}</p>
+                          <p className={`text-[11px] ${control.ready ? "text-emerald-600" : "text-light-black"}`}>{control.ready ? "Ready" : control.gaps.join("; ")}</p>
+                        </td>
+                        <td className="py-2.5 px-3">
+                          {canManage ? (
+                            <select aria-label={`Status of ${control.id}`} value={control.status} onChange={(event) => save(`${BASE}/controls/${control.id}`, { status: event.target.value }, `${control.id} updated.`)} className={select}>
+                              {CONTROL_STATUSES.map((status) => <option key={status}>{status}</option>)}
+                            </select>
+                          ) : control.status}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          {canManage ? (
+                            <select aria-label={`Owner of ${control.id}`} value={control.owner?.id ?? ""} onChange={(event) => save(`${BASE}/controls/${control.id}`, { ownerId: event.target.value || null }, `${control.id} owner updated.`)} className={select}>
+                              <option value="">Unassigned</option>
+                              {data.owners.map((owner) => <option key={owner.id} value={owner.id}>{owner.name}</option>)}
+                            </select>
+                          ) : control.owner?.name ?? "—"}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          {canManage ? (
+                            <input type="date" aria-label={`Due date of ${control.id}`} value={control.dueDate ?? ""} onChange={(event) => save(`${BASE}/controls/${control.id}`, { dueDate: event.target.value || null }, `${control.id} due date updated.`)} className={select} />
+                          ) : control.dueDate ? formatDate(`${control.dueDate}T12:00:00`) : "—"}
+                        </td>
+                        <td className="py-2.5 pl-3 text-medium-black">
+                          {control.evidence.length ? control.evidence.map((item) => <span key={item.id} className="block">{item.reference} · {item.status}</span>) : "None"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+
+            <Card title="Open Gaps" action={<CardLink href={`${BASE}/gaps`}>Export</CardLink>}>
+              {data && !data.gaps.length ? (
+                <p className="text-xs text-medium-black">No gaps. Every control is implemented with verified evidence.</p>
+              ) : (
+                <DataTable
+                  rowKey={(row) => row.control}
+                  rows={data?.gaps ?? []}
+                  columns={[
+                    { key: "control", label: "Control", render: (row) => `${row.control} · ${row.name}` },
+                    { key: "gap", label: "Gap" },
+                    { key: "owner", label: "Owner", render: (row) => row.owner ?? "Unassigned" },
+                    { key: "due", label: "Due", render: (row) => (row.due ? formatDate(`${row.due}T12:00:00`) : "—") },
+                    { key: "severity", label: "Severity", render: (row) => <Badge tone={SEVERITY_TONE[row.severity]}>{row.severity}</Badge> },
+                  ]}
+                />
+              )}
             </Card>
           </>
         }
         side={
           <>
             <Card title="Audit Timeline">
-              <StackedList items={TIMELINE} />
+              <div className="space-y-4">
+                {(data?.milestones ?? []).map((milestone) => (
+                  <div key={milestone.id} className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-dark-black">{milestone.title}</p>
+                      <Badge tone={milestone.done ? "green" : milestone.startsOn ? "blue" : "gray"}>{milestone.done ? "Done" : milestone.startsOn ? "Planned" : "Not scheduled"}</Badge>
+                    </div>
+                    {canManage ? (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <input type="date" aria-label={`${milestone.title} start`} value={milestone.startsOn ?? ""} onChange={(event) => save(`${BASE}/milestones/${milestone.id}`, { startsOn: event.target.value || null }, "Timeline updated.")} className={select} />
+                        <span className="text-xs text-light-black">to</span>
+                        <input type="date" aria-label={`${milestone.title} end`} value={milestone.endsOn ?? ""} onChange={(event) => save(`${BASE}/milestones/${milestone.id}`, { endsOn: event.target.value || null }, "Timeline updated.")} className={select} />
+                        <label className="flex items-center gap-1 text-xs text-medium-black cursor-pointer">
+                          <input type="checkbox" checked={milestone.done} onChange={(event) => save(`${BASE}/milestones/${milestone.id}`, { done: event.target.checked }, "Timeline updated.")} className="accent-primary" /> Done
+                        </label>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-light-black">{milestone.startsOn ? `${formatDate(`${milestone.startsOn}T12:00:00`)}${milestone.endsOn ? ` – ${formatDate(`${milestone.endsOn}T12:00:00`)}` : ""}` : "Not scheduled"}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
             </Card>
             <Card title="Auditor Access">
-              <p className="text-xs text-medium-black">Give your external auditor read-only access to controls and evidence.</p>
-              <button
-                type="button"
-                onClick={() => setInviteOpen(true)}
-                className="mt-4 w-full py-2.5 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-medium-teal cursor-pointer"
-              >
-                Invite Auditor
-              </button>
+              <p className="text-xs text-medium-black">External auditors get the Auditor role: read-only access to Compliance & Audit (controls, evidence, policies, training, incidents and audit logs).</p>
+              {canManage && (
+                <Link href="/super-admin/compliance-audit/access-records" className="mt-4 block w-full py-2.5 rounded-lg bg-primary text-white text-sm font-semibold text-center hover:bg-medium-teal">
+                  Invite Auditor
+                </Link>
+              )}
             </Card>
           </>
         }
       />
-      <InviteAuditorModal key={inviteOpen ? "open" : "closed"} isOpen={inviteOpen} onClose={() => setInviteOpen(false)} />
     </div>
   );
 }

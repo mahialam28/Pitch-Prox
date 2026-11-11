@@ -135,7 +135,7 @@ test("calendar: visibility, owner-only edits, validation", needsStaff(), async (
 test("staff mail: each staff member sees only their own emails", needsStaff(), async () => {
   const sent = await rep.post("/api/v1/mail/messages", { to: "prospect@example.com", subject: `Hello ${RUN}`, body: "Hi there" });
   assert.equal(sent.status, 201);
-  assert.equal(sent.json.message.status, "queued");
+  assert.ok(["waiting", "sending"].includes(sent.json.message.status), sent.json.message.status);
   assert.ok((await rep.get("/api/v1/mail/messages")).json.results.some((mail) => mail.id === sent.json.message.id));
   assert.ok(!(await otherRep.get("/api/v1/mail/messages")).json.results.some((mail) => mail.id === sent.json.message.id));
   assert.equal((await otherRep.get(`/api/v1/mail/messages/${sent.json.message.id}`)).status, 404);

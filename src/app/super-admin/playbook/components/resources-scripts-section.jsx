@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   FileText,
   Plus,
@@ -15,278 +15,26 @@ import {
   Archive,
   Mail,
   MessageSquare,
+  Pin,
+  Paperclip,
 } from "lucide-react";
-import AddResourceModal from "./add-resource-modal";
+import AddResourceModal, { formatResourceDate } from "./add-resource-modal";
 import ImportResourceModal from "./import-resource-modal";
 import ViewResourceModal from "./view-resource-modal";
+import QuickScriptBuilderCard from "./quick-script-builder-card";
+import { apiRequest } from "@/lib/client-api";
+import { showError, showSuccess } from "@/lib/alerts";
 
-export const DEFAULT_RESOURCES = [
-  {
-    id: 1,
-    name: "Call Flow Overview",
-    type: "Script",
-    category: "Scripts",
-    description: "Complete call structure with key talking points and transitions",
-    addedBy: "Daniel Miller",
-    addedDate: "May 10, 2024",
-    iconColor: "rose",
-    content: "Complete call flow structure designed for high-value sales conversations:\n1. Pattern interrupt greeting.\n2. Diagnostic inquiry.\n3. Value anchor.\n4. Definite closing question.",
-  },
-  {
-    id: 2,
-    name: "Opening Scripts (10 Variations)",
-    type: "Call Openers",
-    category: "Call Openers",
-    description: "10 powerful opening lines for different lead types.",
-    addedBy: "Daniel Miller",
-    addedDate: "May 10, 2024",
-    iconColor: "sky",
-    content: "10 tested opening hooks for expired listings, FSBO, probate, and cold outreach. Emphasizes instant rapport, curiosity, and authority.",
-  },
-  {
-    id: 3,
-    name: "Discovery Question Bank",
-    type: "Script",
-    category: "Scripts",
-    description: "Deep discovery questions organized by motivation.",
-    addedBy: "Daniel Miller",
-    addedDate: "May 9, 2024",
-    iconColor: "emerald",
-    content: "Categorized questions to uncover:\n- Core motivation\n- Financial urgency\n- Timeline constraints\n- Previous bad experiences with agents",
-  },
-  {
-    id: 4,
-    name: "Value Proposition Framework",
-    type: "Guide",
-    category: "Guides",
-    description: "How to present value in a way that resonates.",
-    addedBy: "Daniel Miller",
-    addedDate: "May 9, 2024",
-    iconColor: "amber",
-    content: "Framework for articulating net equity return, strategic marketing positioning, and proprietary negotiation leverage.",
-  },
-  {
-    id: 5,
-    name: "Email Follow-Up Templates",
-    type: "Email Template",
-    category: "Email Templates",
-    description: "5 follow-up email templates for different scenarios.",
-    addedBy: "Daniel Miller",
-    addedDate: "May 9, 2024",
-    iconColor: "purple",
-    content: "Multi-scenario email sequences:\n- Post-call summary\n- Unresponsive prospect re-engagement\n- Market update value drop\n- Final decision check-in",
-  },
-  {
-    id: 6,
-    name: "Objection Response Scripts",
-    type: "Objection Script",
-    category: "Objection Responses",
-    description: "Detailed response scripts for top 20 objections.",
-    addedBy: "Daniel Miller",
-    addedDate: "May 8, 2024",
-    iconColor: "rose",
-    content: "Comprehensive word-for-word rebuttals for fee objections, market delay excuses, and competing representation.",
-  },
-  {
-    id: 7,
-    name: "Closing Scripts (8 Variations)",
-    type: "Script",
-    category: "Scripts",
-    description: "8 closing approaches to secure commitment.",
-    addedBy: "Daniel Miller",
-    addedDate: "May 7, 2024",
-    iconColor: "teal",
-    content: "Proven closing variations:\n- Assumptive close\n- Alternative choice close\n- Urgency/Market shift close\n- Net proceeds agreement close",
-  },
-  {
-    id: 8,
-    name: "Implementation Playbook",
-    type: "Guide",
-    category: "Guides",
-    description: "Step-by-step guide to implementing this method.",
-    addedBy: "Daniel Miller",
-    addedDate: "May 7, 2024",
-    iconColor: "blue",
-    content: "Team rollout procedures, daily warm-up scripts, call review rubrics, and KPI benchmarks for representatives.",
-  },
-  // Extra items to fulfill 24 resources for pagination
-  {
-    id: 9,
-    name: "FSBO Direct Outreach Scripts",
-    type: "Call Openers",
-    category: "Call Openers",
-    description: "Direct-to-seller opening scripts focusing on net savings and exposure.",
-    addedBy: "Daniel Miller",
-    addedDate: "May 6, 2024",
-    iconColor: "sky",
-    content: "Specific dialogues to overcome FSBO seller skepticism and secure in-person evaluation appointments.",
-  },
-  {
-    id: 10,
-    name: "Price Reduction Negotiation Guide",
-    type: "Guide",
-    category: "Guides",
-    description: "Data-backed framework for managing client pricing expectations.",
-    addedBy: "Daniel Miller",
-    addedDate: "May 5, 2024",
-    iconColor: "amber",
-    content: "How to present 30-day market feedback and adjust list price seamlessly.",
-  },
-  {
-    id: 11,
-    name: "Expired Listing Re-engagement Script",
-    type: "Script",
-    category: "Scripts",
-    description: "Empathetic reset script diagnosing why the previous listing expired.",
-    addedBy: "Daniel Miller",
-    addedDate: "May 5, 2024",
-    iconColor: "rose",
-    content: "Conversation flow for sellers frustrated with past agents.",
-  },
-  {
-    id: 12,
-    name: "Post-Showing Follow Up Sequence",
-    type: "Follow Up",
-    category: "Follow Up",
-    description: "Fast-turnaround SMS and email messages following property showings.",
-    addedBy: "Daniel Miller",
-    addedDate: "May 4, 2024",
-    iconColor: "purple",
-    content: "Buyer agent follow up scripts to solicit buyer interest and urgency.",
-  },
-  {
-    id: 13,
-    name: "Authority Positioning Masterclass",
-    type: "Guide",
-    category: "Guides",
-    description: "Shark Tank credibility building techniques for high-ticket clients.",
-    addedBy: "Daniel Miller",
-    addedDate: "May 4, 2024",
-    iconColor: "blue",
-    content: "Techniques on body language, vocal pacing, and social proof integration.",
-  },
-  {
-    id: 14,
-    name: "Cold Lead Revival Email Template",
-    type: "Email Template",
-    category: "Email Templates",
-    description: "9-word email revival template for leads dormant 60+ days.",
-    addedBy: "Daniel Miller",
-    addedDate: "May 3, 2024",
-    iconColor: "purple",
-    content: "Subject: Still looking in [City]?\nBody: Are you still considering a move in the next few months?",
-  },
-  {
-    id: 15,
-    name: "Commission Justification Talking Points",
-    type: "Objection Script",
-    category: "Objection Responses",
-    description: "Calculated talking points showing how full service yields higher net ROI.",
-    addedBy: "Daniel Miller",
-    addedDate: "May 3, 2024",
-    iconColor: "rose",
-    content: "Step-by-step mathematical demonstration of net vs gross proceeds.",
-  },
-  {
-    id: 16,
-    name: "Probate & Estate Consultation Script",
-    type: "Script",
-    category: "Scripts",
-    description: "Respectful, service-first communication framework for estate executors.",
-    addedBy: "Daniel Miller",
-    addedDate: "May 2, 2024",
-    iconColor: "emerald",
-    content: "Sensitive consultation dialogue focusing on property management, liquidation, and timeline ease.",
-  },
-  {
-    id: 17,
-    name: "Investor Deal Pitch Template",
-    type: "Other",
-    category: "Other",
-    description: "One-page deal analysis and pitch summary sheet for cash buyers.",
-    addedBy: "Daniel Miller",
-    addedDate: "May 2, 2024",
-    iconColor: "teal",
-    content: "Cap rate, cash-on-cash return, and exit strategy summary format.",
-  },
-  {
-    id: 18,
-    name: "Urgency Close for Hesitant Buyers",
-    type: "Script",
-    category: "Scripts",
-    description: "Overcome buyer paralysis during interest rate fluctuations.",
-    addedBy: "Daniel Miller",
-    addedDate: "May 1, 2024",
-    iconColor: "rose",
-    content: "Rate vs price dynamics dialogue and long-term equity projection.",
-  },
-  {
-    id: 19,
-    name: "Pre-Listing Information Packet",
-    type: "Guide",
-    category: "Guides",
-    description: "Digital brochure sent ahead of listing appointments.",
-    addedBy: "Daniel Miller",
-    addedDate: "May 1, 2024",
-    iconColor: "amber",
-    content: "Preparation checklist for sellers prior to first meeting.",
-  },
-  {
-    id: 20,
-    name: "Past Client Annual Equity Review",
-    type: "Follow Up",
-    category: "Follow Up",
-    description: "Annual touchpoint script updating past clients on home equity.",
-    addedBy: "Daniel Miller",
-    addedDate: "Apr 30, 2024",
-    iconColor: "purple",
-    content: "Warm script for referral generation and repeat business touchpoints.",
-  },
-  {
-    id: 21,
-    name: "Open House Lead Capture Script",
-    type: "Call Openers",
-    category: "Call Openers",
-    description: "Natural registration sign-in scripts and unrepresented buyer qualifying.",
-    addedBy: "Daniel Miller",
-    addedDate: "Apr 29, 2024",
-    iconColor: "sky",
-    content: "Non-intrusive qualifying questions for open house visitors.",
-  },
-  {
-    id: 22,
-    name: "Circle Prospecting Voicemail Script",
-    type: "Call Openers",
-    category: "Call Openers",
-    description: "Neighborhood just-listed and just-sold voicemail drop scripts.",
-    addedBy: "Daniel Miller",
-    addedDate: "Apr 28, 2024",
-    iconColor: "sky",
-    content: "High response voicemail script notifying neighbors of recent transactions.",
-  },
-  {
-    id: 23,
-    name: "Multiple Offer Strategy Guide",
-    type: "Guide",
-    category: "Guides",
-    description: "How to orchestrate competitive bidding and seller negotiation deadlines.",
-    addedBy: "Daniel Miller",
-    addedDate: "Apr 27, 2024",
-    iconColor: "blue",
-    content: "Best and final offer deadline guidelines and escalation clause handling.",
-  },
-  {
-    id: 24,
-    name: "Standard Client Onboarding Checklist",
-    type: "Other",
-    category: "Other",
-    description: "Internal operations checklist from contract execution to closing.",
-    addedBy: "Daniel Miller",
-    addedDate: "Apr 26, 2024",
-    iconColor: "teal",
-    content: "Administrative milestone checklist for seamless transaction coordination.",
-  },
-];
+// New playbooks start with no resources: add them, or import pinned ones from the Resource Library
+export const DEFAULT_RESOURCES = [];
+
+// The library fields of a playbook resource
+// Email Template purpose/subject and Follow Up kind travel with the resource (phase 8)
+const libraryFields = ({ name, type, description, content, iconColor, file, purpose, subject, followUpKind, templatePurpose }) => ({
+  name, type, description, content, iconColor, file: file ?? null,
+  ...(type === "Email Template" && { purpose: purpose ?? null, subject: subject ?? "" }),
+  ...(type === "Follow Up" && { followUpKind: followUpKind ?? null, templatePurpose: templatePurpose ?? null }),
+});
 
 const TABS = [
   { id: "all", label: "All Resources" },
@@ -312,7 +60,6 @@ const TYPE_BADGES = {
 const ResourcesScriptsSection = ({
   resources = DEFAULT_RESOURCES,
   onChange = () => {},
-  onOpenAddWithType = () => {},
 }) => {
   const [activeTab, setActiveTab] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
@@ -323,6 +70,16 @@ const ResourcesScriptsSection = ({
   const [viewingResource, setViewingResource] = useState(null);
   const [activeMenuId, setActiveMenuId] = useState(null);
   const [initialModalType, setInitialModalType] = useState("Script");
+  const [currentUserName, setCurrentUserName] = useState("");
+
+  // Who is signed in: stamped as "Added by" on new resources
+  useEffect(() => {
+    let cancelled = false;
+    apiRequest("/api/v1/me").then((data) => !cancelled && setCurrentUserName(data.user?.name ?? "")).catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const ITEMS_PER_PAGE = 8;
 
@@ -365,10 +122,13 @@ const ResourcesScriptsSection = ({
   };
 
   const handleDuplicate = (res) => {
+    const { libraryId, ...rest } = res;
     const duplicated = {
-      ...res,
+      ...rest,
       id: Date.now(),
       name: `${res.name} (Copy)`,
+      addedBy: currentUserName || res.addedBy,
+      addedDate: formatResourceDate(Date.now()),
     };
     onChange([duplicated, ...resources]);
     setActiveMenuId(null);
@@ -380,24 +140,58 @@ const ResourcesScriptsSection = ({
     setActiveMenuId(null);
   };
 
-  const handleSaveResource = (resData) => {
-    let updated;
-    if (resData.id) {
-      updated = resources.map((item) =>
-        item.id === resData.id ? { ...item, ...resData } : item
-      );
-    } else {
-      const newRes = {
-        ...resData,
-        id: Date.now(),
-      };
-      updated = [newRes, ...resources];
+  // Pin to the Resource Library → the library id, or null when it failed
+  const pinToLibrary = async (res) => {
+    try {
+      const { resource, alreadyPinned } = await apiRequest("/api/v1/admin/playbook-resources", { method: "POST", body: libraryFields(res) });
+      if (alreadyPinned) showSuccess("Already in the library", `"${resource.name}" was pinned before; this resource is now linked to it.`);
+      return resource.id;
+    } catch (error) {
+      showError("Couldn't pin it to the library", error.message);
+      return null;
     }
-    onChange(updated);
   };
 
-  const handleImportLibrary = (packId) => {
-    onChange(DEFAULT_RESOURCES);
+  const handlePin = async (res) => {
+    setActiveMenuId(null);
+    const libraryId = await pinToLibrary(res);
+    if (libraryId) onChange(resources.map((item) => (item.id === res.id ? { ...item, libraryId } : item)));
+  };
+
+  const handleSaveResource = async (resData, { pin = false, updateLibrary = false } = {}) => {
+    const saved = resData.id ? resData : { ...resData, id: Date.now() };
+    if (pin) {
+      const libraryId = await pinToLibrary(saved);
+      if (libraryId) saved.libraryId = libraryId;
+    }
+    if (updateLibrary && saved.libraryId) {
+      try {
+        await apiRequest(`/api/v1/admin/playbook-resources/${saved.libraryId}`, { method: "PATCH", body: libraryFields(saved) });
+      } catch (error) {
+        showError("The library copy wasn't updated", error.message);
+      }
+    }
+    onChange(resData.id ? resources.map((item) => (item.id === saved.id ? { ...item, ...saved } : item)) : [saved, ...resources]);
+  };
+
+  // Imported resources are copies linked to the library entry (libraryId)
+  const handleImportLibrary = (picked) => {
+    const present = new Set(resources.map((item) => item.libraryId).filter(Boolean));
+    const now = Date.now();
+    const imported = picked
+      .filter((item) => !present.has(item.id))
+      .map((item, index) => ({
+        ...libraryFields(item),
+        id: now + index,
+        libraryId: item.id,
+        addedBy: item.addedBy,
+        addedDate: formatResourceDate(item.addedAt),
+      }));
+    if (imported.length) {
+      onChange([...imported, ...resources]);
+      setActiveTab("all");
+      setCurrentPage(1);
+    }
   };
 
   const getFileIcon = (res) => {
@@ -419,6 +213,7 @@ const ResourcesScriptsSection = ({
   };
 
   return (
+    <>
     <div className="bg-white rounded-2xl border border-light-gray p-6 sm:p-7 shadow-sm space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -499,6 +294,13 @@ const ResourcesScriptsSection = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-light-gray">
+            {!paginatedList.length && (
+              <tr>
+                <td colSpan={5} className="py-10 px-4 text-center text-xs text-light-black">
+                  {resources.length ? "No resources of this type yet." : "No resources yet. Add one, or import pinned resources from the library."}
+                </td>
+              </tr>
+            )}
             {paginatedList.map((item) => {
               const badgeClass = TYPE_BADGES[item.type] || "bg-light-gray text-medium-black border-light-gray";
 
@@ -517,6 +319,8 @@ const ResourcesScriptsSection = ({
                       <h4 className="font-bold text-dark-black/90 font-secondary text-xs truncate max-w-[220px]">
                         {item.name}
                       </h4>
+                      {item.libraryId && <Pin className="w-3 h-3 text-primary shrink-0" aria-label="Pinned in the Resource Library" />}
+                      {item.file && <Paperclip className="w-3 h-3 text-light-black shrink-0" aria-label="Has a file" />}
                     </div>
                   </td>
 
@@ -538,10 +342,10 @@ const ResourcesScriptsSection = ({
                   <td className="py-3.5 px-3">
                     <div>
                       <span className="font-semibold text-dark-black/80 text-xs block">
-                        {item.addedBy || "Daniel Miller"}
+                        {item.addedBy || "—"}
                       </span>
                       <span className="text-[10px] text-light-black font-normal block mt-0.5">
-                        {item.addedDate || "May 10, 2024"}
+                        {item.addedDate || ""}
                       </span>
                     </div>
                   </td>
@@ -569,7 +373,7 @@ const ResourcesScriptsSection = ({
 
                       {/* Dropdown Menu */}
                       {activeMenuId === item.id && (
-                        <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-xl border border-light-gray shadow-lg py-1 z-20 text-left">
+                        <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-xl border border-light-gray shadow-lg py-1 z-20 text-left">
                           <button
                             type="button"
                             onClick={() => handleOpenView(item)}
@@ -586,6 +390,16 @@ const ResourcesScriptsSection = ({
                             <Pencil className="w-3 h-3" />
                             <span>Edit</span>
                           </button>
+                          {!item.libraryId && (
+                            <button
+                              type="button"
+                              onClick={() => handlePin(item)}
+                              className="w-full px-3 py-1.5 text-xs text-medium-black hover:text-dark-black hover:bg-light-gray flex items-center gap-2 cursor-pointer"
+                            >
+                              <Pin className="w-3 h-3" />
+                              <span>Pin to Library</span>
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => handleDuplicate(item)}
@@ -616,7 +430,9 @@ const ResourcesScriptsSection = ({
       {/* Pagination Footer */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 text-xs">
         <span className="text-light-black font-normal">
-          Showing 1 to {Math.min(paginatedList.length, 8)} of {filteredResources.length} resources
+          {filteredResources.length
+            ? `Showing ${(currentPage - 1) * ITEMS_PER_PAGE + 1} to ${(currentPage - 1) * ITEMS_PER_PAGE + paginatedList.length} of ${filteredResources.length} resources`
+            : "0 resources"}
         </span>
 
         <div className="flex items-center gap-1 self-center sm:self-auto">
@@ -656,19 +472,26 @@ const ResourcesScriptsSection = ({
       </div>
 
       {/* Modals */}
-      <AddResourceModal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        onSave={handleSaveResource}
-        editResource={editingResource}
-        initialType={initialModalType}
-      />
+      {isAddModalOpen && (
+        <AddResourceModal
+          key={editingResource?.id ?? `new-${initialModalType}`}
+          isOpen
+          onClose={() => setIsAddModalOpen(false)}
+          onSave={handleSaveResource}
+          editResource={editingResource}
+          initialType={initialModalType}
+          currentUserName={currentUserName}
+        />
+      )}
 
-      <ImportResourceModal
-        isOpen={isImportModalOpen}
-        onClose={() => setIsImportModalOpen(false)}
-        onImport={handleImportLibrary}
-      />
+      {isImportModalOpen && (
+        <ImportResourceModal
+          isOpen
+          onClose={() => setIsImportModalOpen(false)}
+          onImport={handleImportLibrary}
+          alreadyImported={new Set(resources.map((item) => item.libraryId).filter(Boolean))}
+        />
+      )}
 
       <ViewResourceModal
         isOpen={isViewModalOpen}
@@ -676,6 +499,10 @@ const ResourcesScriptsSection = ({
         resource={viewingResource}
       />
     </div>
+
+    {/* Quick Script Builder: opens the same Add Resource window */}
+    <QuickScriptBuilderCard onCreate={handleOpenAdd} />
+    </>
   );
 };
 

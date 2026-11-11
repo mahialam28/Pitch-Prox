@@ -11,15 +11,12 @@ import {
   UserX,
   CreditCard,
   Zap,
-  ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
-import Image from "next/image";
+import Pagination from "@/components/shared/pagination/pagination";
 import {
   severityFilterOptions,
   categoryFilterOptions,
   statusFilterOptions,
-  ownerFilterOptions,
 } from "../incident-data";
 
 export default function IncidentTable({
@@ -39,8 +36,10 @@ export default function IncidentTable({
   setCurrentPage,
   pageSize,
   setPageSize,
-  totalItems = 38,
+  owners = [],
+  canReport = true,
 }) {
+  const ownerFilterOptions = ["All Owners", ...owners.map((owner) => owner.name)];
   const router = useRouter();
   const [openDropdown, setOpenDropdown] = useState(null); // 'severity' | 'category' | 'status' | 'owner' | 'pageSize'
 
@@ -116,8 +115,6 @@ export default function IncidentTable({
     currentPage * pageSize
   );
 
-  const startItem = incidents.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
-  const endItem = Math.min(currentPage * pageSize, incidents.length);
 
   return (
     <div className="bg-white rounded-2xl border border-light-gray/80 shadow-xs flex flex-col overflow-hidden">
@@ -298,7 +295,7 @@ export default function IncidentTable({
         </div>
 
         {/* Action Button: + Report Incident */}
-        <div className="shrink-0 flex items-center">
+        {canReport && <div className="shrink-0 flex items-center">
           <button
             type="button"
             onClick={onOpenReportModal}
@@ -307,7 +304,7 @@ export default function IncidentTable({
             <Plus className="w-4 h-4 stroke-[2.5]" />
             <span>Report Incident</span>
           </button>
-        </div>
+        </div>}
       </div>
 
       {/* ── 2. Table Section ── */}
@@ -320,6 +317,7 @@ export default function IncidentTable({
               <th className="py-3 px-4 font-semibold">Category</th>
               <th className="py-3 px-4 font-semibold">Severity</th>
               <th className="py-3 px-4 font-semibold">Status</th>
+              <th className="py-3 px-4 font-semibold">Owner</th>
               <th className="py-3 px-4 font-semibold">Reported By</th>
               <th className="py-3 px-4 font-semibold">Reported At</th>
             </tr>
@@ -327,7 +325,7 @@ export default function IncidentTable({
           <tbody className="divide-y divide-light-gray/60 text-xs">
             {paginatedIncidents.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-12 text-center text-light-black">
+                <td colSpan={8} className="py-12 text-center text-light-black">
                   No incidents found matching current filters.
                 </td>
               </tr>
@@ -349,7 +347,7 @@ export default function IncidentTable({
                       onClick={(e) => e.stopPropagation()}
                       className="text-primary hover:underline font-semibold"
                     >
-                      {incident.id}
+                      {incident.reference}
                     </Link>
                   </td>
 
@@ -362,9 +360,9 @@ export default function IncidentTable({
                       <span className="font-semibold text-dark-black group-hover/link:text-primary transition-colors">
                         {incident.title}
                       </span>
-                      {incident.subtitle && (
+                      {incident.relatedTicket && (
                         <span className="text-[11px] text-light-black">
-                          {incident.subtitle}
+                          From ticket {incident.relatedTicket.reference}
                         </span>
                       )}
                     </Link>
@@ -388,17 +386,16 @@ export default function IncidentTable({
                     {renderStatusBadge(incident.status)}
                   </td>
 
+                  {/* Owner (Assigned To) */}
+                  <td className="py-3.5 px-4 whitespace-nowrap font-medium text-dark-black/85">
+                    {incident.assignedTo?.name ?? <span className="text-light-black font-normal">Unassigned</span>}
+                  </td>
+
                   {/* Reported By */}
                   <td className="py-3.5 px-4 whitespace-nowrap">
                     <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full overflow-hidden shrink-0 border border-light-gray">
-                        <Image
-                          src={incident.reportedBy.avatar}
-                          alt={incident.reportedBy.name}
-                          width={24}
-                          height={24}
-                          className="w-full h-full object-cover"
-                        />
+                      <div className="w-6 h-6 rounded-full bg-primary/10 text-primary text-[10px] font-semibold flex items-center justify-center shrink-0">
+                        {incident.reportedBy.name.split(" ").map((part) => part[0]).join("").slice(0, 2)}
                       </div>
                       <span className="font-medium text-dark-black/85">
                         {incident.reportedBy.name}
@@ -410,10 +407,10 @@ export default function IncidentTable({
                   <td className="py-3.5 px-4 whitespace-nowrap">
                     <div className="flex flex-col text-[11px]">
                       <span className="font-medium text-dark-black/85">
-                        {incident.reportedAt}
+                        {new Date(incident.reportedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                       </span>
                       <span className="text-light-black">
-                        {incident.reportedTime}
+                        {new Date(incident.reportedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
                       </span>
                     </div>
                   </td>
@@ -424,88 +421,19 @@ export default function IncidentTable({
         </table>
       </div>
 
-      {/* ── 3. Table Footer / Pagination ── */}
-      <div className="p-4 border-t border-light-gray/70 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-medium-black">
-        {/* Count string */}
-        <div>
-          Showing {startItem} to {endItem} of {totalItems} Incidents
-        </div>
-
-        {/* Pagination & Page Size */}
-        <div className="flex items-center gap-3">
-          {/* Page numbers */}
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              disabled={currentPage <= 1}
-              onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-              className="w-7 h-7 rounded-lg border border-light-gray flex items-center justify-center text-dark-black hover:bg-light-gray/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            >
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </button>
-
-            {[1, 2, 3].map((pageNum) => (
-              <button
-                key={pageNum}
-                type="button"
-                onClick={() => setCurrentPage(pageNum)}
-                className={`w-7 h-7 rounded-lg text-xs font-semibold flex items-center justify-center transition-colors cursor-pointer ${
-                  currentPage === pageNum
-                    ? "bg-primary text-white shadow-2xs"
-                    : "border border-light-gray text-dark-black hover:bg-light-gray/50"
-                }`}
-              >
-                {pageNum}
-              </button>
-            ))}
-
-            <span className="px-1 text-light-black">...</span>
-
-            <button
-              type="button"
-              disabled={currentPage >= totalPages}
-              onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-              className="w-7 h-7 rounded-lg border border-light-gray flex items-center justify-center text-dark-black hover:bg-light-gray/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            >
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {/* Page size dropdown */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => toggleDropdown("pageSize")}
-              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-dark-black rounded-lg border border-light-gray bg-white hover:bg-light-gray/40 transition-colors cursor-pointer shadow-2xs"
-            >
-              <span>{pageSize} / page</span>
-              <ChevronDown className="w-3.5 h-3.5 text-light-black" />
-            </button>
-
-            {openDropdown === "pageSize" && (
-              <div className="absolute bottom-full right-0 mb-1 w-28 bg-white border border-light-gray rounded-xl shadow-xl py-1 z-30">
-                {[5, 10, 20, 50].map((size) => (
-                  <button
-                    key={size}
-                    type="button"
-                    onClick={() => {
-                      setPageSize(size);
-                      setCurrentPage(1);
-                      setOpenDropdown(null);
-                    }}
-                    className={`w-full px-3 py-1.5 text-left text-xs transition-colors cursor-pointer ${
-                      pageSize === size
-                        ? "text-primary font-semibold bg-primary/5"
-                        : "text-dark-black/80 hover:bg-light-gray/50"
-                    }`}
-                  >
-                    {size} / page
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+      {/* ── 3. Paging ── */}
+      <div className="p-4 border-t border-light-gray/70">
+        <Pagination
+          currentPage={Math.min(currentPage, totalPages)}
+          totalItems={incidents.length}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setCurrentPage(1);
+          }}
+          itemLabel="incidents"
+        />
       </div>
     </div>
   );

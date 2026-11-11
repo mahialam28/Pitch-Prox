@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import VideoReady from "@/components/demo/video-ready";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import {
@@ -101,13 +102,42 @@ export default function SeeHowItWorks() {
     },
   };
 
-  const handleSubmit = (e) => {
+  // Saved for the sales team and emailed; the video and plans open right away (client, Nov 10)
+  const [sending, setSending] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [ready, setReady] = useState(null); // { id, name, email }
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.roleDescription || !formData.referralSource) {
+      setFormError("Please choose your role and how you heard about us.");
       return;
     }
-    console.log("Submitted Demo Request:", formData);
+    setSending(true);
+    setFormError("");
+    try {
+      const response = await fetch("/api/v1/public/demo-requests", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(formData) });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Something went wrong. Please try again.");
+      setReady({ id: result.id, name: formData.fullName, email: formData.workEmail });
+    } catch (error) {
+      setFormError(error.message);
+    } finally {
+      setSending(false);
+    }
   };
+
+  // Escape closes the pop-up
+  useEffect(() => {
+    if (!ready) return undefined;
+    const onKey = (event) => event.key === "Escape" && setReady(null);
+    document.addEventListener("keydown", onKey);
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previous;
+    };
+  }, [ready]);
 
   return (
     <section id="how-it-works" className="relative container mx-auto md:px-5 overflow-hidden select-none scroll-mt-[100px] bg-dark-black rounded-2xl md:rounded-3xl xl:rounded-40">
@@ -123,8 +153,8 @@ export default function SeeHowItWorks() {
         />
       </div>
 
-      {/* Subtle dark scrim for readability - keeps the hero background visible */}
-      <div className="absolute inset-0 z-[1] bg-dark-black/20 pointer-events-none" />
+      {/* Dark scrim so the text stays readable on the photo (client, Nov 9: the light text was hard to read) */}
+      <div className="absolute inset-0 z-[1] bg-gradient-to-r from-dark-black/85 via-dark-black/65 to-dark-black/40 pointer-events-none" />
 
       {/* Subtle gradient glow */}
       <div className="absolute top-1/2 left-1/4 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-radial from-primary/10 to-transparent blur-3xl pointer-events-none z-[1]" />
@@ -157,7 +187,7 @@ export default function SeeHowItWorks() {
             {/* Subheading Description */}
             <Text
               variant="large"
-              className="text-white/70 leading-relaxed max-w-lg font-light"
+              className="text-white leading-relaxed max-w-lg font-normal"
             >
               Discover how PitchProX delivers live AI teleprompting, objection
               guidance, and strategic responses that help sales professionals win
@@ -178,7 +208,7 @@ export default function SeeHowItWorks() {
                   <h3 className="text-base font-bold text-white">
                     Understand How It Works
                   </h3>
-                  <p className="text-xs text-white/60 leading-relaxed max-w-md">
+                  <p className="text-sm text-white/95 leading-relaxed max-w-md">
                     See how PitchProX supports a sales conversation from the
                     moment the call begins.
                   </p>
@@ -197,7 +227,7 @@ export default function SeeHowItWorks() {
                   <h3 className="text-base font-bold text-white">
                     Explore the Core Features
                   </h3>
-                  <p className="text-xs text-white/60 leading-relaxed max-w-md">
+                  <p className="text-sm text-white/95 leading-relaxed max-w-md">
                     Learn how live prompts, objection guidance, trust detection
                     and post call insights work together.
                   </p>
@@ -216,7 +246,7 @@ export default function SeeHowItWorks() {
                   <h3 className="text-base font-bold text-white">
                     See Where It Fits
                   </h3>
-                  <p className="text-xs text-white/60 leading-relaxed max-w-md">
+                  <p className="text-sm text-white/95 leading-relaxed max-w-md">
                     Understand how PitchProX can support your individual sales
                     process, team or organization.
                   </p>
@@ -226,9 +256,9 @@ export default function SeeHowItWorks() {
 
             {/* Testimonial Card */}
             <motion.div variants={fadeUp} className="pt-4 max-w-sm">
-              <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-5 shadow-xl space-y-4">
+              <div className="bg-dark-black/60 backdrop-blur-md border border-white/20 rounded-2xl p-5 shadow-xl space-y-4">
                 <Quote className="w-6 h-6 text-primary fill-primary/20" />
-                <p className="text-xs text-white/80 italic leading-relaxed">
+                <p className="text-sm text-white italic leading-relaxed">
                   {"\"PitchProX changed the way our team communicates. It's like having a coach in every call.\""}
                 </p>
                 <div className="flex items-center gap-3 pt-1">
@@ -243,7 +273,7 @@ export default function SeeHowItWorks() {
                     <h4 className="text-xs font-bold text-white">
                       Daniel Miller
                     </h4>
-                    <p className="text-[10px] text-white/60">
+                    <p className="text-[11px] text-white/90">
                       Sales Director, ABC Realty Group
                     </p>
                   </div>
@@ -420,18 +450,25 @@ export default function SeeHowItWorks() {
                     What happens next?
                   </h5>
                   <p className="text-[11px] text-medium-black/70 leading-snug">
-                    {"You'll receive a \"See How It Works\" video in your inbox within minutes, and our team will follow up shortly."}
+                    {"The \"See How It Works\" video opens right here, and we'll email you the link too. Our team will follow up shortly."}
                   </p>
                 </div>
               </div>
 
+              {formError && (
+                <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs text-red-600">
+                  {formError}
+                </p>
+              )}
+
               {/* Submit Button */}
               <button
                 type="submit"
-                className="w-full py-3 px-6 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer mt-2"
+                disabled={sending}
+                className="w-full py-3 px-6 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer mt-2 disabled:opacity-70 disabled:cursor-wait"
               >
                 <Send className="w-3.5 h-3.5" />
-                <span>Send Me the Video</span>
+                <span>{sending ? "Getting your video…" : "Show Me the Video"}</span>
               </button>
 
               {/* Privacy Note */}
@@ -443,6 +480,18 @@ export default function SeeHowItWorks() {
           </motion.div>
         </motion.div>
       </Wrapper>
+
+      {/* "Your Video Is Ready" pop-up */}
+      {ready && (
+        <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center overflow-y-auto bg-dark-black/70 backdrop-blur-sm p-3 sm:p-6" onClick={() => setReady(null)}>
+          <div role="dialog" aria-modal="true" aria-labelledby="video-ready-title" className="relative w-full max-w-3xl rounded-3xl bg-light-gray p-5 sm:p-8 shadow-2xl my-auto select-text" onClick={(event) => event.stopPropagation()}>
+            <button type="button" onClick={() => setReady(null)} aria-label="Close" className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white text-medium-black hover:text-dark-black shadow cursor-pointer">
+              ×
+            </button>
+            <VideoReady requestId={ready.id} name={ready.name} email={ready.email} onClose={() => setReady(null)} />
+          </div>
+        </div>
+      )}
     </section>
   );
 }

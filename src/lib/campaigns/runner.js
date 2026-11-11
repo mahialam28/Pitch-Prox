@@ -16,7 +16,7 @@ import { DELAY_UNITS, eventByLabel } from "@/lib/campaigns/catalog";
 //   4. enroll users into live journeys (triggers + audience + re-entry rules)
 //   5. move enrollments along their steps; before every email the user's current state is
 //      checked again (exit conditions and the trigger still holding — item 270)
-//   6. hand queued emails to the email provider (none until phase 7)
+//   6. hand queued emails to Postmark (waits in the outbox until POSTMARK_SERVER_TOKEN is set)
 
 const parse = (value) => (typeof value === "string" ? JSON.parse(value) : value);
 const MAX_STEPS_PER_PASS = 50;

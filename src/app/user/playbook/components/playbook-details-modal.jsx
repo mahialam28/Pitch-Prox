@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useCallback } from "react";
+import React, { useEffect, useCallback, useState } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -22,6 +22,11 @@ import {
 import Title from "@/components/texts/title";
 import Text from "@/components/texts/text";
 import { showError } from "@/lib/alerts";
+import { apiRequest } from "@/lib/client-api";
+
+// "build-trust" → "Build Trust"
+const humanize = (value) => String(value ?? "").replace(/[-_]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+const joined = (items, fallback = "—") => (items?.length ? items.map(humanize).join(", ") : fallback);
 
 const backdropVariants = {
   hidden: { opacity: 0 },
@@ -51,7 +56,17 @@ const premiumColors = {
   text: "text-[#f97316]",
 };
 
-const PlaybookDetailsModal = ({ isOpen = false, onClose = () => {}, playbook = null }) => {
+// playbook: the card's data (overview included). The full record is loaded on open: people who
+// have the playbook also get `inside` (stages, objections, resources) to read.
+const PlaybookDetailsModal = ({ isOpen = false, onClose = () => {}, playbook: card = null, onActivate }) => {
+  const [detail, setDetail] = useState(null);
+  useEffect(() => {
+    if (!isOpen || !card?.id) return undefined;
+    let cancelled = false;
+    apiRequest(`/api/v1/playbooks/${card.id}`).then((data) => !cancelled && setDetail(data.playbook)).catch(() => {});
+    return () => { cancelled = true; };
+  }, [isOpen, card?.id]);
+  const playbook = card ? { ...card, ...(detail?.id === card.id ? { inside: detail.inside } : {}) } : null;
   // Close on Escape key
   useEffect(() => {
     if (!isOpen) return;
@@ -101,11 +116,13 @@ const PlaybookDetailsModal = ({ isOpen = false, onClose = () => {}, playbook = n
     .slice(0, 2)
     .toUpperCase();
 
+  const overview = playbook.overview;
+  const counts = overview?.counts;
   const highlights = [
     {
       icon: Compass,
       label: "FOCUS",
-      value: "Trust, Value, Closing",
+      value: joined(overview?.focusAreas, "Trust, value and next steps"),
       bgColor: "bg-blue-50/50",
       borderColor: "border-blue-100",
       iconBg: "bg-white",
@@ -114,7 +131,7 @@ const PlaybookDetailsModal = ({ isOpen = false, onClose = () => {}, playbook = n
     {
       icon: User,
       label: "BEST FOR",
-      value: "High-value sales, Negotiations",
+      value: joined(overview?.bestFor, "All lead types"),
       bgColor: "bg-emerald-50/40",
       borderColor: "border-emerald-100",
       iconBg: "bg-white",
@@ -123,7 +140,7 @@ const PlaybookDetailsModal = ({ isOpen = false, onClose = () => {}, playbook = n
     {
       icon: MessageSquare,
       label: "STYLE",
-      value: "Direct, Confident, Results-driven",
+      value: overview ? joined([...(overview.tones ?? []), overview.style].filter(Boolean)) : "Coaching voice of the author",
       bgColor: "bg-indigo-50/40",
       borderColor: "border-indigo-100",
       iconBg: "bg-white",
@@ -131,8 +148,8 @@ const PlaybookDetailsModal = ({ isOpen = false, onClose = () => {}, playbook = n
     },
     {
       icon: Clock,
-      label: "DURATION",
-      value: "Short-term Impact",
+      label: "INSIDE",
+      value: counts ? `${counts.stages} stages · ${counts.objections} objections · ${counts.resources} resources` : overview?.experienceLevel ? humanize(overview.experienceLevel) : "Call stages, objections and scripts",
       bgColor: "bg-amber-50/40",
       borderColor: "border-amber-100",
       iconBg: "bg-white",
@@ -144,16 +161,16 @@ const PlaybookDetailsModal = ({ isOpen = false, onClose = () => {}, playbook = n
     {
       icon: FileText,
       title: "Complete AI Prompt Framework",
-      desc: "Ready-to-use prompts trained on Herjavec's core principles.",
+      desc: "Ready-to-use prompts built on this playbook's principles.",
     },
     {
       icon: PhoneCall,
-      title: "Conversation Flow Framework",
+      title: counts ? `Conversation Flow (${counts.stages} stages)` : "Conversation Flow Framework",
       desc: "Full call structure and word tracks for key conversations.",
     },
     {
       icon: ShieldCheck,
-      title: "Objection Response Library",
+      title: counts ? `Objection Library (${counts.objections} objections)` : "Objection Response Library",
       desc: "Proven responses to the most common objections.",
     },
     {
@@ -168,12 +185,8 @@ const PlaybookDetailsModal = ({ isOpen = false, onClose = () => {}, playbook = n
     },
   ];
 
-  const learningPoints = [
-    "How to build instant credibility and trust",
-    "Value-driven questioning to uncover real needs",
-    "Objection handling with confidence and clarity",
-    "Closing techniques used by top entrepreneurs and investors",
-  ];
+  // "You'll Learn": the key outcomes from the published version
+  const learningPoints = overview?.keyOutcomes ?? [];
 
   return (
     <>
@@ -248,7 +261,7 @@ const PlaybookDetailsModal = ({ isOpen = false, onClose = () => {}, playbook = n
                             <Title variant="small" className="!text-2xl sm:!text-3xl !font-extrabold !text-dark-black tracking-tight">
                               {playbook.title}
                             </Title>
-                            {playbook.isPremium && (
+                            {playbook.isPremium && !playbook.isAvailable && (
                               <Lock className="w-3.5 h-3.5 text-light-black shrink-0" />
                             )}
                           </div>
@@ -273,17 +286,32 @@ const PlaybookDetailsModal = ({ isOpen = false, onClose = () => {}, playbook = n
                               {playbook.price}
                             </Title>
                             <Text variant="small" className="text-light-black font-medium mt-0.5">
-                              One-time purchase
+                              {playbook.price === "Free" ? "Included for everyone" : playbook.isAvailable ? "You have this playbook" : "One-time purchase"}
                             </Text>
                           </div>
 
-                          <button
-                            onClick={() => showError("Purchasing isn't available yet", "Premium playbooks can be bought once payments (Stripe) are connected by the client.")}
-                            className="w-full md:w-auto px-6 py-3 rounded-2xl bg-primary hover:bg-medium-teal text-white font-bold text-sm flex items-center justify-center space-x-2.5 shadow-md transition-all cursor-pointer"
-                          >
-                            <ShoppingCart className="w-4 h-4 stroke-[2.5]" />
-                            <span>Purchase Playbook</span>
-                          </button>
+                          {playbook.isActive ? (
+                            <span className="px-6 py-3 rounded-2xl bg-light-teal text-primary font-bold text-sm">Your active playbook</span>
+                          ) : playbook.isAvailable ? (
+                            <button
+                              onClick={() => {
+                                onActivate?.(playbook);
+                                onClose();
+                              }}
+                              className="w-full md:w-auto px-6 py-3 rounded-2xl bg-primary hover:bg-medium-teal text-white font-bold text-sm flex items-center justify-center space-x-2.5 shadow-md transition-all cursor-pointer"
+                            >
+                              <Check className="w-4 h-4 stroke-[2.5]" />
+                              <span>Use Playbook</span>
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => showError("Purchasing isn't available yet", "Premium playbooks can be bought once payments (Stripe) are connected by the client.")}
+                              className="w-full md:w-auto px-6 py-3 rounded-2xl bg-primary hover:bg-medium-teal text-white font-bold text-sm flex items-center justify-center space-x-2.5 shadow-md transition-all cursor-pointer"
+                            >
+                              <ShoppingCart className="w-4 h-4 stroke-[2.5]" />
+                              <span>Purchase Playbook</span>
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -326,8 +354,8 @@ const PlaybookDetailsModal = ({ isOpen = false, onClose = () => {}, playbook = n
                           </Text>
                         </div>
 
-                        {/* You'll Learn Box */}
-                        <div className="p-6 bg-light-gray rounded-2xl border border-light-gray/80">
+                        {/* You'll Learn Box (the playbook's key outcomes) */}
+                        {learningPoints.length > 0 && <div className="p-6 bg-light-gray rounded-2xl border border-light-gray/80">
                           <Title variant="small" className="!text-sm !font-bold !text-dark-black mb-4">
                             You&apos;ll Learn
                           </Title>
@@ -342,7 +370,7 @@ const PlaybookDetailsModal = ({ isOpen = false, onClose = () => {}, playbook = n
                               </li>
                             ))}
                           </ul>
-                        </div>
+                        </div>}
                       </div>
 
                       {/* Right Column (What's Included) */}
@@ -373,6 +401,50 @@ const PlaybookDetailsModal = ({ isOpen = false, onClose = () => {}, playbook = n
                         </div>
                       </div>
                     </div>
+
+                    {/* What's inside: read-only for people who have the playbook */}
+                    {playbook.inside && (
+                      <div className="mt-8 space-y-6">
+                        <Title variant="small" className="!text-base !font-bold !text-dark-black">What&apos;s Inside</Title>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          <div className="rounded-2xl border border-light-gray p-5">
+                            <Text variant="small" className="!font-bold !text-dark-black mb-3">Conversation Flow</Text>
+                            <ol className="space-y-2.5">
+                              {playbook.inside.stages.map((stage, index) => (
+                                <li key={`${stage.title}-${index}`} className="text-xs">
+                                  <span className="font-semibold text-dark-black">{index + 1}. {stage.title}</span>
+                                  {stage.goal && <span className="block text-light-black">{stage.goal}</span>}
+                                </li>
+                              ))}
+                            </ol>
+                          </div>
+                          <div className="rounded-2xl border border-light-gray p-5">
+                            <Text variant="small" className="!font-bold !text-dark-black mb-3">Objections Covered</Text>
+                            <ul className="space-y-2.5">
+                              {playbook.inside.objections.map((objection, index) => (
+                                <li key={`${objection.phrase}-${index}`} className="text-xs">
+                                  <span className="font-semibold text-dark-black">&ldquo;{objection.phrase}&rdquo;</span>
+                                  <span className="block text-light-black">{[objection.rootCategory, objection.subtype].filter(Boolean).join(" · ")}{objection.goal ? ` · ${objection.goal}` : ""}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                        {playbook.inside.resources.length > 0 && (
+                          <div className="rounded-2xl border border-light-gray p-5">
+                            <Text variant="small" className="!font-bold !text-dark-black mb-3">Scripts &amp; Resources</Text>
+                            <div className="space-y-3">
+                              {playbook.inside.resources.map((resource, index) => (
+                                <details key={`${resource.name}-${index}`} className="text-xs group">
+                                  <summary className="cursor-pointer font-semibold text-dark-black">{resource.name} <span className="font-normal text-light-black">· {resource.type}</span></summary>
+                                  <p className="mt-1.5 text-medium-black whitespace-pre-line">{resource.content || resource.description || "No text for this resource."}</p>
+                                </details>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

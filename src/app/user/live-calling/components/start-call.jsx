@@ -1,235 +1,124 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import {
-  Activity,
-  Cpu,
-  Mic,
-  MicOff,
-  Phone,
-  PhoneOff,
-  Search,
-  Smile,
-  Sparkles,
-  ShieldCheck,
-} from "lucide-react";
+import { Activity, Bot, BotOff, Cpu, GraduationCap, Loader2, Phone, PhoneOff, Search, Send, ShieldCheck, Smile, Sparkles, Check, AlertTriangle } from "lucide-react";
 import LiveCallingModal from "./live-calling-modal";
-import {
-  PENDING_CALL_KEY,
-  PENDING_CALL_EVENT,
-} from "@/utils.js/call-constants";
+import { useLiveCall } from "../use-live-call";
+import { PENDING_CALL_KEY, PENDING_CALL_EVENT } from "@/utils.js/call-constants";
 
-const WAVE_POINTS = 72;
+// Live calling screen (AI phase 2): every value comes from the AI Core in the call service —
+// the transcript, the exact line to say (teleprompter), session status and the live metrics.
+// Until phone calls are connected (Twilio, AI-3), practice calls use a simulated prospect.
 
-const TRANSCRIPT_LINES = [
-  "I can scroll to view my upcoming meetings and choose whether to have Fireflies join by toggling it on or off.",
-  "That sounds great — let's set up a 15-minute walkthrough for next Tuesday morning.",
-  "Absolutely, we integrate with Slack and Microsoft Teams out of the box.",
-  "How many seats would you estimate your team needs this quarter?",
-  "Perfect, I'll add that to the notes. Anything else you'd like to cover before we wrap up?",
-];
+const STATUS = {
+  idle: { label: "Ready to start", tone: "green", orb: "Tap to start" },
+  connecting: { label: "Connecting…", tone: "blue", orb: "Connecting…" },
+  listening: { label: "Listening…", tone: "blue", orb: "Listening…" },
+  thinking: { label: "Analyzing…", tone: "purple", orb: "Analyzing…" },
+  prompt_ready: { label: "Prompt ready", tone: "green", orb: "Say the line" },
+  ai_paused: { label: "AI paused", tone: "amber", orb: "AI paused" },
+  boundary: { label: "Do not contact: wrap up", tone: "amber", orb: "Wrap up" },
+  script_finished: { label: "Scenario finished", tone: "green", orb: "End the call" },
+  ending: { label: "Saving the call…", tone: "blue", orb: "Saving…" },
+  ended: { label: "Call ended", tone: "blue", orb: "Call ended" },
+};
+const TONES = {
+  green: "bg-[#0b2830] text-[#00a884] border-[#00a884]/30",
+  blue: "bg-[#0b2830] text-[#7dd3fc] border-[#7dd3fc]/30",
+  purple: "bg-[#1d1235] text-purple-300 border-purple-400/30",
+  amber: "bg-[#2a1608] text-amber-400 border-amber-400/30",
+};
+const DOTS = { green: "bg-[#00a884]", blue: "bg-[#7dd3fc]", purple: "bg-purple-300", amber: "bg-amber-400" };
+const ACTION_LABELS = { acknowledge: "Acknowledge", clarify: "Clarify", validate: "Validate", mirror: "Mirror", reframe: "Reframe", educate: "Answer", quantify: "Quantify", differentiate: "Differentiate", "de-risk": "De-risk", social_proof: "Social proof", challenge: "Challenge", future_pace: "Future pace", question: "Ask", close: "Ask for the meeting" };
+const RESOLUTION = { unresolved: "open", reactivated: "back again", clarified: "clarified", partial: "partly resolved", resolved: "resolved" };
+const mmss = (ms) => {
+  const total = Math.max(0, Math.round((ms ?? 0) / 1000));
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+};
+
+function MetricCard({ icon: Icon, label, value, tone }) {
+  return (
+    <div className="bg-white p-4 rounded-2xl flex items-center gap-3 border border-light-gray shadow-xs min-w-0">
+      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${tone.bg}`}>
+        <Icon className={`w-4 h-4 ${tone.text}`} />
+      </div>
+      <div className="flex flex-col min-w-0">
+        <span className="text-[11px] font-bold text-dark-black uppercase tracking-wider">{label}</span>
+        <span className={`text-[13px] font-bold truncate ${tone.text}`} title={typeof value === "string" ? value : undefined}>{value}</span>
+      </div>
+    </div>
+  );
+}
 
 export const StartCall = ({ onCallEnded, setup = {}, onSetupChange = () => {} }) => {
-  const [isCallActive, setIsCallActive] = useState(false);
+  const live = useLiveCall();
   const [isSetupOpen, setIsSetupOpen] = useState(true);
   const [booted, setBooted] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [micError, setMicError] = useState("");
-  const [transcriptIndex, setTranscriptIndex] = useState(0);
+  const [repText, setRepText] = useState("");
+  const [prospectText, setProspectText] = useState("");
+  const startRef = useRef(null);
+  const transcriptRef = useRef(null);
+  const handedOff = useRef(false);
 
-  const streamRef = useRef(null);
-  const audioCtxRef = useRef(null);
-  const analyserRef = useRef(null);
-  const timeDataRef = useRef(null);
-  const rafRef = useRef(null);
-  const waveRef = useRef(new Array(WAVE_POINTS).fill(0));
-  const wavePathRef = useRef(null);
-  const isMutedRef = useRef(false);
-  const isCallActiveRef = useRef(false);
-  const speakingRef = useRef(false);
-  const isStartingRef = useRef(false);
-  const startCallRef = useRef(null);
+  const active = ["connecting", "active", "ending"].includes(live.phase);
+  const status = STATUS[live.status] ?? STATUS.listening;
+  const metrics = live.metrics;
+  const practice = live.call?.mode === "practice";
+  const roleplay = Boolean(live.call?.practice?.roleplay);
 
+  const begin = useCallback(
+    (next) => {
+      handedOff.current = false;
+      setIsSetupOpen(false);
+      live.start(next);
+    },
+    [live]
+  );
   useEffect(() => {
-    isMutedRef.current = isMuted;
-  }, [isMuted]);
-
-  useEffect(() => {
-    isCallActiveRef.current = isCallActive;
-  }, [isCallActive]);
-
-  // Stop and release all audio resources (shared by endCall + unmount cleanup)
-  const stopAudio = useCallback(() => {
-    cancelAnimationFrame(rafRef.current);
-    if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
-    if (audioCtxRef.current) audioCtxRef.current.close();
-    streamRef.current = null;
-    audioCtxRef.current = null;
-    analyserRef.current = null;
-    timeDataRef.current = null;
-  }, []);
-
-  // Rotate the simulated live transcript while the call is active
-  useEffect(() => {
-    if (!isCallActive) return;
-    const id = setInterval(() => {
-      setTranscriptIndex((i) => (i + 1) % TRANSCRIPT_LINES.length);
-    }, 4000);
-    return () => clearInterval(id);
-  }, [isCallActive]);
-
-  // Cleanup audio resources on unmount
-  useEffect(() => {
-    return () => stopAudio();
-  }, [stopAudio]);
-
-  /**
-   * Real-time waveform render loop.
-   * Reads live microphone time-domain samples and draws a smooth recorder-style
-   * curve directly onto the SVG path node (bypassing React re-renders for
-   * buttery 60fps). The line oscillates above AND below the center like an
-   * oscilloscope/recorder waveform.
-   */
-  function renderWave(time) {
-    const analyser = analyserRef.current;
-    if (!analyser || !timeDataRef.current) return;
-
-    analyser.getByteTimeDomainData(timeDataRef.current);
-    const data = timeDataRef.current;
-    const muted = isMutedRef.current;
-
-    const n = WAVE_POINTS;
-    const step = Math.max(1, Math.floor(data.length / n));
-    const raw = new Array(n);
-    for (let i = 0; i < n; i++) {
-      const idx = Math.min(data.length - 1, i * step);
-      // Uint8 samples are centered on 128; convert to a signed -1..1 signal
-      raw[i] = muted ? 0 : (data[idx] - 128) / 128;
-    }
-
-    // Temporal smoothing to calm jittery peaks
-    const prev = waveRef.current;
-    const smoothed = new Array(n);
-    for (let i = 0; i < n; i++) {
-      smoothed[i] = prev[i] * 0.65 + raw[i] * 0.35;
-    }
-    waveRef.current = smoothed;
-
-    // Gentle symmetric idle ripple so the line stays alive during silence
-    const t = time / 1000;
-    const idle = isCallActiveRef.current ? 0.04 : 0;
-
-    // Build the smooth curve path
-    const xStep = 1000 / (n - 1);
-    let d = "";
-    for (let i = 0; i < n; i++) {
-      const ripple = idle * Math.sin(t * 2.4 + i * 0.45);
-      const y = 60 - (smoothed[i] + ripple) * 55;
-      d += `${i === 0 ? "M" : " L"} ${(i * xStep).toFixed(1)},${y.toFixed(1)}`;
-    }
-    if (wavePathRef.current) wavePathRef.current.setAttribute("d", d);
-
-    // Speaking detection (average absolute deviation from silence)
-    let sum = 0;
-    for (let i = 0; i < n; i++) sum += Math.abs(smoothed[i]);
-    const speaking = isCallActiveRef.current && !muted && sum / n > 0.12;
-    if (speaking !== speakingRef.current) {
-      speakingRef.current = speaking;
-      setIsSpeaking(speaking);
-    }
-
-    rafRef.current = requestAnimationFrame(renderWave);
-  }
-
-  const startCall = async (allowSimulation = false) => {
-    if (isStartingRef.current || isCallActiveRef.current) return;
-    isStartingRef.current = true;
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      });
-      // Hold the stream in the ref immediately so the catch block can release
-      // it if any later AudioContext setup step throws.
-      streamRef.current = stream;
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      const ctx = new Ctx();
-      const source = ctx.createMediaStreamSource(stream);
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 1024;
-      analyser.smoothingTimeConstant = 0.75;
-      source.connect(analyser);
-
-      audioCtxRef.current = ctx;
-      analyserRef.current = analyser;
-      timeDataRef.current = new Uint8Array(analyser.fftSize);
-      waveRef.current = new Array(WAVE_POINTS).fill(0);
-
-      setMicError("");
-      setIsMuted(false);
-      isMutedRef.current = false;
-      setTranscriptIndex(0);
-      isCallActiveRef.current = true;
-      setIsCallActive(true);
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = requestAnimationFrame(renderWave);
-      isStartingRef.current = false;
-    } catch (err) {
-      isStartingRef.current = false;
-      if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-      console.error("Mic error:", err);
-      setMicError("Microphone access was blocked. Please allow mic access and try again.");
-      // For header-triggered calls, fall back to a simulated active call so the
-      // live-calling UI still shows the calling state even without mic access.
-      if (allowSimulation) {
-        isCallActiveRef.current = true;
-        setIsCallActive(true);
-        setTranscriptIndex(0);
-      }
-    }
-  };
-
-  // Start the call after the setup modal validates and confirms.
-  const handleStartCall = () => {
-    setIsSetupOpen(false);
-    startCall();
-  };
-
-  // Keep the latest startCall implementation available to mount/event handlers.
-  useEffect(() => {
-    startCallRef.current = startCall;
+    startRef.current = begin;
   });
 
-  // Consume a pending call that was started from the header's Start Call button.
+  // The call ended (saved by the call service): show the after-call screen once
+  useEffect(() => {
+    if (live.phase !== "ended" || handedOff.current) return;
+    handedOff.current = true;
+    const turns = live.turns;
+    const summary = live.summary;
+    const id = setTimeout(() => onCallEnded?.({ summary, turns, call: live.call }), 0);
+    return () => clearTimeout(id);
+  }, [live.phase, live.turns, live.summary, live.call, onCallEnded]);
+
+  // Keep the newest transcript line in view
+  useEffect(() => {
+    const box = transcriptRef.current;
+    if (box) box.scrollTop = box.scrollHeight;
+  }, [live.turns.length]);
+
+  // A call started from the header / CRM / Leads (sessionStorage) starts here as a phone call
   const consumePendingCall = useCallback(() => {
-    if (typeof window === "undefined") return false;
+    if (typeof window === "undefined") return null;
     const raw = sessionStorage.getItem(PENDING_CALL_KEY);
-    if (!raw) return false;
+    if (!raw) return null;
     try {
-      const saved = JSON.parse(raw);
       sessionStorage.removeItem(PENDING_CALL_KEY);
-      onSetupChange({ ...setup, ...saved });
-      setIsSetupOpen(false);
-      return true;
+      const saved = JSON.parse(raw);
+      const next = { ...setup, contactKind: null, contactId: null, phoneId: null, ...saved, mode: "live" };
+      onSetupChange(next);
+      return next;
     } catch {
-      return false;
+      return null;
     }
   }, [onSetupChange, setup]);
 
-  // On mount: prefill + auto-start a call requested from the header, and keep
-  // listening in case the header is clicked while already on this page.
-  // State updates are deferred out of the effect body (React Compiler rule) —
-  // booted stays false until then, so the setup modal never flashes.
   useEffect(() => {
     const id = setTimeout(() => {
-      const started = consumePendingCall();
+      const pending = consumePendingCall();
       setBooted(true);
-      if (started) startCallRef.current?.(true);
+      if (pending) startRef.current?.(pending);
     }, 0);
-
     const handleHeaderStart = () => {
-      if (consumePendingCall()) startCallRef.current?.(true);
+      const pending = consumePendingCall();
+      if (pending) startRef.current?.(pending);
     };
     window.addEventListener(PENDING_CALL_EVENT, handleHeaderStart);
     return () => {
@@ -238,268 +127,189 @@ export const StartCall = ({ onCallEnded, setup = {}, onSetupChange = () => {} })
     };
   }, [consumePendingCall]);
 
-  const endCall = () => {
-    stopAudio();
-    waveRef.current = new Array(WAVE_POINTS).fill(0);
-    if (wavePathRef.current) wavePathRef.current.setAttribute("d", "M 0,60 L 1000,60");
-    speakingRef.current = false;
-    setIsSpeaking(false);
-    setIsMuted(false);
-    isMutedRef.current = false;
-    setTranscriptIndex(0);
-    setIsCallActive(false);
-    onCallEnded?.();
+  const sayLine = (text) => {
+    live.say(text);
+    setRepText("");
+  };
+  const submitRep = (event) => {
+    event.preventDefault();
+    sayLine(repText);
+  };
+  const submitProspect = (event) => {
+    event.preventDefault();
+    live.prospectSay(prospectText);
+    setProspectText("");
   };
 
-  const toggleMute = () => {
-    if (!isCallActive) return;
-    const next = !isMuted;
-    setIsMuted(next);
-    isMutedRef.current = next;
-    if (streamRef.current) {
-      streamRef.current.getAudioTracks().forEach((t) => (t.enabled = !next));
-    }
-  };
-
-  const badge = !isCallActive
-    ? { label: "Ready to start", cls: "bg-[#0b2830] text-[#00a884] border-[#00a884]/30", dot: "bg-[#00a884]" }
-    : isMuted
-      ? { label: "Muted", cls: "bg-[#2a1608] text-amber-400 border-amber-400/30", dot: "bg-amber-400" }
-      : isSpeaking
-        ? { label: "You're speaking", cls: "bg-[#0b2830] text-[#00a884] border-[#00a884]/30", dot: "bg-[#00a884]" }
-        : { label: "Listening...", cls: "bg-[#0b2830] text-[#7dd3fc] border-[#7dd3fc]/30", dot: "bg-[#7dd3fc]" };
-
-  const displayName = setup.leadName || "";
-  const displayNumber = setup.phoneNumber || "";
+  const name = live.call?.prospectName || live.call?.contactName || setup.leadName || "";
+  const badge = live.phase === "error" ? { label: "Call couldn't continue", tone: "amber" } : active || live.phase === "ended" ? status : STATUS.idle;
+  const trust = metrics && live.turns.some((t) => t.speaker === "prospect") ? `${metrics.trust}%${metrics.trustConfident ? "" : " (early)"}` : "—";
+  const aiPaused = metrics?.aiAllowed === false;
 
   return (
     <div className="w-full font-sans text-[#1e293b]">
-      {/* --- PRE-CALL SETUP MODAL (rendered above the live-calling section) --- */}
-      <LiveCallingModal
-        isOpen={booted && isSetupOpen && !isCallActive}
-        onClose={() => setIsSetupOpen(false)}
-        setup={setup}
-        onSetupChange={onSetupChange}
-        onStartCall={handleStartCall}
-      />
+      <LiveCallingModal isOpen={booted && isSetupOpen && !active} onClose={() => setIsSetupOpen(false)} setup={setup} onSetupChange={onSetupChange} onStartCall={begin} />
 
-      {/* --- DARK LIVE-CALL DISPLAY --- */}
-      <div className="w-full bg-[#030d1a] rounded-2xl p-6 sm:p-8 text-white border border-slate-800/60 shadow-xl">
-        <div className="relative flex flex-col items-center pt-2 pb-6 min-h-[580px] justify-between">
-          {/* Top Header: Badge, Lead prompt, PitchProX Standard */}
+      <div className="w-full bg-[#030d1a] rounded-2xl p-5 sm:p-8 text-white border border-slate-800/60 shadow-xl">
+        <div className="relative flex flex-col items-center pt-2 pb-4 min-h-[560px] gap-5">
+          {/* Header: status, who, playbook */}
           <div className="flex flex-col items-center gap-2 z-1 text-center">
-            <div
-              className={`text-xs font-semibold px-4 py-1.5 rounded-full flex items-center gap-2 border transition-colors ${badge.cls}`}
-            >
-              <span className={`w-2 h-2 rounded-full ${badge.dot} ${isSpeaking ? "animate-pulse" : ""}`} />
+            <div className={`text-xs font-semibold px-4 py-1.5 rounded-full flex items-center gap-2 border transition-colors ${TONES[badge.tone]}`} aria-live="polite">
+              <span className={`w-2 h-2 rounded-full ${DOTS[badge.tone]} ${live.status === "thinking" ? "animate-pulse" : ""}`} />
               <span>{badge.label}</span>
             </div>
-
-            <h3 className="text-base sm:text-lg font-bold text-white tracking-wide mt-1">
-              {displayName || (isCallActive ? "(310) 123-4567" : "Select a lead to begin")}
-            </h3>
-
-            <div className="flex items-center justify-center mt-0.5">
-              <span className="text-[12px] font-medium text-slate-300 bg-[#0a1b2a] border border-slate-700/60 rounded-full px-3.5 py-1">
-                {setup.playbook || setup.leadType || "PitchProX Standard"}
-              </span>
+            <h3 className="text-base sm:text-lg font-bold text-white tracking-wide mt-1">{name || (active ? "Connecting…" : "Select a lead to begin")}</h3>
+            <div className="flex flex-wrap items-center justify-center gap-1.5 mt-0.5">
+              <span className="text-[12px] font-medium text-slate-300 bg-[#0a1b2a] border border-slate-700/60 rounded-full px-3.5 py-1">{live.call?.playbook || setup.playbook || "PitchProX Standard"}</span>
+              {practice && (
+                <span className="text-[12px] font-medium text-amber-300 bg-[#2a1608] border border-amber-400/30 rounded-full px-3 py-1 inline-flex items-center gap-1">
+                  <GraduationCap className="w-3.5 h-3.5" /> Practice{live.call?.practice?.scenario ? `: ${live.call.leadType ?? "simulated prospect"}` : ""}
+                </span>
+              )}
+              {live.call?.ai === "demo" && <span className="text-[11px] font-medium text-slate-400 border border-slate-700/60 rounded-full px-2.5 py-1" title="No AI key is configured on this server, so lines come from built-in sample wording. The strategy is the real Core.">Sample wording</span>}
             </div>
 
-            {/* Disclosure notice: read this at the start of every call */}
-            {isCallActive && (
-              <div className="mt-3 max-w-md flex items-start gap-2.5 text-left bg-[#051824] border border-[#00a884]/40 rounded-xl px-3.5 py-2.5">
+            {/* Disclosure: read at the start of every call; confirming it is logged to the call record */}
+            {(live.phase === "active" || live.phase === "ending") && live.call?.disclosure && (
+              <div className="mt-2 max-w-md flex items-start gap-2.5 text-left bg-[#051824] border border-[#00a884]/40 rounded-xl px-3.5 py-2.5">
                 <ShieldCheck className="w-4 h-4 text-[#00a884] shrink-0 mt-0.5" />
-                <span className="text-[11px] leading-relaxed text-slate-200">
+                <span className="text-[11px] leading-relaxed text-slate-200 flex-1">
                   <span className="font-bold text-[#00a884] block">Disclosure</span>
-                  &ldquo;Before we begin, this call uses an AI assistant to help me take notes.&rdquo; Read this at the start of the call. It&apos;s logged to the call record.
+                  &ldquo;{live.call.disclosure}&rdquo;
                 </span>
+                {live.disclosureLogged ? (
+                  <span className="text-[11px] font-semibold text-[#00a884] inline-flex items-center gap-1 shrink-0"><Check className="w-3.5 h-3.5" /> Logged</span>
+                ) : (
+                  <button type="button" onClick={live.markDisclosure} className="text-[11px] font-semibold text-[#030d1a] bg-[#00a884] hover:bg-[#00c49a] rounded-lg px-2.5 py-1 shrink-0 cursor-pointer">I read it</button>
+                )}
               </div>
             )}
           </div>
 
-          {/* Center Glowing Orb */}
-          <div className="relative flex items-center justify-center my-6">
-            {/* Top Soft Purple Radial Glow */}
-            <div
-              className={`absolute -top-10 w-64 h-44 bg-gradient-to-b from-purple-500/40 via-purple-700/20 to-transparent blur-3xl rounded-full pointer-events-none ${
-                isSpeaking ? "animate-pulse" : ""
-              }`}
-            />
-
-            {/* Orb Container */}
-            <button
-              type="button"
-              onClick={!isCallActive ? () => setIsSetupOpen(true) : undefined}
-              className="relative w-48 h-48 sm:w-52 sm:h-52 rounded-full bg-gradient-to-b from-[#8b5cf6] via-[#5b21b6] to-[#1e1b4b] shadow-[0_0_55px_rgba(139,92,246,0.3)] flex items-center justify-center overflow-hidden cursor-pointer transition-transform duration-300 hover:scale-[1.02] active:scale-[0.98] border border-purple-400/30"
-              style={{
-                transform: isSpeaking ? "scale(1.05)" : undefined,
-              }}
-            >
-              {/* Inner highlight */}
-              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-white/20 via-transparent to-transparent pointer-events-none" />
-
-              <span className="relative z-10 text-sm sm:text-base font-semibold text-white tracking-wide">
-                {!isCallActive ? "Tap to start" : isMuted ? "Muted" : isSpeaking ? "Listening..." : "Analyzing..."}
-              </span>
-            </button>
+          {/* Teleprompter: the exact line to say next */}
+          <div className="w-full max-w-2xl">
+            {live.phase === "idle" && (
+              <button type="button" onClick={() => setIsSetupOpen(true)} className="mx-auto flex h-44 w-44 sm:h-48 sm:w-48 items-center justify-center rounded-full bg-gradient-to-b from-[#8b5cf6] via-[#5b21b6] to-[#1e1b4b] shadow-[0_0_55px_rgba(139,92,246,0.3)] border border-purple-400/30 text-sm sm:text-base font-semibold hover:scale-[1.02] active:scale-[0.98] transition-transform cursor-pointer">
+                Tap to start
+              </button>
+            )}
+            {live.phase === "connecting" && (
+              <div className="flex flex-col items-center gap-3 py-12 text-slate-300">
+                <Loader2 className="w-8 h-8 animate-spin text-purple-300" />
+                <span className="text-sm">Connecting to the AI…</span>
+              </div>
+            )}
+            {live.phase === "error" && (
+              <div className="rounded-2xl border border-amber-400/30 bg-amber-400/10 px-5 py-4 text-sm text-amber-200 flex flex-col sm:flex-row sm:items-center gap-3">
+                <AlertTriangle className="w-5 h-5 shrink-0" />
+                <span className="flex-1">{live.error}</span>
+                <button type="button" onClick={() => { live.reset(); onSetupChange({ ...setup, mode: "practice" }); setIsSetupOpen(true); }} className="text-xs font-semibold text-[#030d1a] bg-amber-300 hover:bg-amber-200 rounded-lg px-3 py-1.5 cursor-pointer">
+                  Start a practice call
+                </button>
+              </div>
+            )}
+            {(live.phase === "active" || live.phase === "ending") && (
+              <div className={`rounded-2xl border px-5 py-5 sm:px-6 transition-colors ${live.prompt ? "border-[#00a884]/60 bg-[#06221f]" : "border-slate-700/60 bg-[#071425]"}`} aria-live="polite">
+                {live.prompt ? (
+                  <>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-[#00a884]">Say this · {ACTION_LABELS[live.prompt.action] ?? live.prompt.action}</span>
+                      {live.prompt.latencyMs !== undefined && <span className="text-[10px] text-slate-500">{live.prompt.latencyMs} ms</span>}
+                    </div>
+                    <p className="text-lg sm:text-xl font-semibold leading-relaxed text-white">{live.prompt.text}</p>
+                    <button type="button" onClick={() => sayLine(live.prompt.text)} className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-[#030d1a] bg-[#00a884] hover:bg-[#00c49a] rounded-lg px-3.5 py-2 cursor-pointer">
+                      <Check className="w-3.5 h-3.5" /> I said it
+                    </button>
+                  </>
+                ) : live.opener && practice ? (
+                  <>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-2">Your opening line</span>
+                    <p className="text-lg sm:text-xl font-semibold leading-relaxed text-white">{live.opener}</p>
+                    <button type="button" onClick={() => sayLine(live.opener)} className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-[#030d1a] bg-[#00a884] hover:bg-[#00c49a] rounded-lg px-3.5 py-2 cursor-pointer">
+                      <Phone className="w-3.5 h-3.5" /> Say it
+                    </button>
+                  </>
+                ) : (
+                  <div className="flex items-center gap-3 text-slate-300 min-h-[64px]">
+                    {live.status === "thinking" ? <Loader2 className="w-5 h-5 animate-spin text-purple-300" /> : <Activity className="w-5 h-5 text-[#7dd3fc]" />}
+                    <span className="text-sm">
+                      {live.status === "thinking" ? "Reading the moment…" : live.status === "script_finished" ? "That's the end of this scenario. End the call to see the summary." : live.status === "boundary" ? "They asked not to be contacted. Thank them and end the call." : aiPaused ? "AI coaching is paused. Resume it any time." : "Listening. A line appears here when it helps."}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Live Microphone Waveform */}
-          <div className="w-full max-w-2xl h-20 relative flex items-center justify-center my-2 overflow-visible">
-            <svg
-              className="w-full h-full text-[#00a884] overflow-visible"
-              viewBox="0 0 1000 120"
-              overflow="visible"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-            >
-              {/* Real-time microphone curve */}
-              <path
-                ref={wavePathRef}
-                d="M 0,60 L 1000,60"
-                className="drop-shadow-[0_0_8px_rgba(0,168,132,0.45)]"
-              />
-              {/* Smooth static baseline curve */}
-              <path
-                d="M0,60 Q60,85 120,60 T240,60 T360,45 T480,75 T600,35 T720,75 T840,60 T1000,60"
-                stroke="#00a884"
-                strokeWidth="1.5"
-                opacity="0.25"
-              />
-            </svg>
-          </div>
-
-          {/* Live Subtitle Transcript Text */}
-          <div className="text-center max-w-2xl px-4 my-3">
-            <p className="text-base sm:text-lg font-medium text-slate-100 leading-relaxed">
-              <span className="text-[#00a884] font-semibold">“</span>
-              {TRANSCRIPT_LINES[transcriptIndex]}
-              <span className="text-[#00a884] font-semibold">”</span>
-            </p>
-          </div>
-
-          {/* Mic error notice */}
-          {micError && (
-            <div className="w-full max-w-md mt-2 bg-amber-400/10 border border-amber-400/30 text-amber-300 text-xs font-medium px-4 py-2.5 rounded-xl text-center">
-              {micError}
+          {/* Live transcript + what the rep said */}
+          {(live.phase === "active" || live.phase === "ending" || (live.phase === "error" && live.turns.length > 0)) && (
+            <div className="w-full max-w-2xl">
+              <div ref={transcriptRef} className="max-h-56 overflow-y-auto rounded-2xl border border-slate-800 bg-[#050f1d] px-4 py-3 space-y-2" aria-label="Live transcript">
+                {live.turns.length === 0 ? (
+                  <p className="text-xs text-slate-500">The transcript appears here as the conversation happens.</p>
+                ) : (
+                  live.turns.map((turn) => (
+                    <div key={turn.id} className="text-[13px] leading-relaxed">
+                      <span className={`font-semibold mr-1.5 ${turn.speaker === "rep" ? "text-[#00a884]" : "text-[#7dd3fc]"}`}>{turn.speaker === "rep" ? "You" : name || "Prospect"}</span>
+                      <span className="text-[10px] text-slate-500 mr-2">{mmss(turn.atMs)}</span>
+                      <span className="text-slate-200">{turn.text}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+              {live.phase === "active" && (
+                <div className="mt-2 space-y-2">
+                  <form onSubmit={submitRep} className="flex gap-2">
+                    <input value={repText} onChange={(e) => setRepText(e.target.value)} placeholder={practice ? "Or type what you said…" : "Type a note of what you said…"} aria-label="What you said" className="flex-1 min-w-0 rounded-xl bg-[#071425] border border-slate-700 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#00a884]" />
+                    <button type="submit" disabled={!repText.trim()} className="rounded-xl bg-[#0b2830] border border-[#00a884]/40 px-3.5 text-[#00a884] disabled:opacity-40 cursor-pointer" aria-label="Send what you said"><Send className="w-4 h-4" /></button>
+                  </form>
+                  {roleplay && (
+                    <form onSubmit={submitProspect} className="flex gap-2">
+                      <input value={prospectText} onChange={(e) => setProspectText(e.target.value)} placeholder="Prospect says…" aria-label="What the prospect said" className="flex-1 min-w-0 rounded-xl bg-[#071425] border border-slate-700 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#7dd3fc]" />
+                      <button type="submit" disabled={!prospectText.trim()} className="rounded-xl bg-[#0b2830] border border-[#7dd3fc]/40 px-3.5 text-[#7dd3fc] disabled:opacity-40 cursor-pointer" aria-label="Send what the prospect said"><Send className="w-4 h-4" /></button>
+                    </form>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
-          {/* Bottom Controls Bar */}
-          <div className="w-full mt-4 pt-2 px-2">
-            {/* Desktop / Tablet View (sm and up) */}
-            <div className="hidden sm:flex items-center justify-between gap-4">
-              {/* Left: Call Quality */}
-              <div className="bg-[#051824] border border-[#00a884]/40 rounded-2xl px-5 py-3.5 flex items-center justify-start gap-3 min-w-[170px] shadow-sm">
-                <div className="flex items-end gap-1 h-5 text-[#00a884]">
-                  <span className="w-1.5 h-2 bg-[#00a884] rounded-[2px]" />
-                  <span className="w-1.5 h-3 bg-[#00a884] rounded-[2px]" />
-                  <span className="w-1.5 h-4 bg-[#00a884] rounded-[2px]" />
-                  <span className="w-1.5 h-5 bg-[#00a884] rounded-[2px]" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
-                    Call Quality
-                  </span>
-                  <span className="text-sm font-bold text-[#00a884]">Excellent</span>
+          {/* Controls */}
+          <div className="w-full mt-auto pt-2 px-1">
+            <div className="grid grid-cols-2 sm:flex sm:items-center sm:justify-between gap-3">
+              <div className="order-2 sm:order-1 bg-[#051824] border border-[#00a884]/40 rounded-2xl px-4 py-3 flex items-center gap-3 sm:min-w-[170px]">
+                <Cpu className="w-5 h-5 text-[#00a884] shrink-0" />
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[10px] sm:text-[11px] font-bold text-slate-300 uppercase tracking-wider">Call</span>
+                  <span className="text-xs sm:text-sm font-bold text-[#00a884] truncate">{active ? (practice ? "Practice" : "Live") : "Not started"}</span>
                 </div>
               </div>
 
-              {/* Center: Mic & Call Controller */}
-              <div className="bg-[#00a884] p-1.5 rounded-full flex items-center gap-2 shadow-lg">
-                {isCallActive && (
-                  <button
-                    onClick={toggleMute}
-                    title={isMuted ? "Unmute" : "Mute"}
-                    className="w-12 h-12 rounded-full bg-[#082a32] hover:bg-[#062026] text-white flex items-center justify-center transition-colors cursor-pointer"
-                  >
-                    {isMuted ? <MicOff className="w-5 h-5 text-amber-400" /> : <Mic className="w-5 h-5 text-white" />}
+              <div className="order-1 sm:order-2 col-span-2 justify-self-center bg-[#00a884] p-1.5 rounded-full flex items-center gap-2 shadow-lg">
+                {live.phase === "active" && (
+                  <button type="button" onClick={() => live.setAiPaused(!aiPaused)} title={aiPaused ? "Resume AI coaching" : "Pause AI coaching"} aria-label={aiPaused ? "Resume AI coaching" : "Pause AI coaching"} className="w-12 h-12 rounded-full bg-[#082a32] hover:bg-[#062026] flex items-center justify-center transition-colors cursor-pointer">
+                    {aiPaused ? <BotOff className="w-5 h-5 text-amber-400" /> : <Bot className="w-5 h-5 text-white" />}
                   </button>
                 )}
                 <button
-                  onClick={isCallActive ? endCall : () => setIsSetupOpen(true)}
-                  title={isCallActive ? "End call" : "Start call"}
-                  className={`w-12 h-12 rounded-full text-white flex items-center justify-center transition-colors cursor-pointer ${
-                    isCallActive ? "bg-[#ff4d4d] hover:bg-red-600" : "bg-[#062026] hover:bg-[#04161c]"
-                  }`}
+                  type="button"
+                  onClick={active ? live.end : () => setIsSetupOpen(true)}
+                  disabled={live.phase === "ending" || live.phase === "connecting"}
+                  title={active ? "End call" : "Start call"}
+                  aria-label={active ? "End call" : "Start call"}
+                  className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors cursor-pointer disabled:opacity-60 ${active ? "bg-[#ff4d4d] hover:bg-red-600" : "bg-[#062026] hover:bg-[#04161c]"}`}
                 >
-                  {isCallActive ? <PhoneOff className="w-5 h-5 text-white" /> : <Phone className="w-5 h-5 text-[#00a884]" />}
+                  {live.phase === "ending" ? <Loader2 className="w-5 h-5 animate-spin text-white" /> : active ? <PhoneOff className="w-5 h-5 text-white" /> : <Phone className="w-5 h-5 text-[#00a884]" />}
                 </button>
               </div>
 
-              {/* Right: Trust Score */}
-              <div className="bg-[#051824] border border-[#00a884]/40 rounded-2xl px-5 py-3.5 flex items-center justify-start gap-3 min-w-[170px] shadow-sm">
-                <div className="text-red-500 shrink-0">
-                  <svg className="w-6 h-6 fill-red-500/20 stroke-red-500" viewBox="0 0 24 24" strokeWidth="2">
-                    <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
-                    <path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.28" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
-                    Trust Score
-                  </span>
-                  <span className="text-sm font-bold text-[#00a884]">94%</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Mobile View (< sm): Call Controller on TOP, Boxes BELOW */}
-            <div className="flex sm:hidden flex-col items-center gap-3.5 w-full">
-              {/* Tier 1 (TOP): Dedicated Call Action Controller Pill */}
-              <div className="bg-[#00a884] p-1.5 rounded-full flex items-center gap-3 shadow-lg">
-                {isCallActive && (
-                  <button
-                    onClick={toggleMute}
-                    title={isMuted ? "Unmute" : "Mute"}
-                    className="w-11 h-11 rounded-full bg-[#082a32] hover:bg-[#062026] text-white flex items-center justify-center transition-colors cursor-pointer"
-                  >
-                    {isMuted ? <MicOff className="w-4.5 h-4.5 text-amber-400" /> : <Mic className="w-4.5 h-4.5 text-white" />}
-                  </button>
-                )}
-                <button
-                  onClick={isCallActive ? endCall : () => setIsSetupOpen(true)}
-                  title={isCallActive ? "End call" : "Start call"}
-                  className={`w-11 h-11 rounded-full text-white flex items-center justify-center transition-colors cursor-pointer ${
-                    isCallActive ? "bg-[#ff4d4d] hover:bg-red-600" : "bg-[#062026] hover:bg-[#04161c]"
-                  }`}
-                >
-                  {isCallActive ? <PhoneOff className="w-4.5 h-4.5 text-white" /> : <Phone className="w-4.5 h-4.5 text-[#00a884]" />}
-                </button>
-              </div>
-
-              {/* Tier 2 (BELOW): Call Quality & Trust Score side-by-side */}
-              <div className="grid grid-cols-2 gap-2.5 w-full">
-                <div className="bg-[#051824] border border-[#00a884]/40 rounded-xl p-3 flex items-center justify-center gap-2.5 shadow-sm">
-                  <div className="flex items-end gap-0.5 h-4 text-[#00a884]">
-                    <span className="w-1 h-1.5 bg-[#00a884] rounded-[1px]" />
-                    <span className="w-1 h-2.5 bg-[#00a884] rounded-[1px]" />
-                    <span className="w-1 h-3.5 bg-[#00a884] rounded-[1px]" />
-                    <span className="w-1 h-4 bg-[#00a884] rounded-[1px]" />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[9px] font-bold text-slate-300 uppercase tracking-wider leading-tight">
-                      Call Quality
-                    </span>
-                    <span className="text-xs font-bold text-[#00a884]">Excellent</span>
-                  </div>
-                </div>
-
-                <div className="bg-[#051824] border border-[#00a884]/40 rounded-xl p-3 flex items-center justify-center gap-2.5 shadow-sm">
-                  <div className="text-red-500 shrink-0">
-                    <svg className="w-4.5 h-4.5 fill-red-500/20 stroke-red-500" viewBox="0 0 24 24" strokeWidth="2">
-                      <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
-                      <path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.28" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[9px] font-bold text-slate-300 uppercase tracking-wider leading-tight">
-                      Trust Score
-                    </span>
-                    <span className="text-xs font-bold text-[#00a884]">94%</span>
-                  </div>
+              <div className="order-3 bg-[#051824] border border-[#00a884]/40 rounded-2xl px-4 py-3 flex items-center gap-3 sm:min-w-[170px]">
+                <svg className="w-6 h-6 fill-red-500/20 stroke-red-500 shrink-0" viewBox="0 0 24 24" strokeWidth="2" aria-hidden="true">
+                  <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+                </svg>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[10px] sm:text-[11px] font-bold text-slate-300 uppercase tracking-wider">Trust Score</span>
+                  <span className="text-xs sm:text-sm font-bold text-[#00a884]" title="Inferred from what the prospect says and how the conversation moves. Early in a call it's a rough reading.">{trust}{metrics && trust !== "—" && metrics.trustTrend !== "stable" ? (metrics.trustTrend === "rising" ? " ↑" : " ↓") : ""}</span>
                 </div>
               </div>
             </div>
@@ -507,62 +317,13 @@ export const StartCall = ({ onCallEnded, setup = {}, onSetupChange = () => {} })
         </div>
       </div>
 
-      {/* --- BOTTOM METRICS GRID CARDS --- */}
+      {/* Live metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mt-6">
-        {/* Metric 1: AI Guidance */}
-        <div className="bg-white p-4 rounded-2xl flex items-center gap-3 border border-light-gray shadow-xs">
-          <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-            <Cpu className="w-4 h-4" />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[11px] font-bold text-dark-black uppercase tracking-wider">AI Guidance</span>
-            <span className="text-[13px] font-bold text-primary">{isCallActive ? "Active" : "Idle"}</span>
-          </div>
-        </div>
-
-        {/* Metric 2: Prompt Adherence */}
-        <div className="bg-white p-4 rounded-2xl flex items-center gap-3 border border-light-gray shadow-xs">
-          <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
-            <Sparkles className="w-4 h-4" />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[11px] font-bold text-dark-black uppercase tracking-wider">Prompt Adherence</span>
-            <span className="text-[13px] font-bold text-purple-600">82%</span>
-          </div>
-        </div>
-
-        {/* Metric 3: Objection Detected */}
-        <div className="bg-white p-4 rounded-2xl flex items-center gap-3 border border-light-gray shadow-xs">
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-            <Search className="w-4 h-4" />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[11px] font-bold text-dark-black uppercase tracking-wider">Objection Detected</span>
-            <span className="text-[13px] font-bold text-emerald-600">None</span>
-          </div>
-        </div>
-
-        {/* Metric 4: Sentiment */}
-        <div className="bg-white p-4 rounded-2xl flex items-center gap-3 border border-light-gray shadow-xs">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-            <Smile className="w-4 h-4" />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[11px] font-bold text-dark-black uppercase tracking-wider">Sentiment</span>
-            <span className="text-[13px] font-bold text-blue-600">{isSpeaking ? "Positive" : "Neutral"}</span>
-          </div>
-        </div>
-
-        {/* Metric 5: Pacing */}
-        <div className="bg-white p-4 rounded-2xl flex items-center gap-3 border border-light-gray shadow-xs">
-          <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-            <Activity className="w-4 h-4" />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[11px] font-bold text-dark-black uppercase tracking-wider">Pacing</span>
-            <span className="text-[13px] font-bold text-primary">{isSpeaking ? "Optimal" : "Waiting"}</span>
-          </div>
-        </div>
+        <MetricCard icon={Cpu} label="AI Guidance" value={!active ? "Idle" : aiPaused ? "Paused" : status.label.replace("…", "")} tone={{ bg: "bg-primary/10", text: "text-primary" }} />
+        <MetricCard icon={Sparkles} label="Prompt Adherence" value={metrics?.adherence !== null && metrics?.adherence !== undefined ? `${metrics.adherence}%` : "—"} tone={{ bg: "bg-purple-50", text: "text-purple-600" }} />
+        <MetricCard icon={Search} label="Objection Detected" value={metrics?.objection ? `${metrics.objection.label} (${RESOLUTION[metrics.objection.resolution] ?? metrics.objection.resolution})` : "None"} tone={{ bg: "bg-emerald-50", text: "text-emerald-600" }} />
+        <MetricCard icon={Smile} label="Sentiment" value={metrics && live.turns.length ? metrics.sentiment : "Neutral"} tone={{ bg: "bg-blue-50", text: "text-blue-600" }} />
+        <MetricCard icon={Activity} label="Pacing" value={metrics?.pacing?.label ?? "Waiting"} tone={{ bg: "bg-primary/10", text: "text-primary" }} />
       </div>
     </div>
   );

@@ -1,14 +1,14 @@
 "use client";
 
 import { usePortal } from "@/components/shared/use-portal";
+import PhoneNumbersEditor, { phoneRowsFrom, phonesPayload } from "@/components/contacts/phone-numbers-editor";
 import React, { useState } from "react";
 import Link from "next/link";
-import { Trash2, Plus, User, Mail, Home, FileText } from "lucide-react";
+import { User, Mail, Home, FileText } from "lucide-react";
 import Title from "@/components/texts/title";
 import Text from "@/components/texts/text";
 import SettingsDropdown from "@/components/shared/dropdown/settings-dropdown";
 import DashboardButton from "@/components/buttons/dashboardButton";
-import { formatPhoneNumber } from "@/utils.js/phone";
 import { leadStageOptions, leadStatusOptions, userOutcomeOptions } from "@/utils.js/lead-options";
 
 const stateOptions = [
@@ -87,7 +87,6 @@ const leadTypeOptions = [
 const statusOptions = leadStatusOptions;
 const outcomeOptions = userOutcomeOptions.map(({ value, label }) => ({ value, label }));
 
-const MAX_PHONE_NUMBERS = 6;
 
 // Shared by Add Prospect and Edit Prospect. `onSubmit` receives the form
 // values and should throw to keep the user on the page.
@@ -95,7 +94,7 @@ export default function ProspectForm({ initialValues = {}, title, description, s
   const portal = usePortal();
   // ── Form State ──
   const [fullName, setFullName] = useState(initialValues.name || "");
-  const [phoneNumbers, setPhoneNumbers] = useState([initialValues.phoneNumber || "", "", "", ""]);
+  const [phones, setPhones] = useState(() => phoneRowsFrom(initialValues));
   const [email, setEmail] = useState(initialValues.email || "");
   const [propertyAddress, setPropertyAddress] = useState(initialValues.propertyAddress || "");
   const [city, setCity] = useState(initialValues.city || "");
@@ -109,30 +108,13 @@ export default function ProspectForm({ initialValues = {}, title, description, s
   const [saving, setSaving] = useState(false);
 
   // ── Handlers ──
-  const handlePhoneChange = (index, value) => {
-    const updated = [...phoneNumbers];
-    updated[index] = formatPhoneNumber(value);
-    setPhoneNumbers(updated);
-  };
-
-  const handleRemovePhone = (index) => {
-    if (phoneNumbers.length > 1) {
-      setPhoneNumbers(phoneNumbers.filter((_, i) => i !== index));
-    }
-  };
-
-  const handleAddPhone = () => {
-    if (phoneNumbers.length >= MAX_PHONE_NUMBERS) return;
-    setPhoneNumbers([...phoneNumbers, ""]);
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
     try {
       await onSubmit({
         name: fullName,
-        phoneNumber: phoneNumbers.find((phone) => phone.trim()) || null,
+        phones: phonesPayload(phones),
         email,
         propertyAddress,
         city,
@@ -198,52 +180,8 @@ export default function ProspectForm({ initialValues = {}, title, description, s
             />
           </div>
 
-          {/* Phone Numbers */}
-          <div className="space-y-1.5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
-              {phoneNumbers.map((phone, idx) => (
-                <div key={idx} className="space-y-1.5 w-full">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-semibold text-medium-black">
-                      Phone Number {idx + 1}
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => handleRemovePhone(idx)}
-                      className="text-light-black hover:text-red-500 transition-colors cursor-pointer"
-                      title="Remove phone"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="(213) 555-1234"
-                    value={phone}
-                    onChange={(e) => handlePhoneChange(idx, e.target.value)}
-                    className="w-full px-4 py-2.5 text-sm bg-white border border-light-gray rounded-xl focus:outline-none focus:border-primary transition-colors text-dark-black placeholder-light-black"
-                  />
-                </div>
-              ))}
-
-              <div className="w-full">
-                <button
-                  type="button"
-                  onClick={handleAddPhone}
-                  disabled={phoneNumbers.length >= MAX_PHONE_NUMBERS}
-                  className="flex items-center justify-center gap-1.5 w-full sm:w-auto px-5 py-2.5 text-sm font-semibold bg-primary/10 text-primary hover:bg-primary/20 rounded-xl transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-primary/10"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add more
-                </button>
-                {phoneNumbers.length >= MAX_PHONE_NUMBERS && (
-                  <p className="mt-2 text-[10px] font-medium text-light-black/70">
-                    Maximum {MAX_PHONE_NUMBERS} phone numbers
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
+          {/* Phone Numbers: each with a type, and the status it got after calls */}
+          <PhoneNumbersEditor value={phones} onChange={setPhones} />
 
           {/* Email Address */}
           <div className="space-y-1.5 pt-2">

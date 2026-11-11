@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { createId, hashPassword, hashToken, query } from "@/lib/db";
 import { ApiError } from "@/lib/api";
 import { recordAudit } from "@/lib/audit";
+import { sendStaffInviteEmail } from "@/lib/email/system";
 import { likePattern, paged } from "@/lib/listing";
 import { EMPLOYEE_ROLE_OPTIONS, ROLE_LABELS, STAFF_ROLES } from "@/utils.js/roles";
 
@@ -146,8 +147,8 @@ async function createInvite(userId, actorId) {
   return { token, expiresAt: expires.toISOString() };
 }
 
-// Add Employee wizard. Until an email service is connected the activation
-// link is returned to the admin to share; later it is emailed automatically.
+// Add Employee wizard. The activation link is emailed (Postmark) and also returned so the
+// admin can copy it while no email service is connected.
 export async function inviteEmployee(actor, body) {
   const name = text(body.fullName ?? body.name, "Full name", 255, { required: true });
   const email = text(body.email, "Email", 255, { required: true })?.toLowerCase();
@@ -170,6 +171,7 @@ export async function inviteEmployee(actor, body) {
     [id, text(body.department, "Department", 80) ?? (option.role === "sales_rep" ? "Sales" : null), text(body.jobTitle, "Job title", 120), managerId, text(body.timezone, "Timezone", 80), text(body.language, "Language", 40), startDate, due, actor.id]
   );
   const invite = await createInvite(id, actor.id);
+  await sendStaffInviteEmail({ userId: id, name, email, token: invite.token, roleLabel: option.label, invitedBy: actor.name });
   await recordAudit(actor, { action: "staff.invited", entityType: "user", entityId: id, summary: `Invited ${name} (${email}) as ${option.label}` });
   return { employee: await getEmployee(id), invite };
 }
@@ -180,6 +182,7 @@ export async function resendInvite(actor, id) {
   // Older links stop working once a new one is issued
   await query("UPDATE staff_invites SET expires_at = NOW() WHERE user_id = ? AND accepted_at IS NULL AND expires_at > NOW()", [id]);
   const invite = await createInvite(id, actor.id);
+  await sendStaffInviteEmail({ userId: id, name: employee.name, email: employee.email, token: invite.token, roleLabel: employee.roleLabel, invitedBy: actor.name });
   await recordAudit(actor, { action: "staff.invite_resent", entityType: "user", entityId: id, summary: `Sent a new invite link to ${employee.name}` });
   return { employee: await getEmployee(id), invite };
 }

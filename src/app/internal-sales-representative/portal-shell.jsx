@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import Sidebar from "@/components/shared/sidebar/sidebar";
 import Header from "@/components/shared/header/header";
+import PolicyPrompt from "@/components/shared/policy-prompt";
+import TrainingPrompt from "@/components/shared/training-prompt";
 import { usePortalUser } from "@/components/shared/use-portal-user";
 
 export default function InternalSalesRepPortalShell({ user, children }) {
@@ -69,6 +71,8 @@ export default function InternalSalesRepPortalShell({ user, children }) {
         />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
+          <PolicyPrompt />
+          <TrainingPrompt />
           {children}
         </main>
       </div>

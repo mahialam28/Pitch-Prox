@@ -6,7 +6,7 @@ import { listDeliveries } from "@/lib/campaigns/overview";
 
 export const runtime = "nodejs";
 
-// The email outbox: ?status=&source=&page=&pageSize=
+// The email outbox: ?status=&source=&search=&page=&pageSize=
 export const GET = withApi(async (request) => {
   await requireCampaigns();
   const { searchParams } = new URL(request.url);

@@ -3,7 +3,8 @@
 import { usePortal } from "@/components/shared/use-portal";
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { PENDING_CALL_KEY } from "@/utils.js/call-constants";
+import { queueCall } from "@/utils.js/start-call";
+import ContactPhonesPanel from "@/components/contacts/contact-phones-panel";
 import {
   X,
   Mail,
@@ -126,21 +127,9 @@ const LeadDetailsModal = ({ isOpen = false, onClose, lead = null, onDelete, onLe
   // Hand the lead to the live-calling page (same bridge the Leads table and
   // app header use: sessionStorage + navigate). The call auto-starts there
   // without the pre-call setup popup.
-  const handleCallNow = () => {
-    try {
-      sessionStorage.setItem(
-        PENDING_CALL_KEY,
-        JSON.stringify({
-          leadName: lead?.name || "",
-          phoneNumber: lead?.phoneNumber || "",
-          leadType: lead?.leadType || "",
-          address: lead?.propertyAddress || "",
-          playbook: "PitchProx Standard",
-        })
-      );
-    } catch {
-      /* sessionStorage unavailable — continue without prefill */
-    }
+  // Call the lead's first callable number (or `phone`); the call remembers the lead and the number
+  const handleCallNow = (phone) => {
+    queueCall(lead, "lead", phone?.id ? phone : undefined);
     router.push(`${portal.base}/live-calling`);
   };
 
@@ -242,7 +231,7 @@ const LeadDetailsModal = ({ isOpen = false, onClose, lead = null, onDelete, onLe
 
           <div className="flex items-center gap-3 shrink-0">
             <button
-              onClick={handleCallNow}
+              onClick={() => handleCallNow()}
               className="flex items-center gap-2 px-5 py-2 text-xs font-semibold text-white bg-teal-600 rounded-xl hover:bg-teal-700 transition-colors shadow-sm cursor-pointer whitespace-nowrap"
             >
               <Phone className="h-3.5 w-3.5 shrink-0" />
@@ -267,21 +256,19 @@ const LeadDetailsModal = ({ isOpen = false, onClose, lead = null, onDelete, onLe
                 <Mail className="h-4 w-4 text-gray-400 shrink-0" />
                 <div className="text-xs">
                   <span className="text-gray-400 block text-[10px]">Email</span>
-                  <span className="font-semibold text-gray-800">
-                    demo@gmail.com
+                  <span className="font-semibold text-gray-800 break-all">
+                    {lead?.email || "—"}
                   </span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
-                <Phone className="h-4 w-4 text-gray-400 shrink-0" />
-                <div className="text-xs">
-                  <span className="text-gray-400 block text-[10px]">Phone</span>
-                  <span className="font-semibold text-gray-800">
-                    +1 (962) 142-2314
-                  </span>
-                </div>
-              </div>
+              {/* Every number with its own status (a bad number doesn't stop the others) */}
+              <ContactPhonesPanel
+                contact={lead}
+                kind="lead"
+                onPhonesChange={(phones) => onLeadChange?.({ ...lead, phones, workingPhones: phones.filter((phone) => phone.callable).length, phoneNumber: phones.find((phone) => phone.callable)?.number ?? phones[0]?.number ?? null })}
+                onCall={portal.canCall ? handleCallNow : undefined}
+              />
 
               <div className="flex items-center gap-3">
                 <Tag className="h-4 w-4 text-gray-400 shrink-0" />

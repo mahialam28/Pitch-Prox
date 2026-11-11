@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { FiArrowLeft, FiCheck } from "react-icons/fi";
 import Text from "@/components/texts/text";
@@ -9,7 +10,9 @@ import { showError } from "@/lib/alerts";
 
 // Plans come from the database (seeded from the public pricing section).
 // Choosing one needs Stripe checkout, which the client hasn't connected yet.
-export default function UpgradePlanPage() {
+function UpgradePlanContent() {
+  // ?plan= from sign-up ("Your Video Is Ready" → Continue with a plan) is highlighted
+  const wanted = useSearchParams()?.get("plan") ?? null;
   const [billing, setBilling] = useState(null);
   const [cycle, setCycle] = useState("monthly");
 
@@ -53,8 +56,10 @@ export default function UpgradePlanPage() {
         {!billing && <Text variant="small" className="text-light-black">Loading plans…</Text>}
         {plans.map((plan) => {
           const isCurrent = plan.id === currentPlanId;
+          const isWanted = plan.id === wanted && !isCurrent;
           return (
-            <div key={plan.id} className={`bg-white rounded-2xl border p-6 shadow-sm flex flex-col gap-4 ${isCurrent ? "border-primary" : "border-light-gray"}`}>
+            <div key={plan.id} className={`bg-white rounded-2xl border p-6 shadow-sm flex flex-col gap-4 ${isCurrent ? "border-primary" : isWanted ? "border-2 border-primary ring-4 ring-primary/10" : "border-light-gray"}`}>
+              {isWanted && <span className="self-start px-2 py-0.5 bg-primary text-white text-[10px] font-bold rounded-md">THE PLAN YOU CHOSE</span>}
               <div className="flex items-center justify-between">
                 <Text variant="regular" className="font-bold text-dark-black">{plan.name}</Text>
                 {isCurrent && <span className="px-2 py-0.5 bg-light-teal text-primary text-[10px] font-bold rounded-md">CURRENT</span>}
@@ -82,5 +87,13 @@ export default function UpgradePlanPage() {
         })}
       </div>
     </div>
+  );
+}
+
+export default function UpgradePlanPage() {
+  return (
+    <Suspense fallback={null}>
+      <UpgradePlanContent />
+    </Suspense>
   );
 }

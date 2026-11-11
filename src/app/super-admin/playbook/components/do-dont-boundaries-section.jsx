@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   Lock,
 } from "lucide-react";
+import { confirmReset } from "@/lib/alerts";
 import toast from "react-hot-toast";
 
 export const DEFAULT_DO_DONT_BOUNDARIES = {
@@ -41,14 +42,15 @@ export const DEFAULT_DO_DONT_BOUNDARIES = {
 const DoDontBoundariesSection = ({
   data = {},
   onChange = () => {},
-  onResetDefaults = () => {},
+  onResetDefaults,
 }) => {
   const currentData = {
     ...DEFAULT_DO_DONT_BOUNDARIES,
     ...data,
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
+    if (!(await confirmReset("Do / Don't Boundaries"))) return;
     if (onResetDefaults) {
       onResetDefaults();
     } else {

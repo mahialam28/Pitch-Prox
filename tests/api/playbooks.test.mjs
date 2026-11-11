@@ -3,6 +3,8 @@ import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { actor, newCustomer, signIn } from "./helpers.mjs";
 
+// The seeded platform playbooks (ones published from the Super Admin builder by other tests have an overview)
+const seeded = (results) => results.filter((p) => p.overview == null);
 const STANDARD = "pitchprox-standard";
 let a, b;
 
@@ -26,11 +28,11 @@ test("requires sign-in", async () => {
 test("new account sees the 7 platform playbooks with Standard active", async () => {
   const { status, json } = await a.get("/api/v1/playbooks");
   assert.equal(status, 200);
-  assert.equal(json.results.length, 7);
+  assert.equal(seeded(json.results).length, 7);
   assert.equal(json.activePlaybookId, STANDARD);
   const standard = json.results.find((p) => p.id === STANDARD);
   assert.deepEqual([standard.isAvailable, standard.isActive, standard.isCustom], [true, true, false]);
-  const premium = json.results.filter((p) => p.kind === "premium");
+  const premium = seeded(json.results).filter((p) => p.kind === "premium");
   assert.equal(premium.length, 6);
   assert.ok(premium.every((p) => !p.isAvailable && p.price === "$49.00"));
 });
@@ -76,7 +78,7 @@ test("other companies can't see or change the custom playbook", async () => {
   assert.equal((await b.del(`/api/v1/playbooks/${draftId}`)).status, 404);
   assert.equal((await b.put("/api/v1/playbooks/active", { playbookId: draftId })).status, 404);
   const list = await b.get("/api/v1/playbooks");
-  assert.equal(list.json.results.length, 7);
+  assert.equal(seeded(list.json.results).length, 7);
 });
 
 test("publish with activate makes it the active playbook", async () => {

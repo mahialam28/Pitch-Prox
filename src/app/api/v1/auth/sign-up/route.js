@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
+import { limit } from "@/lib/rate-limit";
 import { createId, hashPassword, query } from "@/lib/db";
-import { createSession } from "@/lib/auth";
+import { createSession, requestClient } from "@/lib/auth";
 import { jsonError, readJson, withApi } from "@/lib/api";
 import { ROLES } from "@/utils.js/roles";
 import { TRIAL_PLAN_ID } from "@/lib/plan-catalog";
@@ -9,6 +10,8 @@ import { recordUserEvent } from "@/lib/campaigns/events";
 export const runtime = "nodejs";
 
 export const POST = withApi(async (request) => {
+  // Attempt limit per IP
+  await limit("sign-up-ip", (await requestClient()).ip);
   const body = await readJson(request);
   const name = typeof body.name === "string" ? body.name.trim() : "";
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
@@ -39,5 +42,6 @@ export const POST = withApi(async (request) => {
   await recordUserEvent(userId, "user_signed_up", { source: "self_signup" });
   await recordUserEvent(userId, "trial_started", { planId: TRIAL_PLAN_ID });
   await createSession(userId);
-  return NextResponse.json({ user: { id: userId, name, email, role: ROLES.CUSTOMER_ADMIN, organizationId } }, { status: 201 });
+  // New customers start with calibration ("Do it later" is offered there)
+  return NextResponse.json({ user: { id: userId, name, email, role: ROLES.CUSTOMER_ADMIN, organizationId, needsCalibration: true } }, { status: 201 });
 });

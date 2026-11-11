@@ -4,14 +4,17 @@ import React from "react";
 import { Target, Users, MessageSquare } from "lucide-react";
 import Text from "@/components/texts/text";
 
+// "Herjavec Sales Method" → "HS"
+const initialsOf = (name) => String(name || "P").trim().split(/\s+/).slice(0, 2).map((word) => word[0]?.toUpperCase() ?? "").join("") || "P";
+
 const PlaybookPreviewCard = ({
-  playbookName = "Herjavec Sales Method",
-  creatorName = "Robert Herjavec",
+  playbookName = "",
+  creatorName = "PitchProX",
   description = "Real-world, no-nonsense tactics from Shark Tank's Robert Herjavec. Build trust, add value, and close bigger deals.",
   focusText = "Trust, Value, Closing",
   bestForText = "High-value deals, Negotiations",
   styleText = "Direct, Confident, Results-driven",
-  avatarUrl = "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150",
+  avatarUrl = null,
   accessType = "premium",
 }) => {
   return (
@@ -31,11 +34,13 @@ const PlaybookPreviewCard = ({
         {/* Creator Info & Title */}
         <div className="flex items-start gap-3.5">
           <div className="relative w-12 h-12 rounded-full overflow-hidden shrink-0 border border-light-gray">
-            <img
-              src={avatarUrl}
-              alt={creatorName}
-              className="w-full h-full object-cover"
-            />
+            {avatarUrl ? (
+              <img src={avatarUrl} alt={creatorName} className="w-full h-full object-cover" />
+            ) : (
+              <span className="w-full h-full flex items-center justify-center bg-dark-black text-white text-xs font-bold">
+                {initialsOf(playbookName || creatorName)}
+              </span>
+            )}
           </div>
 
           <div className="flex flex-col min-w-0">
